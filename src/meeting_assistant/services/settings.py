@@ -19,7 +19,14 @@ class AppSettings:
 
 class SettingsService:
     def __init__(self, path: Path | None = None) -> None:
-        self.path = path or (Path.home() / "AppData" / "Roaming" / "MeetingAssistant" / "settings.json")
+        default_path = (
+            Path.home()
+            / "AppData"
+            / "Roaming"
+            / "MeetingAssistant"
+            / "settings.json"
+        )
+        self.path = path or default_path
 
     def load(self) -> AppSettings:
         if not self.path.exists():
