@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -16,9 +17,11 @@ from meeting_assistant.core.state import AppState, OperatingMode
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, state: AppState) -> None:
+    def __init__(self, state: AppState, app_icon: QIcon | None = None) -> None:
         super().__init__()
         self.state = state
+        self.app_icon = app_icon or QIcon()
+        self.setWindowIcon(self.app_icon)
         self.setWindowTitle("Meeting Assistant 3.0")
         self.resize(520, 620)
         self.setMinimumSize(470, 560)
@@ -37,6 +40,14 @@ class MainWindow(QMainWindow):
 
         header = QHBoxLayout()
         header.setSpacing(10)
+
+        brand_icon = QLabel()
+        brand_icon.setObjectName("BrandIcon")
+        brand_icon.setFixedSize(34, 34)
+        brand_icon.setAlignment(Qt.AlignCenter)
+        if not self.app_icon.isNull():
+            brand_icon.setPixmap(self.app_icon.pixmap(30, 30))
+        header.addWidget(brand_icon, alignment=Qt.AlignVCenter)
 
         title_box = QVBoxLayout()
         title_box.setSpacing(0)
@@ -188,6 +199,11 @@ class MainWindow(QMainWindow):
                 background: #111318;
                 color: #f2f4f8;
                 font-family: 'Segoe UI';
+            }
+            QLabel#BrandIcon {
+                background: #0d121a;
+                border: 1px solid #2a3544;
+                border-radius: 9px;
             }
             QLabel#Title {
                 font-size: 19px;
