@@ -20,8 +20,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.state = state
         self.setWindowTitle("Meeting Assistant 3.0")
-        self.resize(900, 590)
-        self.setMinimumSize(760, 500)
+        self.resize(740, 480)
+        self.setMinimumSize(680, 440)
         if self.state.simulation_enabled:
             self.setWindowTitle("Meeting Assistant 3.0 — Modo de Simulação")
 
@@ -32,16 +32,17 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         central = QWidget()
         root = QVBoxLayout(central)
-        root.setContentsMargins(16, 14, 16, 14)
-        root.setSpacing(10)
+        root.setContentsMargins(12, 10, 12, 10)
+        root.setSpacing(8)
 
         header = QHBoxLayout()
-        header.setSpacing(12)
+        header.setSpacing(10)
+
         title_box = QVBoxLayout()
-        title_box.setSpacing(2)
+        title_box.setSpacing(0)
         title = QLabel("Meeting Assistant")
         title.setObjectName("Title")
-        subtitle = QLabel("Mesa de operação • OBS • Zoom • JW Library")
+        subtitle = QLabel("Operação local • OBS • Zoom • JW Library")
         subtitle.setObjectName("Subtitle")
         title_box.addWidget(title)
         title_box.addWidget(subtitle)
@@ -55,52 +56,60 @@ class MainWindow(QMainWindow):
         root.addLayout(header)
 
         status_row = QHBoxLayout()
-        status_row.setSpacing(7)
+        status_row.setSpacing(5)
         self.status_labels: dict[str, QLabel] = {}
         for name in ("OBS", "JW Library", "Zoom", "Tela 2"):
-            label = QLabel(f"● {name}: aguardando")
+            label = QLabel(f"● {name}")
             label.setObjectName("StatusBadge")
+            label.setToolTip(f"{name}: aguardando verificação")
             self.status_labels[name] = label
             status_row.addWidget(label)
         status_row.addStretch()
         root.addLayout(status_row)
 
         content = QHBoxLayout()
-        content.setSpacing(10)
+        content.setSpacing(8)
 
         preview_card = QFrame()
         preview_card.setObjectName("Card")
         preview_layout = QVBoxLayout(preview_card)
-        preview_layout.setContentsMargins(10, 9, 10, 10)
-        preview_layout.setSpacing(7)
-        preview_title = QLabel("RETORNO / PROGRAM")
+        preview_layout.setContentsMargins(8, 7, 8, 8)
+        preview_layout.setSpacing(5)
+
+        preview_title = QLabel("RETORNO — SALÃO")
         preview_title.setObjectName("SectionTitle")
         preview_layout.addWidget(preview_title)
 
-        self.preview = QLabel("Retorno do OBS será exibido aqui\n\n16:9")
+        self.preview = QLabel("Retorno da Tela 2\n16:9")
         self.preview.setObjectName("Preview")
         self.preview.setAlignment(Qt.AlignCenter)
-        self.preview.setMinimumSize(480, 270)
+        self.preview.setMinimumSize(320, 180)
+        self.preview.setMaximumHeight(230)
         preview_layout.addWidget(self.preview, 1)
+
+        self.zoom_output_label = QLabel("Zoom recebe: OBS Virtual Camera • saída independente")
+        self.zoom_output_label.setObjectName("ZoomOutputLabel")
+        self.zoom_output_label.setWordWrap(True)
+        preview_layout.addWidget(self.zoom_output_label)
 
         content.addWidget(preview_card, 3)
 
         controls_card = QFrame()
         controls_card.setObjectName("Card")
         controls = QVBoxLayout(controls_card)
-        controls.setContentsMargins(10, 9, 10, 10)
-        controls.setSpacing(7)
-        controls.addWidget(self._section_label("OPERAÇÃO"))
+        controls.setContentsMargins(8, 7, 8, 8)
+        controls.setSpacing(5)
+        controls.addWidget(self._section_label("SAÍDA DO SALÃO"))
 
         grid = QGridLayout()
-        grid.setHorizontalSpacing(7)
-        grid.setVerticalSpacing(7)
+        grid.setHorizontalSpacing(5)
+        grid.setVerticalSpacing(5)
         self.mode_buttons: dict[OperatingMode, QPushButton] = {}
         button_specs = [
             (OperatingMode.BACKGROUND, "📖 Fundo", 0, 0),
             (OperatingMode.SPEAKER, "🎤 Orador", 0, 1),
             (OperatingMode.MEDIA, "🎥 Mídia", 1, 0),
-            (OperatingMode.ZOOM, "💻 Zoom", 1, 1),
+            (OperatingMode.ZOOM, "💻 Zoom → Salão", 1, 1),
         ]
         for mode, text, row, col in button_specs:
             btn = QPushButton(text)
@@ -119,22 +128,26 @@ class MainWindow(QMainWindow):
         panic.clicked.connect(lambda: self._select_mode(OperatingMode.BACKGROUND))
         controls.addWidget(panic)
 
-        controls.addSpacing(4)
+        controls.addSpacing(2)
         controls.addWidget(self._section_label("SISTEMA"))
-        diagnostics = QPushButton("🩺 Verificar sistema")
-        settings = QPushButton("⚙️ Configurações")
-        controls.addWidget(diagnostics)
-        controls.addWidget(settings)
+
+        system_grid = QGridLayout()
+        system_grid.setHorizontalSpacing(5)
+        diagnostics = QPushButton("🩺 Verificar")
+        settings = QPushButton("⚙️ Ajustes")
+        system_grid.addWidget(diagnostics, 0, 0)
+        system_grid.addWidget(settings, 0, 1)
+        controls.addLayout(system_grid)
         controls.addStretch()
 
         self.mode_label = QLabel()
         self.mode_label.setObjectName("ModeLabel")
         controls.addWidget(self.mode_label)
 
-        content.addWidget(controls_card, 1)
+        content.addWidget(controls_card, 2)
         root.addLayout(content, 1)
 
-        footer = QLabel("Base 3.0 • integração real será adicionada por módulos")
+        footer = QLabel("Modo compacto • o retorno serve apenas para conferência do operador")
         footer.setObjectName("Footer")
         root.addWidget(footer)
 
@@ -169,9 +182,9 @@ class MainWindow(QMainWindow):
             OperatingMode.BACKGROUND: "Fundo",
             OperatingMode.SPEAKER: "Orador",
             OperatingMode.MEDIA: "Mídia",
-            OperatingMode.ZOOM: "Zoom",
+            OperatingMode.ZOOM: "Zoom remoto",
         }
-        self.mode_label.setText(f"Modo atual: {readable[self.state.current_mode]}")
+        self.mode_label.setText(f"Salão: {readable[self.state.current_mode]}")
 
     def _apply_style(self) -> None:
         self.setStyleSheet(
@@ -182,32 +195,32 @@ class MainWindow(QMainWindow):
                 font-family: 'Segoe UI';
             }
             QLabel#Title {
-                font-size: 22px;
+                font-size: 19px;
                 font-weight: 700;
             }
             QLabel#Subtitle, QLabel#Footer {
                 color: #9ca6b5;
-                font-size: 11px;
+                font-size: 10px;
             }
             QLabel#SectionTitle {
                 color: #92c5ff;
-                font-size: 11px;
+                font-size: 10px;
                 font-weight: 700;
                 letter-spacing: 1px;
             }
             QLabel#StatusBadge {
                 background: #1b2029;
                 border: 1px solid #2c3440;
-                border-radius: 7px;
-                padding: 5px 8px;
-                font-size: 11px;
+                border-radius: 6px;
+                padding: 4px 7px;
+                font-size: 10px;
             }
             QLabel#AutomationBadge {
                 background: #3b3220;
                 color: #ffd166;
-                border-radius: 8px;
-                padding: 7px 10px;
-                font-size: 11px;
+                border-radius: 7px;
+                padding: 6px 9px;
+                font-size: 10px;
                 font-weight: 700;
             }
             QLabel#AutomationBadge[active='true'] {
@@ -217,21 +230,28 @@ class MainWindow(QMainWindow):
             QFrame#Card {
                 background: #171b22;
                 border: 1px solid #282f3a;
-                border-radius: 11px;
+                border-radius: 9px;
             }
             QLabel#Preview {
                 background: #080a0e;
                 border: 1px solid #303844;
-                border-radius: 8px;
+                border-radius: 7px;
                 color: #758093;
-                font-size: 15px;
+                font-size: 13px;
+            }
+            QLabel#ZoomOutputLabel {
+                background: #10141a;
+                color: #9ca6b5;
+                border-radius: 6px;
+                padding: 5px 7px;
+                font-size: 10px;
             }
             QPushButton {
                 background: #252c36;
                 border: 1px solid #343e4c;
-                border-radius: 8px;
-                padding: 9px 10px;
-                font-size: 12px;
+                border-radius: 7px;
+                padding: 8px 9px;
+                font-size: 11px;
                 font-weight: 600;
                 text-align: left;
             }
@@ -248,9 +268,9 @@ class MainWindow(QMainWindow):
             }
             QLabel#ModeLabel {
                 background: #10141a;
-                border-radius: 7px;
-                padding: 8px;
-                font-size: 11px;
+                border-radius: 6px;
+                padding: 7px;
+                font-size: 10px;
                 font-weight: 600;
             }
             """
