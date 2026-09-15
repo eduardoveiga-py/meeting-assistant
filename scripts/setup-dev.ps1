@@ -1,6 +1,13 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+try {
+    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $OutputEncoding = [Console]::OutputEncoding
+} catch {
+    # A codificação não é crítica para o funcionamento do setup.
+}
+
 function Write-Step([string]$Message) {
     Write-Host "`n==> $Message" -ForegroundColor Cyan
 }
@@ -24,25 +31,35 @@ function Get-PythonReleaseInfo {
         [Parameter(Mandatory = $false)][string[]]$PrefixArguments = @()
     )
 
-    $script = @'
-import sys
-v = sys.version_info
-print(f"{v.major}.{v.minor}.{v.micro}|{v.releaselevel}")
-'@
-
-    $output = & $FilePath @PrefixArguments -c $script
+    # Evitamos `python -c` aqui porque o Windows PowerShell 5.1 pode alterar
+    # aspas internas ao encaminhar argumentos para executáveis nativos.
+    $rawOutput = & $FilePath @PrefixArguments --version 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Não foi possível consultar a versão do Python em '$FilePath'."
     }
 
-    $parts = $output.Trim().Split('|')
-    if ($parts.Count -ne 2) {
+    $output = (($rawOutput | Out-String).Trim())
+    $pattern = '^Python\s+(?<version>\d+\.\d+\.\d+)(?<pre>a\d+|b\d+|rc\d+)?(?:\s.*)?$'
+    $match = [regex]::Match($output, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+
+    if (-not $match.Success) {
         throw "Resposta inesperada ao consultar a versão do Python: $output"
     }
 
+    $releaseLevel = 'final'
+    $pre = $match.Groups['pre'].Value.ToLowerInvariant()
+    if ($pre.StartsWith('rc')) {
+        $releaseLevel = 'candidate'
+    } elseif ($pre.StartsWith('b')) {
+        $releaseLevel = 'beta'
+    } elseif ($pre.StartsWith('a')) {
+        $releaseLevel = 'alpha'
+    }
+
     return @{
-        Version = $parts[0]
-        ReleaseLevel = $parts[1]
+        Version = $match.Groups['version'].Value
+        ReleaseLevel = $releaseLevel
+        Raw = $output
     }
 }
 
@@ -51,12 +68,13 @@ Set-Location $repoRoot
 
 Write-Step "Verificando Python 3.12 estável"
 $basePython = Get-PythonReleaseInfo -FilePath 'py' -PrefixArguments @('-3.12')
-Write-Host "Python $($basePython.Version) ($($basePython.ReleaseLevel))"
+Write-Host "$($basePython.Raw) [$($basePython.ReleaseLevel)]"
 
 if ($basePython.ReleaseLevel -ne 'final') {
     throw (
-        "Foi encontrado Python $($basePython.Version) $($basePython.ReleaseLevel). " +
-        "Instale uma versão final estável do Python 3.12 x64 antes de continuar."
+        "Foi encontrado $($basePython.Raw), uma versão de pré-lançamento. " +
+        "Instale uma versão final estável do Python 3.12 x64 antes de continuar. " +
+        "Use 'py -0p' para listar as instalações registradas."
     )
 }
 
