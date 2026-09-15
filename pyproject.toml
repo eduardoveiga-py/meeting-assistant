@@ -24,6 +24,9 @@ meeting-assistant = "meeting_assistant.main:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"meeting_assistant.resources" = ["*.svg"]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100
