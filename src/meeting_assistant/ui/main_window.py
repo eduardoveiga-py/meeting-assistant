@@ -20,8 +20,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.state = state
         self.setWindowTitle("Meeting Assistant 3.0")
-        self.resize(740, 480)
-        self.setMinimumSize(680, 440)
+        self.resize(520, 620)
+        self.setMinimumSize(470, 560)
         if self.state.simulation_enabled:
             self.setWindowTitle("Meeting Assistant 3.0 — Modo de Simulação")
 
@@ -55,55 +55,29 @@ class MainWindow(QMainWindow):
         header.addWidget(self.automation_badge)
         root.addLayout(header)
 
-        status_row = QHBoxLayout()
-        status_row.setSpacing(5)
+        status_grid = QGridLayout()
+        status_grid.setHorizontalSpacing(5)
+        status_grid.setVerticalSpacing(5)
         self.status_labels: dict[str, QLabel] = {}
-        for name in ("OBS", "JW Library", "Zoom", "Tela 2"):
+        for index, name in enumerate(("OBS", "JW Library", "Zoom", "Tela 2")):
             label = QLabel(f"● {name}")
             label.setObjectName("StatusBadge")
             label.setToolTip(f"{name}: aguardando verificação")
             self.status_labels[name] = label
-            status_row.addWidget(label)
-        status_row.addStretch()
-        root.addLayout(status_row)
-
-        content = QHBoxLayout()
-        content.setSpacing(8)
-
-        preview_card = QFrame()
-        preview_card.setObjectName("Card")
-        preview_layout = QVBoxLayout(preview_card)
-        preview_layout.setContentsMargins(8, 7, 8, 8)
-        preview_layout.setSpacing(5)
-
-        preview_title = QLabel("RETORNO — SALÃO")
-        preview_title.setObjectName("SectionTitle")
-        preview_layout.addWidget(preview_title)
-
-        self.preview = QLabel("Retorno da Tela 2\n16:9")
-        self.preview.setObjectName("Preview")
-        self.preview.setAlignment(Qt.AlignCenter)
-        self.preview.setMinimumSize(320, 180)
-        self.preview.setMaximumHeight(230)
-        preview_layout.addWidget(self.preview, 1)
-
-        self.zoom_output_label = QLabel("Zoom recebe: OBS Virtual Camera • saída independente")
-        self.zoom_output_label.setObjectName("ZoomOutputLabel")
-        self.zoom_output_label.setWordWrap(True)
-        preview_layout.addWidget(self.zoom_output_label)
-
-        content.addWidget(preview_card, 3)
+            status_grid.addWidget(label, index // 2, index % 2)
+        root.addLayout(status_grid)
 
         controls_card = QFrame()
         controls_card.setObjectName("Card")
         controls = QVBoxLayout(controls_card)
-        controls.setContentsMargins(8, 7, 8, 8)
-        controls.setSpacing(5)
+        controls.setContentsMargins(10, 9, 10, 10)
+        controls.setSpacing(6)
+
         controls.addWidget(self._section_label("SAÍDA DO SALÃO"))
 
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(5)
-        grid.setVerticalSpacing(5)
+        mode_grid = QGridLayout()
+        mode_grid.setHorizontalSpacing(6)
+        mode_grid.setVerticalSpacing(6)
         self.mode_buttons: dict[OperatingMode, QPushButton] = {}
         button_specs = [
             (OperatingMode.BACKGROUND, "📖 Fundo", 0, 0),
@@ -112,12 +86,12 @@ class MainWindow(QMainWindow):
             (OperatingMode.ZOOM, "💻 Zoom → Salão", 1, 1),
         ]
         for mode, text, row, col in button_specs:
-            btn = QPushButton(text)
-            btn.setCheckable(True)
-            btn.clicked.connect(lambda checked=False, m=mode: self._select_mode(m))
-            self.mode_buttons[mode] = btn
-            grid.addWidget(btn, row, col)
-        controls.addLayout(grid)
+            button = QPushButton(text)
+            button.setCheckable(True)
+            button.clicked.connect(lambda checked=False, m=mode: self._select_mode(m))
+            self.mode_buttons[mode] = button
+            mode_grid.addWidget(button, row, col)
+        controls.addLayout(mode_grid)
 
         self.auto_button = QPushButton("🚥 Ativar automação")
         self.auto_button.clicked.connect(self._toggle_automation)
@@ -132,23 +106,44 @@ class MainWindow(QMainWindow):
         controls.addWidget(self._section_label("SISTEMA"))
 
         system_grid = QGridLayout()
-        system_grid.setHorizontalSpacing(5)
+        system_grid.setHorizontalSpacing(6)
         diagnostics = QPushButton("🩺 Verificar")
         settings = QPushButton("⚙️ Ajustes")
         system_grid.addWidget(diagnostics, 0, 0)
         system_grid.addWidget(settings, 0, 1)
         controls.addLayout(system_grid)
-        controls.addStretch()
+
+        controls.addSpacing(2)
+        controls.addWidget(self._section_label("RETORNO — SALÃO"))
+
+        preview_row = QHBoxLayout()
+        preview_row.addStretch()
+        self.preview = QLabel("Retorno da Tela 2\n16:9")
+        self.preview.setObjectName("Preview")
+        self.preview.setAlignment(Qt.AlignCenter)
+        self.preview.setMinimumSize(280, 158)
+        self.preview.setMaximumSize(320, 180)
+        preview_row.addWidget(self.preview)
+        preview_row.addStretch()
+        controls.addLayout(preview_row)
+
+        self.zoom_output_label = QLabel(
+            "Zoom recebe: OBS Virtual Camera • saída independente"
+        )
+        self.zoom_output_label.setObjectName("ZoomOutputLabel")
+        self.zoom_output_label.setAlignment(Qt.AlignCenter)
+        self.zoom_output_label.setWordWrap(True)
+        controls.addWidget(self.zoom_output_label)
 
         self.mode_label = QLabel()
         self.mode_label.setObjectName("ModeLabel")
         controls.addWidget(self.mode_label)
 
-        content.addWidget(controls_card, 2)
-        root.addLayout(content, 1)
+        root.addWidget(controls_card, 1)
 
-        footer = QLabel("Modo compacto • o retorno serve apenas para conferência do operador")
+        footer = QLabel("Painel compacto • preview apenas para conferência")
         footer.setObjectName("Footer")
+        footer.setAlignment(Qt.AlignCenter)
         root.addWidget(footer)
 
         self.setCentralWidget(central)
@@ -212,7 +207,7 @@ class MainWindow(QMainWindow):
                 background: #1b2029;
                 border: 1px solid #2c3440;
                 border-radius: 6px;
-                padding: 4px 7px;
+                padding: 5px 7px;
                 font-size: 10px;
             }
             QLabel#AutomationBadge {
@@ -237,7 +232,7 @@ class MainWindow(QMainWindow):
                 border: 1px solid #303844;
                 border-radius: 7px;
                 color: #758093;
-                font-size: 13px;
+                font-size: 12px;
             }
             QLabel#ZoomOutputLabel {
                 background: #10141a;
