@@ -20,8 +20,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.state = state
         self.setWindowTitle("Meeting Assistant 3.0")
-        self.resize(1180, 760)
-        self.setMinimumSize(980, 650)
+        self.resize(900, 590)
+        self.setMinimumSize(760, 500)
         if self.state.simulation_enabled:
             self.setWindowTitle("Meeting Assistant 3.0 — Modo de Simulação")
 
@@ -32,11 +32,13 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         central = QWidget()
         root = QVBoxLayout(central)
-        root.setContentsMargins(24, 20, 24, 20)
-        root.setSpacing(16)
+        root.setContentsMargins(16, 14, 16, 14)
+        root.setSpacing(10)
 
         header = QHBoxLayout()
+        header.setSpacing(12)
         title_box = QVBoxLayout()
+        title_box.setSpacing(2)
         title = QLabel("Meeting Assistant")
         title.setObjectName("Title")
         subtitle = QLabel("Mesa de operação • OBS • Zoom • JW Library")
@@ -53,6 +55,7 @@ class MainWindow(QMainWindow):
         root.addLayout(header)
 
         status_row = QHBoxLayout()
+        status_row.setSpacing(7)
         self.status_labels: dict[str, QLabel] = {}
         for name in ("OBS", "JW Library", "Zoom", "Tela 2"):
             label = QLabel(f"● {name}: aguardando")
@@ -63,11 +66,13 @@ class MainWindow(QMainWindow):
         root.addLayout(status_row)
 
         content = QHBoxLayout()
-        content.setSpacing(16)
+        content.setSpacing(10)
 
         preview_card = QFrame()
         preview_card.setObjectName("Card")
         preview_layout = QVBoxLayout(preview_card)
+        preview_layout.setContentsMargins(10, 9, 10, 10)
+        preview_layout.setSpacing(7)
         preview_title = QLabel("RETORNO / PROGRAM")
         preview_title.setObjectName("SectionTitle")
         preview_layout.addWidget(preview_title)
@@ -75,7 +80,7 @@ class MainWindow(QMainWindow):
         self.preview = QLabel("Retorno do OBS será exibido aqui\n\n16:9")
         self.preview.setObjectName("Preview")
         self.preview.setAlignment(Qt.AlignCenter)
-        self.preview.setMinimumSize(640, 360)
+        self.preview.setMinimumSize(480, 270)
         preview_layout.addWidget(self.preview, 1)
 
         content.addWidget(preview_card, 3)
@@ -83,9 +88,13 @@ class MainWindow(QMainWindow):
         controls_card = QFrame()
         controls_card.setObjectName("Card")
         controls = QVBoxLayout(controls_card)
+        controls.setContentsMargins(10, 9, 10, 10)
+        controls.setSpacing(7)
         controls.addWidget(self._section_label("OPERAÇÃO"))
 
         grid = QGridLayout()
+        grid.setHorizontalSpacing(7)
+        grid.setVerticalSpacing(7)
         self.mode_buttons: dict[OperatingMode, QPushButton] = {}
         button_specs = [
             (OperatingMode.BACKGROUND, "📖 Fundo", 0, 0),
@@ -110,7 +119,7 @@ class MainWindow(QMainWindow):
         panic.clicked.connect(lambda: self._select_mode(OperatingMode.BACKGROUND))
         controls.addWidget(panic)
 
-        controls.addSpacing(8)
+        controls.addSpacing(4)
         controls.addWidget(self._section_label("SISTEMA"))
         diagnostics = QPushButton("🩺 Verificar sistema")
         settings = QPushButton("⚙️ Configurações")
@@ -125,9 +134,7 @@ class MainWindow(QMainWindow):
         content.addWidget(controls_card, 1)
         root.addLayout(content, 1)
 
-        footer = QLabel(
-            "Base 3.0 • integração real com OBS/JWL/Zoom será adicionada por módulos"
-        )
+        footer = QLabel("Base 3.0 • integração real será adicionada por módulos")
         footer.setObjectName("Footer")
         root.addWidget(footer)
 
@@ -175,29 +182,32 @@ class MainWindow(QMainWindow):
                 font-family: 'Segoe UI';
             }
             QLabel#Title {
-                font-size: 28px;
+                font-size: 22px;
                 font-weight: 700;
             }
             QLabel#Subtitle, QLabel#Footer {
                 color: #9ca6b5;
+                font-size: 11px;
             }
             QLabel#SectionTitle {
                 color: #92c5ff;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 700;
                 letter-spacing: 1px;
             }
             QLabel#StatusBadge {
                 background: #1b2029;
                 border: 1px solid #2c3440;
-                border-radius: 8px;
-                padding: 7px 10px;
+                border-radius: 7px;
+                padding: 5px 8px;
+                font-size: 11px;
             }
             QLabel#AutomationBadge {
                 background: #3b3220;
                 color: #ffd166;
-                border-radius: 10px;
-                padding: 9px 14px;
+                border-radius: 8px;
+                padding: 7px 10px;
+                font-size: 11px;
                 font-weight: 700;
             }
             QLabel#AutomationBadge[active='true'] {
@@ -207,21 +217,21 @@ class MainWindow(QMainWindow):
             QFrame#Card {
                 background: #171b22;
                 border: 1px solid #282f3a;
-                border-radius: 14px;
+                border-radius: 11px;
             }
             QLabel#Preview {
                 background: #080a0e;
                 border: 1px solid #303844;
-                border-radius: 10px;
+                border-radius: 8px;
                 color: #758093;
-                font-size: 18px;
+                font-size: 15px;
             }
             QPushButton {
                 background: #252c36;
                 border: 1px solid #343e4c;
-                border-radius: 9px;
-                padding: 12px 14px;
-                font-size: 14px;
+                border-radius: 8px;
+                padding: 9px 10px;
+                font-size: 12px;
                 font-weight: 600;
                 text-align: left;
             }
@@ -238,8 +248,9 @@ class MainWindow(QMainWindow):
             }
             QLabel#ModeLabel {
                 background: #10141a;
-                border-radius: 8px;
-                padding: 10px;
+                border-radius: 7px;
+                padding: 8px;
+                font-size: 11px;
                 font-weight: 600;
             }
             """
