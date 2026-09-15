@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from meeting_assistant.core.state import AppState
@@ -20,7 +21,7 @@ def main() -> int:
     state = AppState(simulation_enabled=settings.simulation_enabled)
     window = MainWindow(state)
     if settings.always_on_top:
-        window.setWindowFlag(window.windowFlags().__class__.WindowStaysOnTopHint, True)
+        window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
     window.show()
 
     return app.exec()
