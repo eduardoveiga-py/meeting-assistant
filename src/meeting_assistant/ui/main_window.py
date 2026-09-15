@@ -53,7 +53,7 @@ class MainWindow(QMainWindow):
         root.addLayout(header)
 
         status_row = QHBoxLayout()
-        self.status_labels = {}
+        self.status_labels: dict[str, QLabel] = {}
         for name in ("OBS", "JW Library", "Zoom", "Tela 2"):
             label = QLabel(f"● {name}: aguardando")
             label.setObjectName("StatusBadge")
@@ -86,7 +86,7 @@ class MainWindow(QMainWindow):
         controls.addWidget(self._section_label("OPERAÇÃO"))
 
         grid = QGridLayout()
-        self.mode_buttons = {}
+        self.mode_buttons: dict[OperatingMode, QPushButton] = {}
         button_specs = [
             (OperatingMode.BACKGROUND, "📖 Fundo", 0, 0),
             (OperatingMode.SPEAKER, "🎤 Orador", 0, 1),
@@ -125,7 +125,9 @@ class MainWindow(QMainWindow):
         content.addWidget(controls_card, 1)
         root.addLayout(content, 1)
 
-        footer = QLabel("Base 3.0 • integração real com OBS/JWL/Zoom será adicionada por módulos")
+        footer = QLabel(
+            "Base 3.0 • integração real com OBS/JWL/Zoom será adicionada por módulos"
+        )
         footer.setObjectName("Footer")
         root.addWidget(footer)
 
@@ -167,19 +169,78 @@ class MainWindow(QMainWindow):
     def _apply_style(self) -> None:
         self.setStyleSheet(
             """
-            QMainWindow, QWidget { background: #111318; color: #f2f4f8; font-family: 'Segoe UI'; }
-            QLabel#Title { font-size: 28px; font-weight: 700; }
-            QLabel#Subtitle, QLabel#Footer { color: #9ca6b5; }
-            QLabel#SectionTitle { color: #92c5ff; font-size: 12px; font-weight: 700; letter-spacing: 1px; }
-            QLabel#StatusBadge { background: #1b2029; border: 1px solid #2c3440; border-radius: 8px; padding: 7px 10px; }
-            QLabel#AutomationBadge { background: #3b3220; color: #ffd166; border-radius: 10px; padding: 9px 14px; font-weight: 700; }
-            QLabel#AutomationBadge[active='true'] { background: #153924; color: #73e6a2; }
-            QFrame#Card { background: #171b22; border: 1px solid #282f3a; border-radius: 14px; }
-            QLabel#Preview { background: #080a0e; border: 1px solid #303844; border-radius: 10px; color: #758093; font-size: 18px; }
-            QPushButton { background: #252c36; border: 1px solid #343e4c; border-radius: 9px; padding: 12px 14px; font-size: 14px; font-weight: 600; text-align: left; }
-            QPushButton:hover { background: #2d3744; }
-            QPushButton:checked { background: #0b5cab; border-color: #2b8ce6; }
-            QPushButton#DangerButton { background: #4a2528; border-color: #6b3036; }
-            QLabel#ModeLabel { background: #10141a; border-radius: 8px; padding: 10px; font-weight: 600; }
+            QMainWindow, QWidget {
+                background: #111318;
+                color: #f2f4f8;
+                font-family: 'Segoe UI';
+            }
+            QLabel#Title {
+                font-size: 28px;
+                font-weight: 700;
+            }
+            QLabel#Subtitle, QLabel#Footer {
+                color: #9ca6b5;
+            }
+            QLabel#SectionTitle {
+                color: #92c5ff;
+                font-size: 12px;
+                font-weight: 700;
+                letter-spacing: 1px;
+            }
+            QLabel#StatusBadge {
+                background: #1b2029;
+                border: 1px solid #2c3440;
+                border-radius: 8px;
+                padding: 7px 10px;
+            }
+            QLabel#AutomationBadge {
+                background: #3b3220;
+                color: #ffd166;
+                border-radius: 10px;
+                padding: 9px 14px;
+                font-weight: 700;
+            }
+            QLabel#AutomationBadge[active='true'] {
+                background: #153924;
+                color: #73e6a2;
+            }
+            QFrame#Card {
+                background: #171b22;
+                border: 1px solid #282f3a;
+                border-radius: 14px;
+            }
+            QLabel#Preview {
+                background: #080a0e;
+                border: 1px solid #303844;
+                border-radius: 10px;
+                color: #758093;
+                font-size: 18px;
+            }
+            QPushButton {
+                background: #252c36;
+                border: 1px solid #343e4c;
+                border-radius: 9px;
+                padding: 12px 14px;
+                font-size: 14px;
+                font-weight: 600;
+                text-align: left;
+            }
+            QPushButton:hover {
+                background: #2d3744;
+            }
+            QPushButton:checked {
+                background: #0b5cab;
+                border-color: #2b8ce6;
+            }
+            QPushButton#DangerButton {
+                background: #4a2528;
+                border-color: #6b3036;
+            }
+            QLabel#ModeLabel {
+                background: #10141a;
+                border-radius: 8px;
+                padding: 10px;
+                font-weight: 600;
+            }
             """
         )
