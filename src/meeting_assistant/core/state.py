@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 
 
-class OperatingMode(str, Enum):
+class OperatingMode(StrEnum):
     BACKGROUND = "background"
     SPEAKER = "speaker"
     MEDIA = "media"
     ZOOM = "zoom"
 
 
-class HealthLevel(str, Enum):
+class HealthLevel(StrEnum):
     UNKNOWN = "unknown"
     OK = "ok"
     WARNING = "warning"
@@ -24,12 +24,12 @@ class ComponentHealth:
     name: str
     level: HealthLevel = HealthLevel.UNKNOWN
     message: str = "Aguardando verificação"
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def update(self, level: HealthLevel, message: str) -> None:
         self.level = level
         self.message = message
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
 
 @dataclass(slots=True)
