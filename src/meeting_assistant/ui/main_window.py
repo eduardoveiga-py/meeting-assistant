@@ -154,9 +154,7 @@ class MainWindow(QMainWindow):
 
         panic = QPushButton("🛟 Cena segura")
         panic.setObjectName("DangerButton")
-        panic.clicked.connect(
-            lambda checked=False: self._select_mode(OperatingMode.BACKGROUND)
-        )
+        panic.clicked.connect(self._activate_safe_scene)
         controls.addWidget(panic)
 
         controls.addSpacing(2)
@@ -266,6 +264,14 @@ class MainWindow(QMainWindow):
         self._set_automation_ui(enabled)
         self.automation_enabled_changed.emit(enabled)
 
+    def _activate_safe_scene(self, checked: bool = False) -> None:
+        del checked
+        if self.state.automation_enabled:
+            self.state.automation_enabled = False
+            self._set_automation_ui(False)
+            self.automation_enabled_changed.emit(False)
+        self._select_mode(OperatingMode.BACKGROUND)
+
     def _set_automation_ui(self, enabled: bool) -> None:
         if enabled:
             self.automation_badge.setText("AUTOMAÇÃO ATIVA")
@@ -283,6 +289,19 @@ class MainWindow(QMainWindow):
         self.automation_status.setText(message)
         self.automation_badge.setToolTip(message)
         self.auto_button.setToolTip(message)
+
+    def set_automation_signal(
+        self,
+        source_name: str,
+        changed_percent: float,
+        active: bool,
+    ) -> None:
+        if not self.state.automation_enabled:
+            return
+        state_text = "MÍDIA DETECTADA" if active else "aguardando mídia"
+        self.automation_status.setText(
+            f"Sensor: {source_name} • sinal {changed_percent:.1f}% • {state_text}"
+        )
 
     def _on_obs_connected(self, connected: bool, message: str) -> None:
         self.obs_connected = connected
