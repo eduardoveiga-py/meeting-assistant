@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import obsws_python as obs
 from PySide6.QtCore import QObject, Qt, Signal
@@ -16,6 +17,7 @@ from meeting_assistant.services.obs_controller import ObsConnectionConfig, decod
 PROBE_WIDTH = 160
 PROBE_HEIGHT = 90
 PIXEL_THRESHOLD = 12
+MAX_PROBE_TARGETS = 12
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +25,39 @@ class VisualSample:
     elapsed_ms: int
     changed_percent: float
     mean_difference: float
+
+
+@dataclass(frozen=True, slots=True)
+class SourceProbeResult:
+    source_name: str
+    samples: tuple[VisualSample, ...]
+
+    @property
+    def peak_changed_percent(self) -> float:
+        return max((sample.changed_percent for sample in self.samples), default=0.0)
+
+    @property
+    def peak_mean_difference(self) -> float:
+        return max((sample.mean_difference for sample in self.samples), default=0.0)
+
+    @property
+    def tail_average(self) -> float:
+        if not self.samples:
+            return 0.0
+        tail = self.samples[-min(4, len(self.samples)) :]
+        return sum(sample.changed_percent for sample in tail) / len(tail)
+
+
+def extract_scene_source_names(payload: dict[str, Any]) -> list[str]:
+    items = payload.get("sceneItems") or payload.get("scene_items") or []
+    names: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("sourceName") or item.get("source_name")
+        if isinstance(name, str) and name and name not in names:
+            names.append(name)
+    return names
 
 
 def pixel_difference(
@@ -63,7 +98,7 @@ def image_to_luma(image_bytes: bytes) -> bytes | None:
     return data if data else None
 
 
-def classify_samples(samples: list[VisualSample]) -> str:
+def classify_samples(samples: list[VisualSample] | tuple[VisualSample, ...]) -> str:
     if not samples:
         return "Nenhuma amostra válida foi obtida."
 
@@ -73,12 +108,12 @@ def classify_samples(samples: list[VisualSample]) -> str:
 
     if peak >= 5.0 and tail_average <= 1.5:
         return (
-            "Sinal forte: a cena saiu claramente do estado de repouso e retornou ao final. "
+            "Sinal forte: a fonte saiu claramente do estado de repouso e retornou ao final. "
             "Este é um bom candidato para automação."
         )
     if peak >= 5.0:
         return (
-            "Mudança visual forte detectada, mas a cena não retornou claramente ao estado "
+            "Mudança visual forte detectada, mas a fonte não retornou claramente ao estado "
             "de repouso até o fim do teste."
         )
     if peak >= 2.0:
@@ -86,9 +121,17 @@ def classify_samples(samples: list[VisualSample]) -> str:
             "Mudança visual moderada detectada. Será necessário calibrar o limiar antes de "
             "automatizar."
         )
-    return (
-        "Pouca mudança visual foi detectada. Esta cena provavelmente não é um bom sensor "
-        "para a mídia do JW Library."
+    return "Pouca mudança visual foi detectada nesta fonte."
+
+
+def rank_results(results: list[SourceProbeResult]) -> list[SourceProbeResult]:
+    return sorted(
+        results,
+        key=lambda result: (
+            result.peak_changed_percent,
+            result.peak_mean_difference,
+        ),
+        reverse=True,
     )
 
 
@@ -119,7 +162,7 @@ class ObsVisualProbeService(QObject):
         with self._lock:
             return self._active
 
-    def start(self, config: ObsConnectionConfig, source_name: str) -> bool:
+    def start(self, config: ObsConnectionConfig, scene_name: str) -> bool:
         with self._lock:
             if self._active:
                 return False
@@ -128,7 +171,7 @@ class ObsVisualProbeService(QObject):
         self._stop_event.clear()
         self._thread = threading.Thread(
             target=self._run,
-            args=(config, source_name),
+            args=(config, scene_name),
             name="MeetingAssistant-OBS-VisualProbe",
             daemon=True,
         )
@@ -141,7 +184,7 @@ class ObsVisualProbeService(QObject):
         if thread and thread.is_alive():
             thread.join(timeout=2.0)
 
-    def _run(self, config: ObsConnectionConfig, source_name: str) -> None:
+    def _run(self, config: ObsConnectionConfig, scene_name: str) -> None:
         client: obs.ReqClient | None = None
         try:
             self.started.emit()
@@ -152,15 +195,16 @@ class ObsVisualProbeService(QObject):
                 timeout=3,
             )
 
-            reference = self._calibrate(client, source_name)
-            if reference is None:
+            targets = self._discover_targets(client, scene_name)
+            baselines = self._calibrate(client, targets)
+            if not baselines:
                 raise RuntimeError(
-                    f"Não foi possível obter uma imagem válida da cena/fonte '{source_name}'."
+                    f"Não foi possível obter imagem válida da cena '{scene_name}' nem de suas fontes."
                 )
 
             self.baseline_ready.emit()
-            samples = self._observe(client, source_name, reference)
-            report = self._build_report(source_name, samples)
+            results = self._observe(client, baselines)
+            report = self._build_report(scene_name, targets, baselines, results)
             path = self._save_report(report)
             self.finished.emit(report, str(path))
         except Exception as exc:
@@ -177,35 +221,92 @@ class ObsVisualProbeService(QObject):
             with self._lock:
                 self._active = False
 
-    def _calibrate(self, client: obs.ReqClient, source_name: str) -> bytes | None:
+    def _discover_targets(self, client: obs.ReqClient, scene_name: str) -> list[str]:
+        targets = [scene_name]
+        visited: set[tuple[str, str]] = set()
+
+        def visit(container_name: str, *, is_group: bool = False) -> None:
+            if len(targets) >= MAX_PROBE_TARGETS:
+                return
+            key = ("group" if is_group else "scene", container_name)
+            if key in visited:
+                return
+            visited.add(key)
+
+            request_name = "GetGroupSceneItemList" if is_group else "GetSceneItemList"
+            try:
+                payload = client.send(
+                    request_name,
+                    {"sceneName": container_name},
+                    raw=True,
+                )
+            except Exception:
+                return
+
+            items = payload.get("sceneItems") or payload.get("scene_items") or []
+            for item in items:
+                if len(targets) >= MAX_PROBE_TARGETS or not isinstance(item, dict):
+                    break
+                source_name = item.get("sourceName") or item.get("source_name")
+                if not isinstance(source_name, str) or not source_name:
+                    continue
+                if source_name not in targets:
+                    targets.append(source_name)
+
+                source_type = str(
+                    item.get("sourceType") or item.get("source_type") or ""
+                ).upper()
+                if bool(item.get("isGroup") or item.get("is_group")):
+                    visit(source_name, is_group=True)
+                elif source_type == "OBS_SOURCE_TYPE_SCENE":
+                    visit(source_name, is_group=False)
+
+        visit(scene_name)
+        return targets
+
+    def _calibrate(
+        self,
+        client: obs.ReqClient,
+        targets: list[str],
+    ) -> dict[str, bytes]:
         deadline = time.monotonic() + self._calibration_seconds
-        reference: bytes | None = None
+        baselines: dict[str, bytes] = {}
+
         while not self._stop_event.is_set() and time.monotonic() < deadline:
-            frame = self._capture(client, source_name)
-            if frame is not None:
-                reference = frame
-            self._stop_event.wait(0.35)
-        return reference
+            for source_name in targets:
+                if self._stop_event.is_set():
+                    break
+                frame = self._capture(client, source_name)
+                if frame is not None:
+                    baselines[source_name] = frame
+            self._stop_event.wait(0.25)
+
+        return baselines
 
     def _observe(
         self,
         client: obs.ReqClient,
-        source_name: str,
-        reference: bytes,
-    ) -> list[VisualSample]:
+        baselines: dict[str, bytes],
+    ) -> list[SourceProbeResult]:
         started_at = time.monotonic()
         duration_ms = int(self._duration_seconds * 1000)
-        samples: list[VisualSample] = []
+        sample_map: dict[str, list[VisualSample]] = {
+            source_name: [] for source_name in baselines
+        }
 
         while not self._stop_event.is_set():
             elapsed_ms = int((time.monotonic() - started_at) * 1000)
             if elapsed_ms >= duration_ms:
                 break
 
-            frame = self._capture(client, source_name)
-            if frame is not None and len(frame) == len(reference):
+            for source_name, reference in baselines.items():
+                if self._stop_event.is_set():
+                    break
+                frame = self._capture(client, source_name)
+                if frame is None or len(frame) != len(reference):
+                    continue
                 changed, mean = pixel_difference(reference, frame)
-                samples.append(
+                sample_map[source_name].append(
                     VisualSample(
                         elapsed_ms=elapsed_ms,
                         changed_percent=changed,
@@ -217,7 +318,10 @@ class ObsVisualProbeService(QObject):
             self._stop_event.wait(self._sample_interval)
 
         self.progress_changed.emit(duration_ms, duration_ms)
-        return samples
+        return [
+            SourceProbeResult(source_name=name, samples=tuple(samples))
+            for name, samples in sample_map.items()
+        ]
 
     @staticmethod
     def _capture(client: obs.ReqClient, source_name: str) -> bytes | None:
@@ -228,7 +332,10 @@ class ObsVisualProbeService(QObject):
             "imageHeight": 180,
             "imageCompressionQuality": 65,
         }
-        payload = client.send("GetSourceScreenshot", request_data, raw=True)
+        try:
+            payload = client.send("GetSourceScreenshot", request_data, raw=True)
+        except Exception:
+            return None
         image_data = payload.get("imageData") or payload.get("image_data")
         if not isinstance(image_data, str):
             return None
@@ -237,48 +344,69 @@ class ObsVisualProbeService(QObject):
             return None
         return image_to_luma(decoded)
 
-    def _build_report(self, source_name: str, samples: list[VisualSample]) -> str:
+    def _build_report(
+        self,
+        scene_name: str,
+        targets: list[str],
+        baselines: dict[str, bytes],
+        results: list[SourceProbeResult],
+    ) -> str:
+        ranked = rank_results(results)
+        best = ranked[0] if ranked else None
+
         lines = [
-            "Meeting Assistant — probe visual de mídia pelo OBS",
+            "Meeting Assistant — descoberta de sensor visual pelo OBS",
             f"Data UTC: {datetime.now(UTC).isoformat(timespec='seconds')}",
-            f"Cena/fonte observada: {source_name}",
+            f"Cena usada para descoberta: {scene_name}",
             f"Resolução de análise: {PROBE_WIDTH}x{PROBE_HEIGHT} em tons de cinza",
-            f"Amostras válidas: {len(samples)}",
+            f"Alvos encontrados: {len(targets)}",
+            f"Alvos com screenshot válido: {len(baselines)}",
             "",
+            "Alvos encontrados:",
         ]
+        for target in targets:
+            state = "screenshot OK" if target in baselines else "sem screenshot válido"
+            lines.append(f"  • {target} — {state}")
 
-        if not samples:
-            lines.append("Nenhuma amostra válida foi obtida após a calibração.")
-            return "\n".join(lines)
+        lines.extend(["", "Ranking de sensores:"])
+        if not ranked:
+            lines.append("  nenhum sensor produziu amostras válidas")
+        else:
+            for index, result in enumerate(ranked, start=1):
+                lines.append(
+                    f"  {index}. {result.source_name} — pico "
+                    f"{result.peak_changed_percent:.2f}% • diferença média máx. "
+                    f"{result.peak_mean_difference:.2f} • final "
+                    f"{result.tail_average:.2f}% • {len(result.samples)} amostras"
+                )
 
-        peak = max(samples, key=lambda sample: sample.changed_percent)
-        mean_peak = max(samples, key=lambda sample: sample.mean_difference)
-        tail = samples[-min(4, len(samples)) :]
-        tail_average = sum(sample.changed_percent for sample in tail) / len(tail)
+        lines.extend(["", "Conclusão automática:"])
+        if best is None:
+            lines.append("Nenhuma fonte adequada pôde ser avaliada.")
+        elif best.peak_changed_percent < 2.0:
+            lines.append(
+                "Nenhuma fonte da cena mudou de forma útil neste teste. Isso indica que a "
+                "configuração atual do OBS não está observando a saída visual que muda quando "
+                "o JW Library toca mídia."
+            )
+        else:
+            lines.append(f"Melhor candidato: {best.source_name}")
+            lines.append(classify_samples(best.samples))
 
-        lines.extend(
-            [
-                f"Maior alteração: {peak.changed_percent:.2f}% em +{peak.elapsed_ms / 1000:.1f}s",
-                f"Maior diferença média: {mean_peak.mean_difference:.2f} em "
-                f"+{mean_peak.elapsed_ms / 1000:.1f}s",
-                f"Média das últimas amostras: {tail_average:.2f}%",
-                "",
-                "Conclusão automática:",
-                classify_samples(samples),
-                "",
-                "Amostras:",
-            ]
-        )
-        lines.extend(
-            f"  +{sample.elapsed_ms / 1000:5.1f}s • alterado "
-            f"{sample.changed_percent:6.2f}% • diferença média {sample.mean_difference:6.2f}"
-            for sample in samples
-        )
+        if best is not None and best.samples:
+            lines.extend(["", f"Amostras do melhor candidato ({best.source_name}):"])
+            lines.extend(
+                f"  +{sample.elapsed_ms / 1000:5.1f}s • alterado "
+                f"{sample.changed_percent:6.2f}% • diferença média "
+                f"{sample.mean_difference:6.2f}"
+                for sample in best.samples
+            )
+
         lines.extend(
             [
                 "",
                 "Observação:",
-                "Este teste lê somente screenshots de baixa resolução fornecidos pelo OBS.",
+                "O teste avalia a cena de Mídia e cada fonte visual encontrada dentro dela.",
                 "Nenhuma cena do OBS é alterada pelo probe.",
             ]
         )
@@ -290,6 +418,6 @@ class ObsVisualProbeService(QObject):
         folder = root / "MeetingAssistant" / "diagnostics"
         folder.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        path = folder / f"obs-media-probe-{stamp}.txt"
+        path = folder / f"obs-source-probe-{stamp}.txt"
         path.write_text(report, encoding="utf-8")
         return path
