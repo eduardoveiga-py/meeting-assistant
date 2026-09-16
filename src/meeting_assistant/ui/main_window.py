@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from meeting_assistant.core.state import AppState, OperatingMode
+from meeting_assistant.services.display_service import DisplayInfo, DisplayService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.settings import AppSettings, SettingsService
 from meeting_assistant.ui.settings_dialog import SettingsDialog
@@ -28,6 +29,7 @@ class MainWindow(QMainWindow):
         settings: AppSettings,
         settings_service: SettingsService,
         obs_controller: ObsController,
+        display_service: DisplayService,
         app_icon: QIcon | None = None,
     ) -> None:
         super().__init__()
@@ -35,21 +37,22 @@ class MainWindow(QMainWindow):
         self.settings = settings
         self.settings_service = settings_service
         self.obs = obs_controller
+        self.displays = display_service
         self.app_icon = app_icon or QIcon()
         self.obs_connected = False
         self.obs_scenes: list[str] = []
         self.current_obs_scene: str | None = None
+        self.display_snapshot: list[DisplayInfo] = []
 
         self.setWindowIcon(self.app_icon)
-        self.setWindowTitle("Meeting Assistant 3.0")
         self.resize(520, 620)
         self.setMinimumSize(470, 560)
-        if self.state.simulation_enabled:
-            self.setWindowTitle("Meeting Assistant 3.0 — Modo de Simulação")
 
         self._build_ui()
         self._apply_style()
         self._connect_obs_signals()
+        self._connect_display_signals()
+        self._on_displays_changed(self.displays.snapshot())
         self._refresh_mode()
 
     def _build_ui(self) -> None:
@@ -157,6 +160,7 @@ class MainWindow(QMainWindow):
         self.preview.setAlignment(Qt.AlignCenter)
         self.preview.setMinimumSize(280, 158)
         self.preview.setMaximumSize(320, 180)
+        self.preview.setScaledContents(False)
         preview_row.addWidget(self.preview)
         preview_row.addStretch()
         controls.addLayout(preview_row)
@@ -186,7 +190,12 @@ class MainWindow(QMainWindow):
         self.obs.connected_changed.connect(self._on_obs_connected)
         self.obs.scenes_changed.connect(self._on_obs_scenes)
         self.obs.scene_changed.connect(self._on_obs_scene)
+        self.obs.preview_changed.connect(self._on_obs_preview)
+        self.obs.preview_error.connect(self._on_obs_preview_error)
         self.obs.error.connect(self._on_obs_error)
+
+    def _connect_display_signals(self) -> None:
+        self.displays.displays_changed.connect(self._on_displays_changed)
 
     def _section_label(self, text: str) -> QLabel:
         label = QLabel(text)
@@ -230,10 +239,12 @@ class MainWindow(QMainWindow):
         self.obs_connected = connected
         if connected:
             self._set_component_status("OBS", "ok", "● OBS", message)
-            self.preview.setText("OBS conectado\npreview real no próximo teste")
+            self.preview.clear()
+            self.preview.setText("Aguardando preview do OBS…")
         else:
             self.current_obs_scene = None
             self._set_component_status("OBS", "error", "● OBS", message)
+            self.preview.clear()
             self.preview.setText("OBS desconectado\n16:9")
             self.mode_label.setText("Salão: aguardando OBS")
 
@@ -249,6 +260,64 @@ class MainWindow(QMainWindow):
         if mode is not None:
             self.state.set_mode(mode)
         self._refresh_mode()
+        self.obs.refresh_preview()
+
+    def _on_obs_preview(self, image_bytes: bytes) -> None:
+        pixmap = QPixmap()
+        if not pixmap.loadFromData(image_bytes):
+            self.preview.clear()
+            self.preview.setText("Preview inválido")
+            return
+        scaled = pixmap.scaled(
+            self.preview.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.preview.setPixmap(scaled)
+        self.preview.setToolTip(
+            f"Preview real do OBS Program • {self.current_obs_scene or 'cena atual'}"
+        )
+
+    def _on_obs_preview_error(self, message: str) -> None:
+        if not self.obs_connected:
+            return
+        self.preview.clear()
+        self.preview.setText("Preview indisponível\nverifique o diagnóstico")
+        self.preview.setToolTip(message)
+
+    def _on_displays_changed(self, displays: list[DisplayInfo]) -> None:
+        self.display_snapshot = displays
+        self.state.second_display_available = len(displays) >= 2
+        self._update_window_title()
+
+        if not displays:
+            self._set_component_status(
+                "Tela 2",
+                "error",
+                "● Tela 2",
+                "Nenhum monitor foi detectado pelo Windows.",
+            )
+            return
+
+        if len(displays) == 1:
+            display = displays[0]
+            self._set_component_status(
+                "Tela 2",
+                "warning",
+                "○ Tela 2",
+                f"Somente 1 monitor detectado ({display.name}, {display.resolution}). "
+                "Modo de simulação ativo.",
+            )
+            return
+
+        secondary = next((item for item in displays if not item.primary), displays[1])
+        self._set_component_status(
+            "Tela 2",
+            "ok",
+            "● Tela 2",
+            f"Segunda tela detectada: {secondary.name} • {secondary.resolution} • "
+            f"posição {secondary.x},{secondary.y}",
+        )
 
     def _on_obs_error(self, message: str) -> None:
         self.mode_label.setText(message)
@@ -264,12 +333,19 @@ class MainWindow(QMainWindow):
         self.obs.reconfigure(self._obs_config())
 
     def _show_diagnostics(self) -> None:
+        display_lines = "\n".join(
+            f"• {'Principal' if display.primary else 'Secundária'}: "
+            f"{display.name} • {display.resolution} • {display.x},{display.y}"
+            for display in self.display_snapshot
+        ) or "• nenhum monitor detectado"
+
         if not self.obs_connected:
             QMessageBox.information(
                 self,
                 "Verificação do sistema",
                 "OBS WebSocket não está conectado.\n\n"
-                "Abra o OBS e confira host, porta e senha em Ajustes.",
+                "Abra o OBS e confira host, porta e senha em Ajustes.\n\n"
+                f"Monitores detectados:\n{display_lines}",
             )
             return
 
@@ -288,10 +364,11 @@ class MainWindow(QMainWindow):
         missing_text = "\n".join(f"• {item}" for item in missing) or "• nenhuma"
         QMessageBox.information(
             self,
-            "Verificação do OBS",
+            "Verificação do sistema",
             f"Cena Program atual: {self.current_obs_scene or 'desconhecida'}\n\n"
             f"Cenas encontradas:\n{scene_lines}\n\n"
-            f"Mapeamentos ausentes:\n{missing_text}",
+            f"Mapeamentos ausentes:\n{missing_text}\n\n"
+            f"Monitores detectados:\n{display_lines}",
         )
 
     def _obs_config(self) -> ObsConnectionConfig:
@@ -349,6 +426,12 @@ class MainWindow(QMainWindow):
         }
         self.mode_label.setText(f"Simulação: {readable[self.state.current_mode]}")
 
+    def _update_window_title(self) -> None:
+        if self.state.second_display_available:
+            self.setWindowTitle("Meeting Assistant 3.0")
+        else:
+            self.setWindowTitle("Meeting Assistant 3.0 — Modo de Simulação")
+
     def _set_component_status(
         self,
         name: str,
@@ -404,6 +487,10 @@ class MainWindow(QMainWindow):
             QLabel#StatusBadge[state='ok'] {
                 color: #73e6a2;
                 border-color: #286743;
+            }
+            QLabel#StatusBadge[state='warning'] {
+                color: #ffd166;
+                border-color: #705b2a;
             }
             QLabel#StatusBadge[state='error'] {
                 color: #ff9299;
