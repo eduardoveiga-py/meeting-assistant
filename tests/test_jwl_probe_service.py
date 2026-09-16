@@ -1,76 +1,47 @@
-from meeting_assistant.services.jwl_probe_service import (
-    describe_changes,
-    structural_signature,
+from meeting_assistant.services.obs_visual_probe_service import (
+    VisualSample,
+    classify_samples,
+    pixel_difference,
 )
-from meeting_assistant.services.jwl_service import JwlWindowInfo
 
 
-def make_window(
-    hwnd: int = 100,
-    *,
-    title: str = "JW Library",
-    left: int = 0,
-    top: int = 0,
-    right: int = 1280,
-    bottom: int = 720,
-    visible: bool = True,
-    minimized: bool = False,
-) -> JwlWindowInfo:
-    return JwlWindowInfo(
-        hwnd=hwnd,
-        pid=42,
-        process_name="JWLibrary.exe",
-        title=title,
-        class_name="ApplicationFrameWindow",
-        left=left,
-        top=top,
-        right=right,
-        bottom=bottom,
-        visible=visible,
-        minimized=minimized,
-        foreground=False,
+def sample(elapsed_ms: int, changed_percent: float, mean_difference: float = 1.0) -> VisualSample:
+    return VisualSample(
+        elapsed_ms=elapsed_ms,
+        changed_percent=changed_percent,
+        mean_difference=mean_difference,
     )
 
 
-def test_structural_signature_ignores_foreground_only() -> None:
-    first = make_window()
-    second = JwlWindowInfo(
-        hwnd=first.hwnd,
-        pid=first.pid,
-        process_name=first.process_name,
-        title=first.title,
-        class_name=first.class_name,
-        left=first.left,
-        top=first.top,
-        right=first.right,
-        bottom=first.bottom,
-        visible=first.visible,
-        minimized=first.minimized,
-        foreground=True,
-    )
+def test_pixel_difference_identical_frames() -> None:
+    changed, mean = pixel_difference(bytes([10, 20, 30, 40]), bytes([10, 20, 30, 40]))
 
-    assert structural_signature([first]) == structural_signature([second])
+    assert changed == 0.0
+    assert mean == 0.0
 
 
-def test_describe_changes_reports_created_window() -> None:
-    result = describe_changes((make_window(),), (make_window(), make_window(200)))
+def test_pixel_difference_reports_changed_pixels() -> None:
+    changed, mean = pixel_difference(bytes([0, 0, 0, 0]), bytes([0, 20, 0, 20]))
 
-    assert any("janela criada" in line and "HWND 200" in line for line in result)
-
-
-def test_describe_changes_reports_geometry_change() -> None:
-    result = describe_changes(
-        (make_window(),),
-        (make_window(left=1280, right=2560),),
-    )
-
-    assert any("retângulo" in line for line in result)
+    assert changed == 50.0
+    assert mean == 10.0
 
 
-def test_describe_changes_reports_visibility_change() -> None:
-    result = describe_changes(
-        (make_window(),),
-        (make_window(visible=False),),
-    )
+def test_classify_samples_accepts_strong_signal_that_returns_to_baseline() -> None:
+    samples = [
+        sample(0, 0.2),
+        sample(1000, 14.0, 20.0),
+        sample(2000, 18.0, 25.0),
+        sample(3000, 0.4),
+        sample(4000, 0.3),
+        sample(5000, 0.2),
+        sample(6000, 0.2),
+    ]
 
-    assert any("visível True → False" in line for line in result)
+    assert classify_samples(samples).startswith("Sinal forte")
+
+
+def test_classify_samples_rejects_nearly_static_scene() -> None:
+    samples = [sample(0, 0.1), sample(1000, 0.4), sample(2000, 0.6)]
+
+    assert classify_samples(samples).startswith("Pouca mudança")
