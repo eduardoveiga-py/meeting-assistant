@@ -110,6 +110,8 @@ def main() -> int:
 
     media_automation.status_changed.connect(window.set_automation_status)
     media_automation.signal_changed.connect(window.set_automation_signal)
+    media_automation.media_started.connect(obs_controller.set_program_scene)
+    media_automation.media_ended.connect(obs_controller.set_program_scene)
     media_automation.error.connect(window.set_automation_status)
     window.automation_enabled_changed.connect(media_automation.set_enabled)
 
