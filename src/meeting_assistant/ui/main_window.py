@@ -1,10 +1,17 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import (
+    QEasingCurve,
+    QPropertyAnimation,
+    QSequentialAnimationGroup,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
+    QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -52,13 +59,14 @@ class MainWindow(QMainWindow):
         self.current_obs_scene: str | None = None
         self.display_snapshot: list[DisplayInfo] = []
         self.jwl_snapshot: list[JwlWindowInfo] = []
+        self._startup_scene_applied = False
+        self._preview_fade_group: QSequentialAnimationGroup | None = None
 
-        # Segurança operacional: cada execução sempre começa pausada.
         self.state.automation_enabled = False
 
         self.setWindowIcon(self.app_icon)
-        self.resize(520, 680)
-        self.setMinimumSize(470, 610)
+        self.resize(600, 780)
+        self.setMinimumSize(520, 700)
 
         self._build_ui()
         self._apply_style()
@@ -131,7 +139,7 @@ class MainWindow(QMainWindow):
         self.mode_buttons: dict[OperatingMode, QPushButton] = {}
         button_specs = [
             (OperatingMode.BACKGROUND, "📖 Fundo", 0, 0),
-            (OperatingMode.SPEAKER, "🎤 Orador", 0, 1),
+            (OperatingMode.SPEAKER, "🎤 Palco", 0, 1),
             (OperatingMode.MEDIA, "🎥 Mídia", 1, 0),
             (OperatingMode.ZOOM, "💻 Zoom → Salão", 1, 1),
         ]
@@ -152,7 +160,7 @@ class MainWindow(QMainWindow):
         self.automation_status.setWordWrap(True)
         controls.addWidget(self.automation_status)
 
-        panic = QPushButton("🛟 Cena segura")
+        panic = QPushButton("🛟 Cena segura → Palco")
         panic.setObjectName("DangerButton")
         panic.clicked.connect(self._activate_safe_scene)
         controls.addWidget(panic)
@@ -172,7 +180,7 @@ class MainWindow(QMainWindow):
 
         self.jwl_probe_button = QPushButton("🧪 Observar mídia no JW Library (20 s)")
         self.jwl_probe_button.setToolTip(
-            "Registra alterações nas janelas do JW Library sem trocar cenas do OBS."
+            "Diagnóstico opcional da saída de mídia do JW Library."
         )
         self.jwl_probe_button.clicked.connect(self._start_jwl_probe)
         controls.addWidget(self.jwl_probe_button)
@@ -185,15 +193,18 @@ class MainWindow(QMainWindow):
         self.preview = QLabel("Conectando ao OBS…\n16:9")
         self.preview.setObjectName("Preview")
         self.preview.setAlignment(Qt.AlignCenter)
-        self.preview.setMinimumSize(280, 158)
-        self.preview.setMaximumSize(320, 180)
+        self.preview.setMinimumSize(420, 236)
+        self.preview.setMaximumSize(480, 270)
         self.preview.setScaledContents(False)
+        self.preview_opacity = QGraphicsOpacityEffect(self.preview)
+        self.preview_opacity.setOpacity(1.0)
+        self.preview.setGraphicsEffect(self.preview_opacity)
         preview_row.addWidget(self.preview)
         preview_row.addStretch()
         controls.addLayout(preview_row)
 
         self.zoom_output_label = QLabel(
-            "Zoom recebe: OBS Virtual Camera • saída independente"
+            "Zoom recebe: OBS Virtual Camera • transições feitas pelo OBS"
         )
         self.zoom_output_label.setObjectName("ZoomOutputLabel")
         self.zoom_output_label.setAlignment(Qt.AlignCenter)
@@ -206,7 +217,7 @@ class MainWindow(QMainWindow):
 
         root.addWidget(controls_card, 1)
 
-        footer = QLabel("Painel compacto • OBS é a fonte de verdade das cenas")
+        footer = QLabel("OBS é a fonte de verdade • fluxo principal: Palco ↔ Mídias")
         footer.setObjectName("Footer")
         footer.setAlignment(Qt.AlignCenter)
         root.addWidget(footer)
@@ -270,14 +281,14 @@ class MainWindow(QMainWindow):
             self.state.automation_enabled = False
             self._set_automation_ui(False)
             self.automation_enabled_changed.emit(False)
-        self._select_mode(OperatingMode.BACKGROUND)
+        self._select_mode(OperatingMode.SPEAKER)
 
     def _set_automation_ui(self, enabled: bool) -> None:
         if enabled:
             self.automation_badge.setText("AUTOMAÇÃO ATIVA")
             self.automation_badge.setProperty("active", True)
             self.auto_button.setText("⏸️ Pausar automação")
-            self.automation_status.setText("Automação ativada; iniciando sensor…")
+            self.automation_status.setText("Automação ativada; calibrando Mídias…")
         else:
             self.automation_badge.setText("AUTOMAÇÃO PAUSADA")
             self.automation_badge.setProperty("active", False)
@@ -298,7 +309,7 @@ class MainWindow(QMainWindow):
     ) -> None:
         if not self.state.automation_enabled:
             return
-        state_text = "MÍDIA DETECTADA" if active else "aguardando mídia"
+        state_text = "MÍDIA DETECTADA" if active else "repouso / aguardando mídia"
         self.automation_status.setText(
             f"Sensor: {source_name} • sinal {changed_percent:.1f}% • {state_text}"
         )
@@ -309,6 +320,10 @@ class MainWindow(QMainWindow):
             self._set_component_status("OBS", "ok", "● OBS", message)
             self.preview.clear()
             self.preview.setText("Aguardando preview do OBS…")
+            if not self._startup_scene_applied and self.settings.scene_speaker:
+                self._startup_scene_applied = True
+                self.mode_label.setText("Inicializando em Palco…")
+                self.obs.set_program_scene(self.settings.scene_speaker)
         else:
             self.current_obs_scene = None
             self._set_component_status("OBS", "error", "● OBS", message)
@@ -328,7 +343,30 @@ class MainWindow(QMainWindow):
         if mode is not None:
             self.state.set_mode(mode)
         self._refresh_mode()
+        self._start_preview_fade()
         self.obs.refresh_preview()
+
+    def _start_preview_fade(self) -> None:
+        if self._preview_fade_group is not None:
+            self._preview_fade_group.stop()
+
+        fade_out = QPropertyAnimation(self.preview_opacity, b"opacity", self)
+        fade_out.setDuration(120)
+        fade_out.setStartValue(1.0)
+        fade_out.setEndValue(0.20)
+        fade_out.setEasingCurve(QEasingCurve.Type.InOutQuad)
+
+        fade_in = QPropertyAnimation(self.preview_opacity, b"opacity", self)
+        fade_in.setDuration(230)
+        fade_in.setStartValue(0.20)
+        fade_in.setEndValue(1.0)
+        fade_in.setEasingCurve(QEasingCurve.Type.InOutQuad)
+
+        group = QSequentialAnimationGroup(self)
+        group.addAnimation(fade_out)
+        group.addAnimation(fade_in)
+        self._preview_fade_group = group
+        group.start()
 
     def _on_obs_preview(self, image_bytes: bytes) -> None:
         pixmap = QPixmap()
@@ -343,7 +381,7 @@ class MainWindow(QMainWindow):
         )
         self.preview.setPixmap(scaled)
         self.preview.setToolTip(
-            f"Preview real do OBS Program • {self.current_obs_scene or 'cena atual'}"
+            f"Preview 640×360 do OBS Program • {self.current_obs_scene or 'cena atual'}"
         )
 
     def _on_obs_preview_error(self, message: str) -> None:
@@ -448,6 +486,7 @@ class MainWindow(QMainWindow):
 
         dialog.apply_to(self.settings)
         self.settings_service.save(self.settings)
+        self._startup_scene_applied = False
         self._set_component_status("OBS", "pending", "○ OBS", "Reconectando…")
         self.obs.reconfigure(self._obs_config())
 
@@ -472,7 +511,7 @@ class MainWindow(QMainWindow):
 
         configured = {
             "Fundo": self.settings.scene_background,
-            "Orador": self.settings.scene_speaker,
+            "Palco": self.settings.scene_speaker,
             "Mídia": self.settings.scene_media,
             "Zoom → Salão": self.settings.scene_zoom,
         }
@@ -542,25 +581,20 @@ class MainWindow(QMainWindow):
         for mode, button in self.mode_buttons.items():
             button.setChecked(mode == actual_mode)
 
+        readable = {
+            OperatingMode.BACKGROUND: "Fundo",
+            OperatingMode.SPEAKER: "Palco",
+            OperatingMode.MEDIA: "Mídia",
+            OperatingMode.ZOOM: "Zoom remoto",
+        }
+
         if self.obs_connected and self.current_obs_scene:
-            readable = {
-                OperatingMode.BACKGROUND: "Fundo",
-                OperatingMode.SPEAKER: "Orador",
-                OperatingMode.MEDIA: "Mídia",
-                OperatingMode.ZOOM: "Zoom remoto",
-            }
             if actual_mode is None:
                 self.mode_label.setText(f"OBS Program: {self.current_obs_scene}")
             else:
                 self.mode_label.setText(f"Salão: {readable[actual_mode]}")
             return
 
-        readable = {
-            OperatingMode.BACKGROUND: "Fundo",
-            OperatingMode.SPEAKER: "Orador",
-            OperatingMode.MEDIA: "Mídia",
-            OperatingMode.ZOOM: "Zoom remoto",
-        }
         self.mode_label.setText(f"Simulação: {readable[self.state.current_mode]}")
 
     def _update_window_title(self) -> None:
