@@ -4,7 +4,7 @@ import ctypes
 import sys
 from importlib.resources import as_file, files
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QLoggingCategory, Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
@@ -22,6 +22,13 @@ def _set_windows_app_id() -> None:
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
 
 
+def _configure_qt_logging() -> None:
+    # Qt/DirectWrite can warn while probing legacy Windows bitmap fonts such as
+    # Fixedsys and 8514oem. They are not used by Meeting Assistant and the
+    # warning is harmless, so suppress only this narrow Qt font category.
+    QLoggingCategory.setFilterRules("qt.qpa.fonts.warning=false")
+
+
 def _load_app_icon() -> QIcon:
     resource = files("meeting_assistant.resources").joinpath("app_icon.svg")
     with as_file(resource) as icon_path:
@@ -30,6 +37,7 @@ def _load_app_icon() -> QIcon:
 
 def main() -> int:
     _set_windows_app_id()
+    _configure_qt_logging()
 
     app = QApplication(sys.argv)
     app.setApplicationName("Meeting Assistant")
