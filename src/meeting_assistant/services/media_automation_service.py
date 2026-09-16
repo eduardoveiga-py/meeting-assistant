@@ -118,6 +118,16 @@ def sensor_candidate_score(
     return score
 
 
+def set_program_scene(client: obs.ReqClient, scene_name: str) -> None:
+    """Troca o Program usando o request OBS WebSocket v5 explícito."""
+
+    client.send(
+        "SetCurrentProgramScene",
+        {"sceneName": scene_name},
+        raw=True,
+    )
+
+
 def should_restore_scene(
     *,
     auto_switched: bool,
@@ -137,7 +147,6 @@ def should_restore_scene(
 class MediaAutomationService(QObject):
     """Detecta mídia do JW Library e automatiza a cena Mídia com proteção manual."""
 
-    request_scene_change = Signal(str)
     status_changed = Signal(str)
     signal_changed = Signal(str, float, bool)
     media_started = Signal(str)
@@ -430,9 +439,9 @@ class MediaAutomationService(QObject):
         self._return_scene = current_scene
         self._auto_switched = True
         self._switch_requested_at = time.monotonic()
-        self.request_scene_change.emit(config.media_scene)
+        set_program_scene(client, config.media_scene)
         self.media_started.emit(config.media_scene)
-        self._emit_status(f"Mídia detectada: entrando em '{config.media_scene}'.")
+        self._emit_status(f"Mídia detectada: OBS alterado para '{config.media_scene}'.")
 
     def _handle_media_ended(
         self,
@@ -451,9 +460,9 @@ class MediaAutomationService(QObject):
             media_scene=config.media_scene,
         ):
             assert return_scene is not None
-            self.request_scene_change.emit(return_scene)
+            set_program_scene(client, return_scene)
             self.media_ended.emit(return_scene)
-            self._emit_status(f"Mídia encerrada: retornando para '{return_scene}'.")
+            self._emit_status(f"Mídia encerrada: OBS retornou para '{return_scene}'.")
         elif self._manual_override:
             self.media_ended.emit(current_scene or "")
             self._emit_status(
