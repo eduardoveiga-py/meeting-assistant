@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QApplication
 
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.display_service import DisplayService
+from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.obs_visual_probe_service import ObsVisualProbeService
@@ -51,10 +52,20 @@ def main() -> int:
     settings = settings_service.load()
     state = AppState(simulation_enabled=settings.simulation_enabled)
 
+    obs_config = ObsConnectionConfig(
+        host=settings.obs_host,
+        port=settings.obs_port,
+        password=settings.obs_password,
+    )
     obs_controller = ObsController(poll_interval=1.0, preview_interval=1.0)
     display_service = DisplayService(app)
     jwl_service = JwlService(interval_ms=2000)
     visual_probe = ObsVisualProbeService()
+    jwl_probe = JwlProbeService(
+        visual_probe=visual_probe,
+        config=obs_config,
+        media_scene=settings.scene_media,
+    )
 
     window = MainWindow(
         state=state,
@@ -63,27 +74,20 @@ def main() -> int:
         obs_controller=obs_controller,
         display_service=display_service,
         jwl_service=jwl_service,
-        visual_probe=visual_probe,
+        jwl_probe=jwl_probe,
         app_icon=app_icon,
     )
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
     app.aboutToQuit.connect(obs_controller.stop)
-    app.aboutToQuit.connect(visual_probe.stop)
+    app.aboutToQuit.connect(jwl_probe.stop)
     app.aboutToQuit.connect(jwl_service.stop)
 
     window.show()
     display_service.start()
     jwl_service.start()
-
-    obs_controller.start(
-        ObsConnectionConfig(
-            host=settings.obs_host,
-            port=settings.obs_port,
-            password=settings.obs_password,
-        )
-    )
+    obs_controller.start(obs_config)
 
     return app.exec()
 
