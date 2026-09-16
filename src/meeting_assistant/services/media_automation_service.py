@@ -39,9 +39,9 @@ class MediaAutomationConfig:
 
 @dataclass(slots=True)
 class MediaSignalDetector:
-    """Converte diferença visual em início/fim de mídia com debounce curto."""
+    """Converte diferença visual em início/fim com debounce curto."""
 
-    start_threshold: float = 4.0
+    start_threshold: float = 3.0
     end_threshold: float = 1.5
     start_hits_required: int = 2
     end_hits_required: int = 2
@@ -95,7 +95,7 @@ def sensor_candidate_score(
     input_kind: str | None,
     settings: dict[str, Any],
 ) -> int:
-    """Mantido para compatibilidade dos diagnósticos antigos."""
+    """Pontua fontes que parecem ser a captura direta do JW Library."""
 
     score = 0
     name = source_name.casefold()
@@ -140,7 +140,7 @@ def should_restore_scene(
 
 
 class MediaAutomationService(QObject):
-    """Automação principal Palco → Mídias → Palco baseada no estado visual idle."""
+    """Fluxo determinístico Palco → Mídias → Palco."""
 
     status_changed = Signal(str)
     signal_changed = Signal(str, float, bool)
@@ -162,10 +162,9 @@ class MediaAutomationService(QObject):
         self._detector = MediaSignalDetector()
         self._last_status: str | None = None
         self._last_signal_emit_at = 0.0
-        self._return_scene: str | None = None
-        self._auto_switched = False
-        self._manual_override = False
-        self._program_seen_media = False
+        self._active_since = 0.0
+        self._scene_seen_media = False
+        self._direct_seen_media = False
 
     @property
     def enabled(self) -> bool:
@@ -175,7 +174,7 @@ class MediaAutomationService(QObject):
         if enabled:
             self._enabled_event.set()
             self._last_signal_emit_at = 0.0
-            self._emit_status("Automação ativada; calibrando a tela de repouso de Mídias…")
+            self._emit_status("Automação ativada; calibrando saída do JW Library…")
         else:
             self._enabled_event.clear()
             self._emit_status("Automação pausada; monitoramento de mídia suspenso.")
@@ -200,17 +199,22 @@ class MediaAutomationService(QObject):
     def _run(self) -> None:
         client: obs.ReqClient | None = None
         active_config: MediaAutomationConfig | None = None
-        baseline: bytes | None = None
+        scene_baseline: bytes | None = None
+        direct_baseline: bytes | None = None
+        direct_source: str | None = None
         was_enabled = False
 
         while not self._stop_event.is_set():
             if not self._enabled_event.is_set():
                 if was_enabled:
-                    self._emit_status("Automação pausada; monitoramento de mídia suspenso.")
+                    self._emit_status(
+                        "Automação pausada; monitoramento de mídia suspenso."
+                    )
                 was_enabled = False
-                baseline = None
-                self._detector.reset()
-                self._reset_session()
+                scene_baseline = None
+                direct_baseline = None
+                direct_source = None
+                self._reset_detector()
                 self._close_client(client)
                 client = None
                 self._stop_event.wait(0.15)
@@ -220,9 +224,10 @@ class MediaAutomationService(QObject):
             config = self._config_provider()
             if config != active_config:
                 active_config = config
-                baseline = None
-                self._detector.reset()
-                self._reset_session()
+                scene_baseline = None
+                direct_baseline = None
+                direct_source = None
+                self._reset_detector()
                 self._close_client(client)
                 client = None
 
@@ -236,40 +241,79 @@ class MediaAutomationService(QObject):
                 if client is None:
                     self._stop_event.wait(1.0)
                     continue
-                baseline = None
+                direct_source = self._resolve_direct_sensor(
+                    client,
+                    config.sensor_source,
+                )
+                scene_baseline = None
+                direct_baseline = None
 
             try:
-                if baseline is None:
-                    baseline = self._calibrate(client, config.sensor_source)
-                    if baseline is None:
+                if scene_baseline is None or direct_baseline is None:
+                    scene_baseline = self._calibrate(
+                        client,
+                        config.sensor_source,
+                        "cena Mídias",
+                    )
+                    if scene_baseline is None:
+                        if not self._enabled_event.is_set():
+                            continue
+                        raise RuntimeError("não foi possível calibrar a cena Mídias")
+
+                    assert direct_source is not None
+                    if direct_source == config.sensor_source:
+                        direct_baseline = scene_baseline
+                    else:
+                        direct_baseline = self._calibrate(
+                            client,
+                            direct_source,
+                            direct_source,
+                        )
+                    if direct_baseline is None:
                         if not self._enabled_event.is_set():
                             continue
                         raise RuntimeError(
-                            f"não foi possível calibrar a cena '{config.sensor_source}'"
+                            f"não foi possível calibrar '{direct_source}'"
                         )
+
                     self._emit_status(
                         "Automação pronta: aguardando foto/vídeo do JW Library."
                     )
-                    self.signal_changed.emit(config.sensor_source, 0.0, False)
+                    sensor_label = self._sensor_label(
+                        direct_source,
+                        config.sensor_source,
+                    )
+                    self.signal_changed.emit(sensor_label, 0.0, False)
                     continue
 
-                frame = self._capture_luma(client, config.sensor_source)
-                if frame is None or len(frame) != len(baseline):
+                assert direct_source is not None
+                scene_frame = self._capture_luma(client, config.sensor_source)
+                direct_frame = (
+                    scene_frame
+                    if direct_source == config.sensor_source
+                    else self._capture_luma(client, direct_source)
+                )
+                if scene_frame is None or len(scene_frame) != len(scene_baseline):
+                    raise RuntimeError("a cena Mídias não retornou imagem válida")
+                if direct_frame is None or len(direct_frame) != len(direct_baseline):
                     raise RuntimeError(
-                        f"a cena '{config.sensor_source}' não retornou imagem válida"
+                        f"o sensor '{direct_source}' não retornou imagem válida"
                     )
 
-                changed_percent = pixel_difference(baseline, frame)
+                scene_diff = pixel_difference(scene_baseline, scene_frame)
+                direct_diff = pixel_difference(direct_baseline, direct_frame)
                 current_scene = self._current_scene(client)
-                event = self._detector.update(changed_percent)
-                self._emit_signal_snapshot(
+                event = self._update_detection(scene_diff, direct_diff)
+                display_signal = max(scene_diff, direct_diff)
+                sensor_label = self._sensor_label(
+                    direct_source,
                     config.sensor_source,
-                    changed_percent,
+                )
+                self._emit_signal_snapshot(
+                    sensor_label,
+                    display_signal,
                     force=event is not None,
                 )
-
-                if self._detector.active:
-                    self._observe_manual_override(current_scene, config.media_scene)
 
                 if event == MediaSignalEvent.STARTED:
                     self._handle_media_started(client, config, current_scene)
@@ -280,15 +324,47 @@ class MediaAutomationService(QObject):
             except Exception as exc:
                 message = str(exc).strip() or type(exc).__name__
                 self.error.emit(f"Automação de mídia: {message}")
-                self._emit_status("Automação reconectando e recalibrando a cena Mídias…")
-                baseline = None
-                self._detector.reset()
-                self._reset_session()
+                self._emit_status("Automação reconectando e recalibrando sensores…")
+                scene_baseline = None
+                direct_baseline = None
+                direct_source = None
+                self._reset_detector()
                 self._close_client(client)
                 client = None
                 self._stop_event.wait(1.0)
 
         self._close_client(client)
+
+    def _update_detection(
+        self,
+        scene_diff: float,
+        direct_diff: float,
+    ) -> MediaSignalEvent | None:
+        if not self._detector.active:
+            start_signal = max(scene_diff, direct_diff)
+            event = self._detector.update(start_signal)
+            if event == MediaSignalEvent.STARTED:
+                self._active_since = time.monotonic()
+                self._scene_seen_media = scene_diff >= self._detector.start_threshold
+                self._direct_seen_media = direct_diff >= self._detector.start_threshold
+            return event
+
+        if scene_diff >= self._detector.start_threshold:
+            self._scene_seen_media = True
+        if direct_diff >= self._detector.start_threshold:
+            self._direct_seen_media = True
+
+        if time.monotonic() - self._active_since < 1.0:
+            self._detector.end_hits = 0
+            return None
+
+        scene_idle = self._scene_seen_media and scene_diff <= self._detector.end_threshold
+        direct_idle = (
+            self._direct_seen_media
+            and direct_diff <= self._detector.end_threshold
+        )
+        end_signal = 0.0 if scene_idle or direct_idle else 100.0
+        return self._detector.update(end_signal)
 
     def _connect(self, config: ObsConnectionConfig) -> obs.ReqClient | None:
         try:
@@ -300,7 +376,7 @@ class MediaAutomationService(QObject):
             )
             client.send("GetVersion", raw=True)
             ensure_fade_transition(client)
-            self._emit_status("Automação conectada ao OBS; lendo repouso da cena Mídias…")
+            self._emit_status("Automação conectada ao OBS; preparando sensores…")
             return client
         except Exception as exc:
             message = str(exc).strip() or type(exc).__name__
@@ -308,14 +384,64 @@ class MediaAutomationService(QObject):
             self._emit_status("Automação aguardando OBS WebSocket…")
             return None
 
-    def _calibrate(self, client: obs.ReqClient, scene_name: str) -> bytes | None:
+    def _resolve_direct_sensor(
+        self,
+        client: obs.ReqClient,
+        scene_name: str,
+    ) -> str:
+        try:
+            payload = client.send(
+                "GetSceneItemList",
+                {"sceneName": scene_name},
+                raw=True,
+            )
+        except Exception:
+            return scene_name
+
+        items = payload.get("sceneItems") or payload.get("scene_items") or []
+        best_source = scene_name
+        best_score = 0
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            source_name = item.get("sourceName") or item.get("source_name")
+            if not isinstance(source_name, str) or not source_name:
+                continue
+            try:
+                input_payload = client.send(
+                    "GetInputSettings",
+                    {"inputName": source_name},
+                    raw=True,
+                )
+            except Exception:
+                continue
+            input_kind = input_payload.get("inputKind") or input_payload.get("input_kind")
+            if not isinstance(input_kind, str):
+                input_kind = None
+            settings = input_payload.get("inputSettings") or input_payload.get(
+                "input_settings"
+            )
+            if not isinstance(settings, dict):
+                settings = {}
+            score = sensor_candidate_score(source_name, input_kind, settings)
+            if score > best_score:
+                best_source = source_name
+                best_score = score
+        return best_source
+
+    def _calibrate(
+        self,
+        client: obs.ReqClient,
+        source_name: str,
+        label: str,
+    ) -> bytes | None:
         candidate: bytes | None = None
         stable_hits = 0
         self._emit_status(
-            "Calibrando Mídias: deixe a tela no Texto do Ano + logo JW por 1 segundo."
+            f"Calibrando {label}: deixe a saída no Texto do Ano + logo JW."
         )
         while not self._stop_event.is_set() and self._enabled_event.is_set():
-            frame = self._capture_luma(client, scene_name)
+            frame = self._capture_luma(client, source_name)
             if frame is None:
                 self._stop_event.wait(0.18)
                 continue
@@ -340,29 +466,8 @@ class MediaAutomationService(QObject):
         config: MediaAutomationConfig,
         current_scene: str | None,
     ) -> None:
-        self._reset_session()
-        if current_scene == config.media_scene:
-            self._manual_override = True
-            self.media_started.emit(config.media_scene)
-            self._emit_status("Mídia detectada; Mídias já estava no Program.")
-            return
-
-        if current_scene not in config.eligible_return_scenes:
-            self._manual_override = True
-            label = current_scene or "desconhecida"
-            self.media_started.emit(label)
-            self._emit_status(
-                f"Mídia detectada, mas Program está em '{label}'; cena preservada."
-            )
-            return
-
-        self._return_scene = (
-            config.preferred_return_scene
-            if config.preferred_return_scene in config.eligible_return_scenes
-            else current_scene
-        )
-        self._auto_switched = True
-        set_program_scene(client, config.media_scene)
+        if current_scene != config.media_scene:
+            set_program_scene(client, config.media_scene)
         self.media_started.emit(config.media_scene)
         self._emit_status("Foto/vídeo detectado: fade para Mídias.")
 
@@ -373,48 +478,31 @@ class MediaAutomationService(QObject):
         current_scene: str | None,
     ) -> None:
         current_scene = self._current_scene(client) or current_scene
-        return_scene = self._return_scene
-        if should_restore_scene(
-            auto_switched=self._auto_switched,
-            manual_override=self._manual_override,
-            return_scene=return_scene,
-            current_scene=current_scene,
-            media_scene=config.media_scene,
-        ):
-            assert return_scene is not None
+        return_scene = config.preferred_return_scene
+        if current_scene == config.media_scene and return_scene:
             set_program_scene(client, return_scene)
             self.media_ended.emit(return_scene)
             self._emit_status(
                 "Texto do Ano + logo JW detectados: fade de volta para Palco."
             )
-        elif self._manual_override:
-            self.media_ended.emit(current_scene or "")
-            self._emit_status(
-                "Mídia terminou; alteração manual detectada, cena atual preservada."
-            )
         else:
             self.media_ended.emit(current_scene or "")
-            self._emit_status("Mídia terminou; nenhuma restauração necessária.")
-        self._reset_session()
+            self._emit_status(
+                "Mídia terminou; cena manual atual preservada."
+            )
+        self._reset_detector()
 
-    def _observe_manual_override(
-        self,
-        current_scene: str | None,
-        media_scene: str,
-    ) -> None:
-        if not self._auto_switched or self._manual_override or current_scene is None:
-            return
-        if current_scene == media_scene:
-            self._program_seen_media = True
-            return
-        if self._program_seen_media:
-            self._manual_override = True
+    def _reset_detector(self) -> None:
+        self._detector.reset()
+        self._active_since = 0.0
+        self._scene_seen_media = False
+        self._direct_seen_media = False
 
-    def _reset_session(self) -> None:
-        self._return_scene = None
-        self._auto_switched = False
-        self._manual_override = False
-        self._program_seen_media = False
+    @staticmethod
+    def _sensor_label(direct_source: str, scene_source: str) -> str:
+        if direct_source == scene_source:
+            return scene_source
+        return f"{direct_source} + {scene_source}"
 
     def _emit_signal_snapshot(
         self,
