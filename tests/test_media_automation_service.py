@@ -5,9 +5,25 @@ from meeting_assistant.services.media_automation_service import (
     MediaSignalEvent,
     pixel_difference,
     sensor_candidate_score,
+    set_program_scene,
     should_restore_scene,
 )
 from meeting_assistant.services.obs_controller import ObsConnectionConfig
+
+
+class FakeObsClient:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object | None, bool]] = []
+
+    def send(
+        self,
+        request_type: str,
+        request_data: object | None = None,
+        *,
+        raw: bool = False,
+    ) -> dict[str, object]:
+        self.calls.append((request_type, request_data, raw))
+        return {}
 
 
 def test_pixel_difference_identical_frames_is_zero() -> None:
@@ -98,6 +114,16 @@ def test_jw_library_window_capture_scores_above_monitor_capture() -> None:
 
     assert direct > monitor
     assert direct >= 100
+
+
+def test_set_program_scene_uses_explicit_obs_websocket_request() -> None:
+    client = FakeObsClient()
+
+    set_program_scene(client, "Mídias")  # type: ignore[arg-type]
+
+    assert client.calls == [
+        ("SetCurrentProgramScene", {"sceneName": "Mídias"}, True),
+    ]
 
 
 def test_media_automation_can_be_enabled_explicitly() -> None:
