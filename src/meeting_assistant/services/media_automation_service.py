@@ -139,6 +139,7 @@ class MediaAutomationService(QObject):
 
     request_scene_change = Signal(str)
     status_changed = Signal(str)
+    signal_changed = Signal(str, float, bool)
     media_started = Signal(str)
     media_ended = Signal(str)
     error = Signal(str)
@@ -156,6 +157,7 @@ class MediaAutomationService(QObject):
         self._thread: threading.Thread | None = None
         self._detector = MediaSignalDetector()
         self._last_status: str | None = None
+        self._last_signal_emit_at = 0.0
 
         self._return_scene: str | None = None
         self._auto_switched = False
@@ -170,6 +172,7 @@ class MediaAutomationService(QObject):
     def set_enabled(self, enabled: bool) -> None:
         if enabled:
             self._enabled_event.set()
+            self._last_signal_emit_at = 0.0
             self._emit_status("Automação ativada; conectando ao sensor do JW Library…")
         else:
             self._enabled_event.clear()
@@ -257,6 +260,7 @@ class MediaAutomationService(QObject):
                     self._emit_status(
                         f"Automação pronta • sensor: '{resolved_sensor}' • aguardando mídia."
                     )
+                    self.signal_changed.emit(resolved_sensor, 0.0, False)
                     continue
 
                 frame = self._capture_luma(client, resolved_sensor)
@@ -268,6 +272,7 @@ class MediaAutomationService(QObject):
                 changed_percent = pixel_difference(baseline, frame)
                 current_scene = self._current_scene(client)
                 event = self._detector.update(changed_percent)
+                self._emit_signal_snapshot(resolved_sensor, changed_percent, force=event is not None)
 
                 if self._detector.active:
                     self._observe_manual_override(current_scene, config.media_scene)
@@ -291,6 +296,19 @@ class MediaAutomationService(QObject):
                 self._stop_event.wait(2.0)
 
         self._close_client(client)
+
+    def _emit_signal_snapshot(
+        self,
+        source_name: str,
+        changed_percent: float,
+        *,
+        force: bool = False,
+    ) -> None:
+        now = time.monotonic()
+        if not force and now - self._last_signal_emit_at < 1.0:
+            return
+        self._last_signal_emit_at = now
+        self.signal_changed.emit(source_name, changed_percent, self._detector.active)
 
     def _connect(self, config: ObsConnectionConfig) -> obs.ReqClient | None:
         try:
