@@ -5,7 +5,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $python = Join-Path $repoRoot '.venv\Scripts\python.exe'
 
 if (-not (Test-Path $python)) {
-    throw "Ambiente virtual não encontrado. Execute primeiro: .\scripts\setup-dev.ps1"
+    throw "Ambiente virtual nao encontrado. Execute primeiro: .\scripts\setup-dev.ps1"
 }
 
 Set-Location $repoRoot
