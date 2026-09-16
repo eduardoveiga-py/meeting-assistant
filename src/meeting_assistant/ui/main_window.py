@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
@@ -25,6 +25,8 @@ from meeting_assistant.ui.settings_dialog import SettingsDialog
 
 
 class MainWindow(QMainWindow):
+    automation_enabled_changed = Signal(bool)
+
     def __init__(
         self,
         state: AppState,
@@ -51,9 +53,12 @@ class MainWindow(QMainWindow):
         self.display_snapshot: list[DisplayInfo] = []
         self.jwl_snapshot: list[JwlWindowInfo] = []
 
+        # Segurança operacional: cada execução sempre começa pausada.
+        self.state.automation_enabled = False
+
         self.setWindowIcon(self.app_icon)
-        self.resize(520, 660)
-        self.setMinimumSize(470, 590)
+        self.resize(520, 680)
+        self.setMinimumSize(470, 610)
 
         self._build_ui()
         self._apply_style()
@@ -62,6 +67,7 @@ class MainWindow(QMainWindow):
         self._connect_jwl_signals()
         self._on_displays_changed(self.displays.snapshot())
         self._on_jwl_snapshot(self.jwl.snapshot())
+        self._set_automation_ui(False)
         self._refresh_mode()
 
     def _build_ui(self) -> None:
@@ -141,9 +147,16 @@ class MainWindow(QMainWindow):
         self.auto_button.clicked.connect(self._toggle_automation)
         controls.addWidget(self.auto_button)
 
+        self.automation_status = QLabel("Automação pausada")
+        self.automation_status.setObjectName("AutomationStatus")
+        self.automation_status.setWordWrap(True)
+        controls.addWidget(self.automation_status)
+
         panic = QPushButton("🛟 Cena segura")
         panic.setObjectName("DangerButton")
-        panic.clicked.connect(lambda: self._select_mode(OperatingMode.BACKGROUND))
+        panic.clicked.connect(
+            lambda checked=False: self._select_mode(OperatingMode.BACKGROUND)
+        )
         controls.addWidget(panic)
 
         controls.addSpacing(2)
@@ -246,17 +259,30 @@ class MainWindow(QMainWindow):
         else:
             self.mode_label.setText("OBS desconectado")
 
-    def _toggle_automation(self) -> None:
-        self.state.automation_enabled = not self.state.automation_enabled
-        if self.state.automation_enabled:
+    def _toggle_automation(self, checked: bool = False) -> None:
+        del checked
+        enabled = not self.state.automation_enabled
+        self.state.automation_enabled = enabled
+        self._set_automation_ui(enabled)
+        self.automation_enabled_changed.emit(enabled)
+
+    def _set_automation_ui(self, enabled: bool) -> None:
+        if enabled:
             self.automation_badge.setText("AUTOMAÇÃO ATIVA")
             self.automation_badge.setProperty("active", True)
             self.auto_button.setText("⏸️ Pausar automação")
+            self.automation_status.setText("Automação ativada; iniciando sensor…")
         else:
             self.automation_badge.setText("AUTOMAÇÃO PAUSADA")
             self.automation_badge.setProperty("active", False)
             self.auto_button.setText("🚥 Ativar automação")
+            self.automation_status.setText("Automação pausada")
         self._repolish(self.automation_badge)
+
+    def set_automation_status(self, message: str) -> None:
+        self.automation_status.setText(message)
+        self.automation_badge.setToolTip(message)
+        self.auto_button.setToolTip(message)
 
     def _on_obs_connected(self, connected: bool, message: str) -> None:
         self.obs_connected = connected
@@ -602,6 +628,13 @@ class MainWindow(QMainWindow):
             QLabel#AutomationBadge[active='true'] {
                 background: #153924;
                 color: #73e6a2;
+            }
+            QLabel#AutomationStatus {
+                background: #10141a;
+                color: #aeb7c4;
+                border-radius: 6px;
+                padding: 5px 7px;
+                font-size: 10px;
             }
             QFrame#Card {
                 background: #171b22;
