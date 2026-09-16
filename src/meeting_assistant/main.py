@@ -107,10 +107,41 @@ def main() -> int:
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
+    automation_media_latched = False
+
+    def handle_automation_signal(
+        source_name: str,
+        changed_percent: float,
+        active: bool,
+    ) -> None:
+        nonlocal automation_media_latched
+
+        window.set_automation_signal(source_name, changed_percent, active)
+        if not state.automation_enabled:
+            automation_media_latched = False
+            return
+
+        if active and not automation_media_latched:
+            automation_media_latched = True
+            # Usa exatamente o mesmo caminho comprovado pelos botões manuais.
+            obs_controller.set_program_scene(settings.scene_media)
+            return
+
+        if not active and automation_media_latched:
+            automation_media_latched = False
+            if settings.scene_speaker:
+                obs_controller.set_program_scene(settings.scene_speaker)
+
+    def handle_automation_enabled(enabled: bool) -> None:
+        nonlocal automation_media_latched
+        if not enabled:
+            automation_media_latched = False
+        media_automation.set_enabled(enabled)
+
     media_automation.status_changed.connect(window.set_automation_status)
-    media_automation.signal_changed.connect(window.set_automation_signal)
+    media_automation.signal_changed.connect(handle_automation_signal)
     media_automation.error.connect(window.set_automation_status)
-    window.automation_enabled_changed.connect(media_automation.set_enabled)
+    window.automation_enabled_changed.connect(handle_automation_enabled)
 
     app.aboutToQuit.connect(media_automation.stop)
     app.aboutToQuit.connect(obs_controller.stop)
