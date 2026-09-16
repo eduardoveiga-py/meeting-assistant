@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import QObject, Signal
 
 from meeting_assistant.services.obs_controller import ObsConnectionConfig
 from meeting_assistant.services.obs_visual_probe_service import ObsVisualProbeService
+
+ProbeConfigProvider = Callable[[], tuple[ObsConnectionConfig, str]]
 
 
 class JwlProbeService(QObject):
@@ -21,13 +25,11 @@ class JwlProbeService(QObject):
     def __init__(
         self,
         visual_probe: ObsVisualProbeService,
-        config: ObsConnectionConfig,
-        media_scene: str,
+        config_provider: ProbeConfigProvider,
     ) -> None:
         super().__init__()
         self._probe = visual_probe
-        self._config = config
-        self._media_scene = media_scene
+        self._config_provider = config_provider
 
         self._probe.started.connect(self.started.emit)
         self._probe.progress_changed.connect(self.progress_changed.emit)
@@ -39,16 +41,11 @@ class JwlProbeService(QObject):
         return self._probe.active
 
     def start(self) -> bool:
-        return self._probe.start(self._config, self._media_scene)
+        config, media_scene = self._config_provider()
+        return self._probe.start(config, media_scene)
 
     def stop(self) -> None:
         self._probe.stop()
-
-    def reconfigure(self, config: ObsConnectionConfig, media_scene: str) -> None:
-        if self.active:
-            return
-        self._config = config
-        self._media_scene = media_scene
 
     def _on_failed(self, message: str) -> None:
         report = (
