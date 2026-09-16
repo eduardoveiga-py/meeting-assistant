@@ -52,19 +52,24 @@ def main() -> int:
     settings = settings_service.load()
     state = AppState(simulation_enabled=settings.simulation_enabled)
 
-    obs_config = ObsConnectionConfig(
-        host=settings.obs_host,
-        port=settings.obs_port,
-        password=settings.obs_password,
-    )
+    def current_probe_config() -> tuple[ObsConnectionConfig, str]:
+        return (
+            ObsConnectionConfig(
+                host=settings.obs_host,
+                port=settings.obs_port,
+                password=settings.obs_password,
+            ),
+            settings.scene_media,
+        )
+
+    obs_config, _ = current_probe_config()
     obs_controller = ObsController(poll_interval=1.0, preview_interval=1.0)
     display_service = DisplayService(app)
     jwl_service = JwlService(interval_ms=2000)
     visual_probe = ObsVisualProbeService()
     jwl_probe = JwlProbeService(
         visual_probe=visual_probe,
-        config=obs_config,
-        media_scene=settings.scene_media,
+        config_provider=current_probe_config,
     )
 
     window = MainWindow(
