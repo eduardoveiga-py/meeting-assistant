@@ -10,9 +10,9 @@ from PySide6.QtWidgets import QApplication
 
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.display_service import DisplayService
-from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
+from meeting_assistant.services.obs_visual_probe_service import ObsVisualProbeService
 from meeting_assistant.services.settings import SettingsService
 from meeting_assistant.ui.main_window import MainWindow
 
@@ -54,7 +54,7 @@ def main() -> int:
     obs_controller = ObsController(poll_interval=1.0, preview_interval=1.0)
     display_service = DisplayService(app)
     jwl_service = JwlService(interval_ms=2000)
-    jwl_probe = JwlProbeService(jwl_service)
+    visual_probe = ObsVisualProbeService()
 
     window = MainWindow(
         state=state,
@@ -63,14 +63,14 @@ def main() -> int:
         obs_controller=obs_controller,
         display_service=display_service,
         jwl_service=jwl_service,
-        jwl_probe=jwl_probe,
+        visual_probe=visual_probe,
         app_icon=app_icon,
     )
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
     app.aboutToQuit.connect(obs_controller.stop)
-    app.aboutToQuit.connect(jwl_probe.stop)
+    app.aboutToQuit.connect(visual_probe.stop)
     app.aboutToQuit.connect(jwl_service.stop)
 
     window.show()
