@@ -106,7 +106,6 @@ def main() -> int:
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
-    media_automation.request_scene_change.connect(obs_controller.set_program_scene)
     media_automation.status_changed.connect(window.set_automation_status)
     media_automation.signal_changed.connect(window.set_automation_signal)
     media_automation.error.connect(window.set_automation_status)
