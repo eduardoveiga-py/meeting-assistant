@@ -24,6 +24,9 @@ class JwlWindowInfo:
     top: int
     right: int
     bottom: int
+    visible: bool
+    minimized: bool
+    foreground: bool
 
     @property
     def size(self) -> str:
@@ -41,10 +44,7 @@ def looks_like_jw_library(process_name: str, title: str) -> bool:
         return True
 
     compact_process = process.replace(" ", "").replace("_", "").replace("-", "")
-    if "jwlibrary" in compact_process:
-        return True
-
-    return False
+    return "jwlibrary" in compact_process
 
 
 class JwlService(QObject):
@@ -70,8 +70,11 @@ class JwlService(QObject):
     def snapshot(self) -> list[JwlWindowInfo]:
         return list(self._snapshot)
 
+    def scan(self, include_hidden: bool = False) -> list[JwlWindowInfo]:
+        return self._discover_windows(include_hidden=include_hidden)
+
     def refresh(self) -> None:
-        snapshot = self._discover_windows()
+        snapshot = self.scan(include_hidden=False)
         signature = tuple(
             (
                 item.hwnd,
@@ -83,6 +86,8 @@ class JwlService(QObject):
                 item.top,
                 item.right,
                 item.bottom,
+                item.visible,
+                item.minimized,
             )
             for item in snapshot
         )
@@ -106,33 +111,47 @@ class JwlService(QObject):
                 message = "JW Library não detectado"
             self.status_changed.emit(running, message)
 
-    def _has_candidate_process(self) -> bool:
+    def _process_map(self) -> dict[int, str]:
+        processes: dict[int, str] = {}
         try:
-            for process in psutil.process_iter(["name"]):
-                name = process.info.get("name") or ""
-                if looks_like_jw_library(name, ""):
-                    return True
+            for process in psutil.process_iter(["pid", "name"]):
+                pid = process.info.get("pid")
+                if not isinstance(pid, int):
+                    continue
+                processes[pid] = process.info.get("name") or ""
         except (psutil.Error, OSError):
-            return False
-        return False
+            return processes
+        return processes
 
-    def _discover_windows(self) -> list[JwlWindowInfo]:
+    def _has_candidate_process(self) -> bool:
+        return any(
+            looks_like_jw_library(name, "")
+            for name in self._process_map().values()
+        )
+
+    def _discover_windows(self, include_hidden: bool = False) -> list[JwlWindowInfo]:
         if win32gui is None or win32process is None:
             return []
 
+        process_map = self._process_map()
         windows: list[JwlWindowInfo] = []
+        try:
+            foreground_hwnd = win32gui.GetForegroundWindow()
+        except (OSError, RuntimeError):
+            foreground_hwnd = 0
 
         def callback(hwnd: int, _: object) -> bool:
             try:
-                if not win32gui.IsWindow(hwnd) or not win32gui.IsWindowVisible(hwnd):
+                if not win32gui.IsWindow(hwnd):
+                    return True
+
+                visible = bool(win32gui.IsWindowVisible(hwnd))
+                if not include_hidden and not visible:
                     return True
 
                 title = win32gui.GetWindowText(hwnd).strip()
-                if not title:
-                    return True
-
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                process_name = self._process_name(pid)
+                process_name = process_map.get(pid, "")
                 if not looks_like_jw_library(process_name, title):
                     return True
 
@@ -149,6 +168,9 @@ class JwlService(QObject):
                         top=top,
                         right=right,
                         bottom=bottom,
+                        visible=visible,
+                        minimized=bool(win32gui.IsIconic(hwnd)),
+                        foreground=hwnd == foreground_hwnd,
                     )
                 )
             except (OSError, RuntimeError, psutil.Error):
@@ -156,12 +178,5 @@ class JwlService(QObject):
             return True
 
         win32gui.EnumWindows(callback, None)
-        windows.sort(key=lambda item: (item.top, item.left, item.hwnd))
+        windows.sort(key=lambda item: (not item.visible, item.top, item.left, item.hwnd))
         return windows
-
-    @staticmethod
-    def _process_name(pid: int) -> str:
-        try:
-            return psutil.Process(pid).name()
-        except (psutil.Error, OSError):
-            return ""
