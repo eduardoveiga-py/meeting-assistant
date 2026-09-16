@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import queue
 import threading
 import time
@@ -37,15 +39,28 @@ def extract_current_scene(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def decode_image_data(image_data: str) -> bytes | None:
+    if not image_data:
+        return None
+    encoded = image_data.split(",", 1)[1] if "," in image_data else image_data
+    try:
+        return base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        return None
+
+
 class ObsController(QObject):
     connected_changed = Signal(bool, str)
     scenes_changed = Signal(list)
     scene_changed = Signal(str)
+    preview_changed = Signal(bytes)
+    preview_error = Signal(str)
     error = Signal(str)
 
-    def __init__(self, poll_interval: float = 1.0) -> None:
+    def __init__(self, poll_interval: float = 1.0, preview_interval: float = 1.0) -> None:
         super().__init__()
         self._poll_interval = max(0.5, poll_interval)
+        self._preview_interval = max(0.75, preview_interval)
         self._commands: queue.Queue[tuple[str, object | None]] = queue.Queue()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -54,6 +69,7 @@ class ObsController(QObject):
         self._last_connected: bool | None = None
         self._last_scenes: list[str] = []
         self._last_scene: str | None = None
+        self._last_preview_error: str | None = None
 
     def start(self, config: ObsConnectionConfig) -> None:
         self._config = config
@@ -77,6 +93,9 @@ class ObsController(QObject):
     def refresh(self) -> None:
         self._commands.put(("refresh", None))
 
+    def refresh_preview(self) -> None:
+        self._commands.put(("preview", None))
+
     def stop(self) -> None:
         self._stop_event.set()
         self._commands.put(("stop", None))
@@ -86,6 +105,7 @@ class ObsController(QObject):
 
     def _run(self) -> None:
         next_poll = 0.0
+        next_preview = 0.0
         next_reconnect = 0.0
 
         while not self._stop_event.is_set():
@@ -99,10 +119,14 @@ class ObsController(QObject):
                     self._disconnect()
                     next_reconnect = 0.0
                     next_poll = 0.0
+                    next_preview = 0.0
                 elif command == "set_scene" and isinstance(payload, str):
                     self._handle_set_scene(payload)
+                    next_preview = 0.0
                 elif command == "refresh":
                     next_poll = 0.0
+                elif command == "preview":
+                    next_preview = 0.0
             except queue.Empty:
                 pass
 
@@ -110,12 +134,17 @@ class ObsController(QObject):
             if self._client is None and now >= next_reconnect:
                 if self._connect():
                     next_poll = 0.0
+                    next_preview = 0.0
                 else:
                     next_reconnect = now + 2.0
 
             if self._client is not None and now >= next_poll:
                 self._poll()
                 next_poll = now + self._poll_interval
+
+            if self._client is not None and now >= next_preview:
+                self._refresh_preview()
+                next_preview = now + self._preview_interval
 
         self._disconnect()
 
@@ -169,6 +198,31 @@ class ObsController(QObject):
             self._last_scene = scene
             self.scene_changed.emit(scene)
 
+    def _refresh_preview(self) -> None:
+        if self._client is None or not self._last_scene:
+            return
+        request_data = {
+            "sourceName": self._last_scene,
+            "imageFormat": "jpeg",
+            "imageWidth": 320,
+            "imageHeight": 180,
+            "imageCompressionQuality": 55,
+        }
+        try:
+            payload = self._client.send("GetSourceScreenshot", request_data, raw=True)
+            image_data = payload.get("imageData") or payload.get("image_data")
+            if not isinstance(image_data, str):
+                self._emit_preview_error("OBS não retornou imagem para o preview.")
+                return
+            decoded = decode_image_data(image_data)
+            if not decoded:
+                self._emit_preview_error("OBS retornou um preview inválido.")
+                return
+            self._last_preview_error = None
+            self.preview_changed.emit(decoded)
+        except Exception as exc:
+            self._emit_preview_error(f"Preview indisponível: {exc}")
+
     def _handle_set_scene(self, scene_name: str) -> None:
         if self._client is None:
             self.error.emit("OBS desconectado; não foi possível trocar a cena.")
@@ -178,6 +232,12 @@ class ObsController(QObject):
             self._refresh_current_scene()
         except Exception as exc:
             self.error.emit(f"Falha ao trocar para '{scene_name}': {exc}")
+
+    def _emit_preview_error(self, message: str) -> None:
+        if message == self._last_preview_error:
+            return
+        self._last_preview_error = message
+        self.preview_error.emit(message)
 
     def _set_connected(self, connected: bool, message: str) -> None:
         if self._last_connected == connected and connected:
@@ -190,6 +250,7 @@ class ObsController(QObject):
         self._client = None
         self._last_scene = None
         self._last_scenes = []
+        self._last_preview_error = None
         if client is None:
             return
         try:
