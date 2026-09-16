@@ -1,3 +1,5 @@
+import time
+
 from meeting_assistant.services.media_automation_service import (
     MediaAutomationConfig,
     MediaAutomationService,
@@ -78,6 +80,25 @@ def test_detector_resets_end_counter_if_signal_returns() -> None:
     assert detector.update(50.0) is None
     assert detector.update(0.0) is None
     assert detector.update(0.0) == MediaSignalEvent.ENDED
+
+
+def test_hybrid_detector_can_start_from_direct_sensor_and_end_from_scene() -> None:
+    config = MediaAutomationConfig(
+        obs=ObsConnectionConfig(host="127.0.0.1", port=4455, password=""),
+        sensor_source="Mídias",
+        media_scene="Mídias",
+        eligible_return_scenes=("Palco",),
+        preferred_return_scene="Palco",
+    )
+    service = MediaAutomationService(config_provider=lambda: config)
+
+    assert service._update_detection(0.0, 8.0) is None
+    assert service._update_detection(0.0, 8.0) == MediaSignalEvent.STARTED
+
+    service._active_since = time.monotonic() - 2.0
+    assert service._update_detection(8.0, 8.0) is None
+    assert service._update_detection(0.5, 8.0) is None
+    assert service._update_detection(0.4, 8.0) == MediaSignalEvent.ENDED
 
 
 def test_should_restore_only_when_automation_still_owns_media_scene() -> None:
