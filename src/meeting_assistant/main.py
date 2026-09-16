@@ -90,7 +90,6 @@ def main() -> int:
     )
     media_automation = MediaAutomationService(
         config_provider=current_media_automation_config,
-        enabled_provider=lambda: state.automation_enabled,
     )
 
     window = MainWindow(
@@ -111,6 +110,13 @@ def main() -> int:
     media_automation.status_changed.connect(window.auto_button.setToolTip)
     media_automation.error.connect(window.automation_badge.setToolTip)
     media_automation.error.connect(window.auto_button.setToolTip)
+
+    # MainWindow atualiza AppState primeiro; esta conexão aplica o novo estado
+    # diretamente no worker de automação no mesmo clique do operador.
+    window.auto_button.clicked.connect(
+        lambda _checked=False: media_automation.set_enabled(state.automation_enabled)
+    )
+    media_automation.set_enabled(state.automation_enabled)
 
     app.aboutToQuit.connect(media_automation.stop)
     app.aboutToQuit.connect(obs_controller.stop)
