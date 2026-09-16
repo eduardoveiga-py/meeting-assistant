@@ -5,6 +5,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
 import obsws_python as obs
 from PySide6.QtCore import QObject, Qt, Signal
@@ -89,6 +90,34 @@ def pixel_difference(reference: bytes, current: bytes) -> float:
     return (changed / len(reference)) * 100.0
 
 
+def sensor_candidate_score(
+    source_name: str,
+    input_kind: str | None,
+    settings: dict[str, Any],
+) -> int:
+    """Pontua fontes OBS que parecem ser a captura direta do JW Library."""
+
+    score = 0
+    name = source_name.casefold()
+    kind = (input_kind or "").casefold()
+    settings_text = " ".join(str(value) for value in settings.values()).casefold()
+
+    if kind == "window_capture":
+        score += 40
+    elif kind == "monitor_capture":
+        score -= 40
+
+    if "jw library" in name or "jwlibrary" in name:
+        score += 25
+
+    if "jwlibrary.exe" in settings_text:
+        score += 120
+    elif "jw library" in settings_text or "jwlibrary" in settings_text:
+        score += 70
+
+    return score
+
+
 def should_restore_scene(
     *,
     auto_switched: bool,
@@ -106,11 +135,7 @@ def should_restore_scene(
 
 
 class MediaAutomationService(QObject):
-    """Observa uma cena/fonte do OBS e automatiza a cena Mídia com segurança.
-
-    A captura roda em uma conexão WebSocket separada para nunca bloquear a conexão
-    usada pela interface. Mudanças de cena são solicitadas ao ObsController por sinal.
-    """
+    """Detecta mídia do JW Library e automatiza a cena Mídia com proteção manual."""
 
     request_scene_change = Signal(str)
     status_changed = Signal(str)
@@ -121,14 +146,13 @@ class MediaAutomationService(QObject):
     def __init__(
         self,
         config_provider: Callable[[], MediaAutomationConfig],
-        enabled_provider: Callable[[], bool],
         sample_interval_seconds: float = 0.4,
     ) -> None:
         super().__init__()
         self._config_provider = config_provider
-        self._enabled_provider = enabled_provider
         self._sample_interval = max(0.25, sample_interval_seconds)
         self._stop_event = threading.Event()
+        self._enabled_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._detector = MediaSignalDetector()
         self._last_status: str | None = None
@@ -138,6 +162,18 @@ class MediaAutomationService(QObject):
         self._manual_override = False
         self._program_seen_media = False
         self._switch_requested_at = 0.0
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled_event.is_set()
+
+    def set_enabled(self, enabled: bool) -> None:
+        if enabled:
+            self._enabled_event.set()
+            self._emit_status("Automação ativada; conectando ao sensor do JW Library…")
+        else:
+            self._enabled_event.clear()
+            self._emit_status("Automação pausada; monitoramento de mídia suspenso.")
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -152,6 +188,7 @@ class MediaAutomationService(QObject):
 
     def stop(self) -> None:
         self._stop_event.set()
+        self._enabled_event.clear()
         thread = self._thread
         if thread and thread.is_alive():
             thread.join(timeout=2.5)
@@ -159,27 +196,30 @@ class MediaAutomationService(QObject):
     def _run(self) -> None:
         client: obs.ReqClient | None = None
         active_config: MediaAutomationConfig | None = None
+        resolved_sensor: str | None = None
         baseline: bytes | None = None
         was_enabled = False
 
         while not self._stop_event.is_set():
-            enabled = bool(self._enabled_provider())
+            enabled = self._enabled_event.is_set()
             if not enabled:
                 if was_enabled:
                     self._emit_status("Automação pausada; monitoramento de mídia suspenso.")
                 was_enabled = False
+                resolved_sensor = None
                 baseline = None
                 self._detector.reset()
                 self._reset_session()
                 self._close_client(client)
                 client = None
-                self._stop_event.wait(0.25)
+                self._stop_event.wait(0.20)
                 continue
 
             was_enabled = True
             config = self._config_provider()
             if config != active_config:
                 active_config = config
+                resolved_sensor = None
                 baseline = None
                 self._detector.reset()
                 self._reset_session()
@@ -196,26 +236,33 @@ class MediaAutomationService(QObject):
                 if client is None:
                     self._stop_event.wait(2.0)
                     continue
+                resolved_sensor = None
                 baseline = None
 
             try:
+                if resolved_sensor is None:
+                    resolved_sensor = self._resolve_sensor_source(client, config.sensor_source)
+                    self._emit_status(
+                        f"Sensor de mídia: '{resolved_sensor}'. Calibrando estado parado…"
+                    )
+
                 if baseline is None:
-                    baseline = self._calibrate(client, config.sensor_source)
+                    baseline = self._calibrate(client, resolved_sensor)
                     if baseline is None:
-                        if not self._enabled_provider():
+                        if not self._enabled_event.is_set():
                             continue
                         raise RuntimeError(
-                            f"não foi possível calibrar o sensor '{config.sensor_source}'"
+                            f"não foi possível calibrar o sensor '{resolved_sensor}'"
                         )
                     self._emit_status(
-                        "Automação pronta: aguardando mídia no JW Library."
+                        f"Automação pronta • sensor: '{resolved_sensor}' • aguardando mídia."
                     )
                     continue
 
-                frame = self._capture_luma(client, config.sensor_source)
+                frame = self._capture_luma(client, resolved_sensor)
                 if frame is None or len(frame) != len(baseline):
                     raise RuntimeError(
-                        f"sensor '{config.sensor_source}' não retornou imagem válida"
+                        f"sensor '{resolved_sensor}' não retornou imagem válida"
                     )
 
                 changed_percent = pixel_difference(baseline, frame)
@@ -235,6 +282,7 @@ class MediaAutomationService(QObject):
                 message = str(exc).strip() or type(exc).__name__
                 self.error.emit(f"Automação de mídia: {message}")
                 self._emit_status("Automação de mídia reconectando ao OBS…")
+                resolved_sensor = None
                 baseline = None
                 self._detector.reset()
                 self._reset_session()
@@ -253,7 +301,7 @@ class MediaAutomationService(QObject):
                 timeout=3,
             )
             client.send("GetVersion", raw=True)
-            self._emit_status("Automação conectada; calibrando estado parado do JW Library…")
+            self._emit_status("Automação conectada ao OBS; procurando sensor do JW Library…")
             return client
         except Exception as exc:
             message = str(exc).strip() or type(exc).__name__
@@ -261,12 +309,60 @@ class MediaAutomationService(QObject):
             self._emit_status("Automação aguardando OBS WebSocket…")
             return None
 
+    def _resolve_sensor_source(self, client: obs.ReqClient, scene_name: str) -> str:
+        """Prefere a captura de janela do JW Library; usa a cena Mídia como fallback."""
+
+        try:
+            payload = client.send(
+                "GetSceneItemList",
+                {"sceneName": scene_name},
+                raw=True,
+            )
+        except Exception:
+            return scene_name
+
+        items = payload.get("sceneItems") or payload.get("scene_items") or []
+        best_source = scene_name
+        best_score = 0
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            source_name = item.get("sourceName") or item.get("source_name")
+            if not isinstance(source_name, str) or not source_name:
+                continue
+
+            try:
+                input_payload = client.send(
+                    "GetInputSettings",
+                    {"inputName": source_name},
+                    raw=True,
+                )
+            except Exception:
+                continue
+
+            input_kind = input_payload.get("inputKind") or input_payload.get("input_kind")
+            if not isinstance(input_kind, str):
+                input_kind = None
+            settings = input_payload.get("inputSettings") or input_payload.get("input_settings")
+            if not isinstance(settings, dict):
+                settings = {}
+
+            score = sensor_candidate_score(source_name, input_kind, settings)
+            if score > best_score:
+                best_source = source_name
+                best_score = score
+
+        return best_source
+
     def _calibrate(self, client: obs.ReqClient, source_name: str) -> bytes | None:
         candidate: bytes | None = None
         stable_hits = 0
-        self._emit_status("Automação calibrando: deixe o JW Library sem mídia por alguns segundos.")
+        self._emit_status(
+            f"Calibrando '{source_name}': deixe o JW Library sem mídia por alguns segundos."
+        )
 
-        while not self._stop_event.is_set() and self._enabled_provider():
+        while not self._stop_event.is_set() and self._enabled_event.is_set():
             frame = self._capture_luma(client, source_name)
             if frame is None:
                 self._stop_event.wait(0.4)
@@ -318,9 +414,7 @@ class MediaAutomationService(QObject):
         self._switch_requested_at = time.monotonic()
         self.request_scene_change.emit(config.media_scene)
         self.media_started.emit(config.media_scene)
-        self._emit_status(
-            f"Mídia detectada: entrando em '{config.media_scene}'."
-        )
+        self._emit_status(f"Mídia detectada: entrando em '{config.media_scene}'.")
 
     def _handle_media_ended(
         self,
@@ -328,7 +422,6 @@ class MediaAutomationService(QObject):
         config: MediaAutomationConfig,
         current_scene: str | None,
     ) -> None:
-        # Atualiza uma última vez antes de decidir se pode restaurar.
         current_scene = self._current_scene(client) or current_scene
         return_scene = self._return_scene
 
@@ -342,9 +435,7 @@ class MediaAutomationService(QObject):
             assert return_scene is not None
             self.request_scene_change.emit(return_scene)
             self.media_ended.emit(return_scene)
-            self._emit_status(
-                f"Mídia encerrada: retornando para '{return_scene}'."
-            )
+            self._emit_status(f"Mídia encerrada: retornando para '{return_scene}'.")
         elif self._manual_override:
             self.media_ended.emit(current_scene or "")
             self._emit_status(
