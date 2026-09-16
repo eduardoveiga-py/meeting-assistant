@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
 
 from meeting_assistant.core.state import AppState, OperatingMode
 from meeting_assistant.services.display_service import DisplayInfo, DisplayService
+from meeting_assistant.services.jwl_probe_service import JwlProbeService
+from meeting_assistant.services.jwl_service import JwlService, JwlWindowInfo
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.settings import AppSettings, SettingsService
 from meeting_assistant.ui.settings_dialog import SettingsDialog
@@ -30,6 +32,8 @@ class MainWindow(QMainWindow):
         settings_service: SettingsService,
         obs_controller: ObsController,
         display_service: DisplayService,
+        jwl_service: JwlService,
+        jwl_probe: JwlProbeService,
         app_icon: QIcon | None = None,
     ) -> None:
         super().__init__()
@@ -38,21 +42,26 @@ class MainWindow(QMainWindow):
         self.settings_service = settings_service
         self.obs = obs_controller
         self.displays = display_service
+        self.jwl = jwl_service
+        self.jwl_probe = jwl_probe
         self.app_icon = app_icon or QIcon()
         self.obs_connected = False
         self.obs_scenes: list[str] = []
         self.current_obs_scene: str | None = None
         self.display_snapshot: list[DisplayInfo] = []
+        self.jwl_snapshot: list[JwlWindowInfo] = []
 
         self.setWindowIcon(self.app_icon)
-        self.resize(520, 620)
-        self.setMinimumSize(470, 560)
+        self.resize(520, 660)
+        self.setMinimumSize(470, 590)
 
         self._build_ui()
         self._apply_style()
         self._connect_obs_signals()
         self._connect_display_signals()
+        self._connect_jwl_signals()
         self._on_displays_changed(self.displays.snapshot())
+        self._on_jwl_snapshot(self.jwl.snapshot())
         self._refresh_mode()
 
     def _build_ui(self) -> None:
@@ -150,6 +159,13 @@ class MainWindow(QMainWindow):
         system_grid.addWidget(settings_button, 0, 1)
         controls.addLayout(system_grid)
 
+        self.jwl_probe_button = QPushButton("🧪 Observar mídia no JW Library (20 s)")
+        self.jwl_probe_button.setToolTip(
+            "Registra alterações nas janelas do JW Library sem trocar cenas do OBS."
+        )
+        self.jwl_probe_button.clicked.connect(self._start_jwl_probe)
+        controls.addWidget(self.jwl_probe_button)
+
         controls.addSpacing(2)
         controls.addWidget(self._section_label("RETORNO — SALÃO"))
 
@@ -196,6 +212,13 @@ class MainWindow(QMainWindow):
 
     def _connect_display_signals(self) -> None:
         self.displays.displays_changed.connect(self._on_displays_changed)
+
+    def _connect_jwl_signals(self) -> None:
+        self.jwl.status_changed.connect(self._on_jwl_status)
+        self.jwl.snapshot_changed.connect(self._on_jwl_snapshot)
+        self.jwl_probe.started.connect(self._on_jwl_probe_started)
+        self.jwl_probe.progress_changed.connect(self._on_jwl_probe_progress)
+        self.jwl_probe.finished.connect(self._on_jwl_probe_finished)
 
     def _section_label(self, text: str) -> QLabel:
         label = QLabel(text)
@@ -319,6 +342,57 @@ class MainWindow(QMainWindow):
             f"posição {secondary.x},{secondary.y}",
         )
 
+    def _on_jwl_status(self, running: bool, message: str) -> None:
+        self._set_component_status(
+            "JW Library",
+            "ok" if running else "error",
+            "● JW Library",
+            message,
+        )
+
+    def _on_jwl_snapshot(self, snapshot: list[JwlWindowInfo]) -> None:
+        self.jwl_snapshot = snapshot
+        self.status_labels["JW Library"].setToolTip(self._format_jwl_snapshot(snapshot))
+
+    def _start_jwl_probe(self) -> None:
+        candidates = self.jwl.scan(include_hidden=True)
+        if not candidates:
+            QMessageBox.information(
+                self,
+                "Observação do JW Library",
+                "Nenhuma janela/processo candidato do JW Library foi encontrado.\n\n"
+                "Abra o JW Library e tente novamente.",
+            )
+            return
+
+        if not self.jwl_probe.start():
+            return
+
+        self.mode_label.setText(
+            "Teste JWL: toque uma mídia e depois pare-a durante os próximos 20 segundos."
+        )
+
+    def _on_jwl_probe_started(self) -> None:
+        self.jwl_probe_button.setEnabled(False)
+        self.jwl_probe_button.setText("🧪 Observando JW Library… 20 s")
+
+    def _on_jwl_probe_progress(self, elapsed_ms: int, total_ms: int) -> None:
+        remaining = max(0, (total_ms - elapsed_ms + 999) // 1000)
+        self.jwl_probe_button.setText(f"🧪 Observando JW Library… {remaining} s")
+
+    def _on_jwl_probe_finished(self, report: str, path: str) -> None:
+        self.jwl_probe_button.setEnabled(True)
+        self.jwl_probe_button.setText("🧪 Observar mídia no JW Library (20 s)")
+        self.mode_label.setText("Teste do JW Library concluído; nenhuma cena foi alterada.")
+
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("Observação do JW Library concluída")
+        dialog.setIcon(QMessageBox.Icon.Information)
+        dialog.setText("O teste foi concluído sem automatizar o OBS.")
+        dialog.setInformativeText(f"Relatório salvo em:\n{path}")
+        dialog.setDetailedText(report)
+        dialog.exec()
+
     def _on_obs_error(self, message: str) -> None:
         self.mode_label.setText(message)
 
@@ -338,6 +412,7 @@ class MainWindow(QMainWindow):
             f"{display.name} • {display.resolution} • {display.x},{display.y}"
             for display in self.display_snapshot
         ) or "• nenhum monitor detectado"
+        jwl_lines = self._format_jwl_snapshot(self.jwl_snapshot)
 
         if not self.obs_connected:
             QMessageBox.information(
@@ -345,7 +420,8 @@ class MainWindow(QMainWindow):
                 "Verificação do sistema",
                 "OBS WebSocket não está conectado.\n\n"
                 "Abra o OBS e confira host, porta e senha em Ajustes.\n\n"
-                f"Monitores detectados:\n{display_lines}",
+                f"Monitores detectados:\n{display_lines}\n\n"
+                f"JW Library:\n{jwl_lines}",
             )
             return
 
@@ -368,8 +444,24 @@ class MainWindow(QMainWindow):
             f"Cena Program atual: {self.current_obs_scene or 'desconhecida'}\n\n"
             f"Cenas encontradas:\n{scene_lines}\n\n"
             f"Mapeamentos ausentes:\n{missing_text}\n\n"
-            f"Monitores detectados:\n{display_lines}",
+            f"Monitores detectados:\n{display_lines}\n\n"
+            f"JW Library:\n{jwl_lines}",
         )
+
+    @staticmethod
+    def _format_jwl_snapshot(snapshot: list[JwlWindowInfo]) -> str:
+        if not snapshot:
+            return "nenhuma janela candidata visível"
+
+        lines: list[str] = []
+        for item in snapshot:
+            state = "minimizada" if item.minimized else "normal"
+            title = item.title or "<sem título>"
+            lines.append(
+                f"HWND {item.hwnd} • PID {item.pid} • {item.process_name or '?'}\n"
+                f"{item.class_name} • {item.size} • {state} • {title}"
+            )
+        return "\n\n".join(lines)
 
     def _obs_config(self) -> ObsConnectionConfig:
         return ObsConnectionConfig(
@@ -545,6 +637,10 @@ class MainWindow(QMainWindow):
             QPushButton:checked {
                 background: #0b5cab;
                 border-color: #2b8ce6;
+            }
+            QPushButton:disabled {
+                color: #8b95a3;
+                background: #1c222b;
             }
             QPushButton#DangerButton {
                 background: #4a2528;
