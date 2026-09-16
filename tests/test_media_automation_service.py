@@ -1,9 +1,13 @@
 from meeting_assistant.services.media_automation_service import (
+    MediaAutomationConfig,
+    MediaAutomationService,
     MediaSignalDetector,
     MediaSignalEvent,
     pixel_difference,
+    sensor_candidate_score,
     should_restore_scene,
 )
+from meeting_assistant.services.obs_controller import ObsConnectionConfig
 
 
 def test_pixel_difference_identical_frames_is_zero() -> None:
@@ -78,3 +82,35 @@ def test_should_restore_only_when_automation_still_owns_media_scene() -> None:
         current_scene="Texto do Ano",
         media_scene="Mídias",
     )
+
+
+def test_jw_library_window_capture_scores_above_monitor_capture() -> None:
+    direct = sensor_candidate_score(
+        "JW Library Real",
+        "window_capture",
+        {"window": "JW Library:Windows.UI.Core.CoreWindow:JWLibrary.exe"},
+    )
+    monitor = sensor_candidate_score(
+        "JW Library",
+        "monitor_capture",
+        {"monitor_id": r"\\?\DISPLAY#MEIA296"},
+    )
+
+    assert direct > monitor
+    assert direct >= 100
+
+
+def test_media_automation_can_be_enabled_explicitly() -> None:
+    config = MediaAutomationConfig(
+        obs=ObsConnectionConfig(host="127.0.0.1", port=4455, password=""),
+        sensor_source="Mídias",
+        media_scene="Mídias",
+        eligible_return_scenes=("Texto do Ano", "Palco"),
+    )
+    service = MediaAutomationService(config_provider=lambda: config)
+
+    assert service.enabled is False
+    service.set_enabled(True)
+    assert service.enabled is True
+    service.set_enabled(False)
+    assert service.enabled is False
