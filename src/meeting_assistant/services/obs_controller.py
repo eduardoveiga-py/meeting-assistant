@@ -88,6 +88,10 @@ class ObsController(QObject):
         self._commands.put(("configure", config))
 
     def set_program_scene(self, scene_name: str) -> None:
+        scene_name = scene_name.strip()
+        if not scene_name:
+            self.error.emit("Nome de cena vazio; troca cancelada.")
+            return
         self._commands.put(("set_scene", scene_name))
 
     def refresh(self) -> None:
@@ -228,7 +232,11 @@ class ObsController(QObject):
             self.error.emit("OBS desconectado; não foi possível trocar a cena.")
             return
         try:
-            self._client.set_current_program_scene(scene_name)
+            self._client.send(
+                "SetCurrentProgramScene",
+                {"sceneName": scene_name},
+                raw=True,
+            )
             self._refresh_current_scene()
         except Exception as exc:
             self.error.emit(f"Falha ao trocar para '{scene_name}': {exc}")
