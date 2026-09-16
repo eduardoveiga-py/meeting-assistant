@@ -55,6 +55,7 @@ def main() -> int:
     settings_service = SettingsService()
     settings = settings_service.load()
     state = AppState(simulation_enabled=settings.simulation_enabled)
+    state.automation_enabled = False
 
     def current_obs_config() -> ObsConnectionConfig:
         return ObsConnectionConfig(
@@ -106,17 +107,9 @@ def main() -> int:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
     media_automation.request_scene_change.connect(obs_controller.set_program_scene)
-    media_automation.status_changed.connect(window.automation_badge.setToolTip)
-    media_automation.status_changed.connect(window.auto_button.setToolTip)
-    media_automation.error.connect(window.automation_badge.setToolTip)
-    media_automation.error.connect(window.auto_button.setToolTip)
-
-    # MainWindow atualiza AppState primeiro; esta conexão aplica o novo estado
-    # diretamente no worker de automação no mesmo clique do operador.
-    window.auto_button.clicked.connect(
-        lambda _checked=False: media_automation.set_enabled(state.automation_enabled)
-    )
-    media_automation.set_enabled(state.automation_enabled)
+    media_automation.status_changed.connect(window.set_automation_status)
+    media_automation.error.connect(window.set_automation_status)
+    window.automation_enabled_changed.connect(media_automation.set_enabled)
 
     app.aboutToQuit.connect(media_automation.stop)
     app.aboutToQuit.connect(obs_controller.stop)
@@ -128,6 +121,7 @@ def main() -> int:
     jwl_service.start()
     obs_controller.start(obs_config)
     media_automation.start()
+    media_automation.set_enabled(False)
 
     return app.exec()
 
