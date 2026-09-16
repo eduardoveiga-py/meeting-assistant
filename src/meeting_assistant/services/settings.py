@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+import os
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 
@@ -15,17 +16,16 @@ class AppSettings:
     scene_background: str = "Texto do Ano"
     scene_speaker: str = "Palco"
     scene_media: str = "Mídias"
+    scene_zoom: str = "Zoom"
 
 
 class SettingsService:
     def __init__(self, path: Path | None = None) -> None:
-        default_path = (
-            Path.home()
-            / "AppData"
-            / "Roaming"
-            / "MeetingAssistant"
-            / "settings.json"
-        )
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            default_path = Path(appdata) / "MeetingAssistant" / "settings.json"
+        else:
+            default_path = Path.home() / ".meeting-assistant" / "settings.json"
         self.path = path or default_path
 
     def load(self) -> AppSettings:
@@ -33,8 +33,10 @@ class SettingsService:
             return AppSettings()
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
-            return AppSettings(**data)
-        except (OSError, json.JSONDecodeError, TypeError):
+            known_fields = {field.name for field in fields(AppSettings)}
+            filtered = {key: value for key, value in data.items() if key in known_fields}
+            return AppSettings(**filtered)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
             return AppSettings()
 
     def save(self, settings: AppSettings) -> None:

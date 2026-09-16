@@ -1,35 +1,58 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
+    QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 from meeting_assistant.core.state import AppState, OperatingMode
+from meeting_assistant.services.display_service import DisplayInfo, DisplayService
+from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
+from meeting_assistant.services.settings import AppSettings, SettingsService
+from meeting_assistant.ui.settings_dialog import SettingsDialog
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, state: AppState, app_icon: QIcon | None = None) -> None:
+    def __init__(
+        self,
+        state: AppState,
+        settings: AppSettings,
+        settings_service: SettingsService,
+        obs_controller: ObsController,
+        display_service: DisplayService,
+        app_icon: QIcon | None = None,
+    ) -> None:
         super().__init__()
         self.state = state
+        self.settings = settings
+        self.settings_service = settings_service
+        self.obs = obs_controller
+        self.displays = display_service
         self.app_icon = app_icon or QIcon()
+        self.obs_connected = False
+        self.obs_scenes: list[str] = []
+        self.current_obs_scene: str | None = None
+        self.display_snapshot: list[DisplayInfo] = []
+
         self.setWindowIcon(self.app_icon)
-        self.setWindowTitle("Meeting Assistant 3.0")
         self.resize(520, 620)
         self.setMinimumSize(470, 560)
-        if self.state.simulation_enabled:
-            self.setWindowTitle("Meeting Assistant 3.0 — Modo de Simulação")
 
         self._build_ui()
         self._apply_style()
+        self._connect_obs_signals()
+        self._connect_display_signals()
+        self._on_displays_changed(self.displays.snapshot())
         self._refresh_mode()
 
     def _build_ui(self) -> None:
@@ -71,8 +94,9 @@ class MainWindow(QMainWindow):
         status_grid.setVerticalSpacing(5)
         self.status_labels: dict[str, QLabel] = {}
         for index, name in enumerate(("OBS", "JW Library", "Zoom", "Tela 2")):
-            label = QLabel(f"● {name}")
+            label = QLabel(f"○ {name}")
             label.setObjectName("StatusBadge")
+            label.setProperty("state", "pending")
             label.setToolTip(f"{name}: aguardando verificação")
             self.status_labels[name] = label
             status_grid.addWidget(label, index // 2, index % 2)
@@ -119,9 +143,11 @@ class MainWindow(QMainWindow):
         system_grid = QGridLayout()
         system_grid.setHorizontalSpacing(6)
         diagnostics = QPushButton("🩺 Verificar")
-        settings = QPushButton("⚙️ Ajustes")
+        diagnostics.clicked.connect(self._show_diagnostics)
+        settings_button = QPushButton("⚙️ Ajustes")
+        settings_button.clicked.connect(self._show_settings)
         system_grid.addWidget(diagnostics, 0, 0)
-        system_grid.addWidget(settings, 0, 1)
+        system_grid.addWidget(settings_button, 0, 1)
         controls.addLayout(system_grid)
 
         controls.addSpacing(2)
@@ -129,11 +155,12 @@ class MainWindow(QMainWindow):
 
         preview_row = QHBoxLayout()
         preview_row.addStretch()
-        self.preview = QLabel("Retorno da Tela 2\n16:9")
+        self.preview = QLabel("Conectando ao OBS…\n16:9")
         self.preview.setObjectName("Preview")
         self.preview.setAlignment(Qt.AlignCenter)
         self.preview.setMinimumSize(280, 158)
         self.preview.setMaximumSize(320, 180)
+        self.preview.setScaledContents(False)
         preview_row.addWidget(self.preview)
         preview_row.addStretch()
         controls.addLayout(preview_row)
@@ -152,12 +179,23 @@ class MainWindow(QMainWindow):
 
         root.addWidget(controls_card, 1)
 
-        footer = QLabel("Painel compacto • preview apenas para conferência")
+        footer = QLabel("Painel compacto • OBS é a fonte de verdade das cenas")
         footer.setObjectName("Footer")
         footer.setAlignment(Qt.AlignCenter)
         root.addWidget(footer)
 
         self.setCentralWidget(central)
+
+    def _connect_obs_signals(self) -> None:
+        self.obs.connected_changed.connect(self._on_obs_connected)
+        self.obs.scenes_changed.connect(self._on_obs_scenes)
+        self.obs.scene_changed.connect(self._on_obs_scene)
+        self.obs.preview_changed.connect(self._on_obs_preview)
+        self.obs.preview_error.connect(self._on_obs_preview_error)
+        self.obs.error.connect(self._on_obs_error)
+
+    def _connect_display_signals(self) -> None:
+        self.displays.displays_changed.connect(self._on_displays_changed)
 
     def _section_label(self, text: str) -> QLabel:
         label = QLabel(text)
@@ -165,8 +203,25 @@ class MainWindow(QMainWindow):
         return label
 
     def _select_mode(self, mode: OperatingMode) -> None:
-        self.state.set_mode(mode)
-        self._refresh_mode()
+        if self.obs_connected:
+            scene_name = self._scene_for_mode(mode)
+            if self.obs_scenes and scene_name not in self.obs_scenes:
+                QMessageBox.warning(
+                    self,
+                    "Cena não encontrada",
+                    f"A cena configurada '{scene_name}' não existe no OBS.\n"
+                    "Abra Ajustes e escolha uma das cenas encontradas.",
+                )
+                return
+            self.mode_label.setText(f"Solicitando ao OBS: {scene_name}")
+            self.obs.set_program_scene(scene_name)
+            return
+
+        if self.state.simulation_enabled:
+            self.state.set_mode(mode)
+            self._refresh_mode()
+        else:
+            self.mode_label.setText("OBS desconectado")
 
     def _toggle_automation(self) -> None:
         self.state.automation_enabled = not self.state.automation_enabled
@@ -178,19 +233,222 @@ class MainWindow(QMainWindow):
             self.automation_badge.setText("AUTOMAÇÃO PAUSADA")
             self.automation_badge.setProperty("active", False)
             self.auto_button.setText("🚥 Ativar automação")
-        self.automation_badge.style().unpolish(self.automation_badge)
-        self.automation_badge.style().polish(self.automation_badge)
+        self._repolish(self.automation_badge)
+
+    def _on_obs_connected(self, connected: bool, message: str) -> None:
+        self.obs_connected = connected
+        if connected:
+            self._set_component_status("OBS", "ok", "● OBS", message)
+            self.preview.clear()
+            self.preview.setText("Aguardando preview do OBS…")
+        else:
+            self.current_obs_scene = None
+            self._set_component_status("OBS", "error", "● OBS", message)
+            self.preview.clear()
+            self.preview.setText("OBS desconectado\n16:9")
+            self.mode_label.setText("Salão: aguardando OBS")
+
+    def _on_obs_scenes(self, scenes: list[str]) -> None:
+        self.obs_scenes = scenes
+        self.status_labels["OBS"].setToolTip(
+            f"OBS conectado • {len(scenes)} cena(s) encontrada(s)"
+        )
+
+    def _on_obs_scene(self, scene_name: str) -> None:
+        self.current_obs_scene = scene_name
+        mode = self._mode_for_scene(scene_name)
+        if mode is not None:
+            self.state.set_mode(mode)
+        self._refresh_mode()
+        self.obs.refresh_preview()
+
+    def _on_obs_preview(self, image_bytes: bytes) -> None:
+        pixmap = QPixmap()
+        if not pixmap.loadFromData(image_bytes):
+            self.preview.clear()
+            self.preview.setText("Preview inválido")
+            return
+        scaled = pixmap.scaled(
+            self.preview.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.preview.setPixmap(scaled)
+        self.preview.setToolTip(
+            f"Preview real do OBS Program • {self.current_obs_scene or 'cena atual'}"
+        )
+
+    def _on_obs_preview_error(self, message: str) -> None:
+        if not self.obs_connected:
+            return
+        self.preview.clear()
+        self.preview.setText("Preview indisponível\nverifique o diagnóstico")
+        self.preview.setToolTip(message)
+
+    def _on_displays_changed(self, displays: list[DisplayInfo]) -> None:
+        self.display_snapshot = displays
+        self.state.second_display_available = len(displays) >= 2
+        self._update_window_title()
+
+        if not displays:
+            self._set_component_status(
+                "Tela 2",
+                "error",
+                "● Tela 2",
+                "Nenhum monitor foi detectado pelo Windows.",
+            )
+            return
+
+        if len(displays) == 1:
+            display = displays[0]
+            self._set_component_status(
+                "Tela 2",
+                "warning",
+                "○ Tela 2",
+                f"Somente 1 monitor detectado ({display.name}, {display.resolution}). "
+                "Modo de simulação ativo.",
+            )
+            return
+
+        secondary = next((item for item in displays if not item.primary), displays[1])
+        self._set_component_status(
+            "Tela 2",
+            "ok",
+            "● Tela 2",
+            f"Segunda tela detectada: {secondary.name} • {secondary.resolution} • "
+            f"posição {secondary.x},{secondary.y}",
+        )
+
+    def _on_obs_error(self, message: str) -> None:
+        self.mode_label.setText(message)
+
+    def _show_settings(self) -> None:
+        dialog = SettingsDialog(self.settings, self.obs_scenes, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        dialog.apply_to(self.settings)
+        self.settings_service.save(self.settings)
+        self._set_component_status("OBS", "pending", "○ OBS", "Reconectando…")
+        self.obs.reconfigure(self._obs_config())
+
+    def _show_diagnostics(self) -> None:
+        display_lines = "\n".join(
+            f"• {'Principal' if display.primary else 'Secundária'}: "
+            f"{display.name} • {display.resolution} • {display.x},{display.y}"
+            for display in self.display_snapshot
+        ) or "• nenhum monitor detectado"
+
+        if not self.obs_connected:
+            QMessageBox.information(
+                self,
+                "Verificação do sistema",
+                "OBS WebSocket não está conectado.\n\n"
+                "Abra o OBS e confira host, porta e senha em Ajustes.\n\n"
+                f"Monitores detectados:\n{display_lines}",
+            )
+            return
+
+        configured = {
+            "Fundo": self.settings.scene_background,
+            "Orador": self.settings.scene_speaker,
+            "Mídia": self.settings.scene_media,
+            "Zoom → Salão": self.settings.scene_zoom,
+        }
+        missing = [
+            f"{label}: {scene}"
+            for label, scene in configured.items()
+            if scene not in self.obs_scenes
+        ]
+        scene_lines = "\n".join(f"• {scene}" for scene in self.obs_scenes) or "• nenhuma"
+        missing_text = "\n".join(f"• {item}" for item in missing) or "• nenhuma"
+        QMessageBox.information(
+            self,
+            "Verificação do sistema",
+            f"Cena Program atual: {self.current_obs_scene or 'desconhecida'}\n\n"
+            f"Cenas encontradas:\n{scene_lines}\n\n"
+            f"Mapeamentos ausentes:\n{missing_text}\n\n"
+            f"Monitores detectados:\n{display_lines}",
+        )
+
+    def _obs_config(self) -> ObsConnectionConfig:
+        return ObsConnectionConfig(
+            host=self.settings.obs_host,
+            port=self.settings.obs_port,
+            password=self.settings.obs_password,
+        )
+
+    def _scene_for_mode(self, mode: OperatingMode) -> str:
+        return {
+            OperatingMode.BACKGROUND: self.settings.scene_background,
+            OperatingMode.SPEAKER: self.settings.scene_speaker,
+            OperatingMode.MEDIA: self.settings.scene_media,
+            OperatingMode.ZOOM: self.settings.scene_zoom,
+        }[mode]
+
+    def _mode_for_scene(self, scene_name: str) -> OperatingMode | None:
+        mappings = {
+            self.settings.scene_background: OperatingMode.BACKGROUND,
+            self.settings.scene_speaker: OperatingMode.SPEAKER,
+            self.settings.scene_media: OperatingMode.MEDIA,
+            self.settings.scene_zoom: OperatingMode.ZOOM,
+        }
+        return mappings.get(scene_name)
 
     def _refresh_mode(self) -> None:
+        actual_mode = None
+        if self.obs_connected and self.current_obs_scene:
+            actual_mode = self._mode_for_scene(self.current_obs_scene)
+        elif self.state.simulation_enabled:
+            actual_mode = self.state.current_mode
+
         for mode, button in self.mode_buttons.items():
-            button.setChecked(mode == self.state.current_mode)
+            button.setChecked(mode == actual_mode)
+
+        if self.obs_connected and self.current_obs_scene:
+            readable = {
+                OperatingMode.BACKGROUND: "Fundo",
+                OperatingMode.SPEAKER: "Orador",
+                OperatingMode.MEDIA: "Mídia",
+                OperatingMode.ZOOM: "Zoom remoto",
+            }
+            if actual_mode is None:
+                self.mode_label.setText(f"OBS Program: {self.current_obs_scene}")
+            else:
+                self.mode_label.setText(f"Salão: {readable[actual_mode]}")
+            return
+
         readable = {
             OperatingMode.BACKGROUND: "Fundo",
             OperatingMode.SPEAKER: "Orador",
             OperatingMode.MEDIA: "Mídia",
             OperatingMode.ZOOM: "Zoom remoto",
         }
-        self.mode_label.setText(f"Salão: {readable[self.state.current_mode]}")
+        self.mode_label.setText(f"Simulação: {readable[self.state.current_mode]}")
+
+    def _update_window_title(self) -> None:
+        if self.state.second_display_available:
+            self.setWindowTitle("Meeting Assistant 3.0")
+        else:
+            self.setWindowTitle("Meeting Assistant 3.0 — Modo de Simulação")
+
+    def _set_component_status(
+        self,
+        name: str,
+        state: str,
+        text: str,
+        tooltip: str,
+    ) -> None:
+        label = self.status_labels[name]
+        label.setText(text)
+        label.setProperty("state", state)
+        label.setToolTip(tooltip)
+        self._repolish(label)
+
+    @staticmethod
+    def _repolish(widget: QWidget) -> None:
+        widget.style().unpolish(widget)
+        widget.style().polish(widget)
 
     def _apply_style(self) -> None:
         self.setStyleSheet(
@@ -225,6 +483,21 @@ class MainWindow(QMainWindow):
                 border-radius: 6px;
                 padding: 5px 7px;
                 font-size: 10px;
+            }
+            QLabel#StatusBadge[state='ok'] {
+                color: #73e6a2;
+                border-color: #286743;
+            }
+            QLabel#StatusBadge[state='warning'] {
+                color: #ffd166;
+                border-color: #705b2a;
+            }
+            QLabel#StatusBadge[state='error'] {
+                color: #ff9299;
+                border-color: #74363d;
+            }
+            QLabel#StatusBadge[state='pending'] {
+                color: #d4dae3;
             }
             QLabel#AutomationBadge {
                 background: #3b3220;

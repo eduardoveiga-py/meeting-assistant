@@ -9,6 +9,8 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from meeting_assistant.core.state import AppState
+from meeting_assistant.services.display_service import DisplayService
+from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.settings import SettingsService
 from meeting_assistant.ui.main_window import MainWindow
 
@@ -23,9 +25,6 @@ def _set_windows_app_id() -> None:
 
 
 def _configure_qt_logging() -> None:
-    # Qt/DirectWrite can warn while probing legacy Windows bitmap fonts such as
-    # Fixedsys and 8514oem. They are not used by Meeting Assistant and the
-    # warning is harmless, so suppress only this narrow Qt font category.
     QLoggingCategory.setFilterRules("qt.qpa.fonts.warning=false")
 
 
@@ -48,12 +47,32 @@ def main() -> int:
 
     settings_service = SettingsService()
     settings = settings_service.load()
-
     state = AppState(simulation_enabled=settings.simulation_enabled)
-    window = MainWindow(state, app_icon=app_icon)
+
+    obs_controller = ObsController(poll_interval=1.0, preview_interval=1.0)
+    display_service = DisplayService(app)
+    window = MainWindow(
+        state=state,
+        settings=settings,
+        settings_service=settings_service,
+        obs_controller=obs_controller,
+        display_service=display_service,
+        app_icon=app_icon,
+    )
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+
+    app.aboutToQuit.connect(obs_controller.stop)
     window.show()
+    display_service.start()
+
+    obs_controller.start(
+        ObsConnectionConfig(
+            host=settings.obs_host,
+            port=settings.obs_port,
+            password=settings.obs_password,
+        )
+    )
 
     return app.exec()
 

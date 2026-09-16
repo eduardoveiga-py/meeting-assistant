@@ -4,7 +4,12 @@ from meeting_assistant.services.settings import AppSettings, SettingsService
 def test_settings_round_trip(tmp_path) -> None:
     path = tmp_path / "settings.json"
     service = SettingsService(path)
-    original = AppSettings(simulation_enabled=False, obs_port=4456, scene_media="Midias Teste")
+    original = AppSettings(
+        simulation_enabled=False,
+        obs_port=4456,
+        scene_media="Midias Teste",
+        scene_zoom="Zoom Salao",
+    )
 
     service.save(original)
     loaded = service.load()
@@ -17,3 +22,15 @@ def test_invalid_settings_fall_back_to_defaults(tmp_path) -> None:
     path.write_text("{invalid json", encoding="utf-8")
     loaded = SettingsService(path).load()
     assert loaded == AppSettings()
+
+
+def test_unknown_future_settings_are_ignored(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    path.write_text(
+        '{"obs_port": 4460, "future_option": true}',
+        encoding="utf-8",
+    )
+
+    loaded = SettingsService(path).load()
+
+    assert loaded.obs_port == 4460
