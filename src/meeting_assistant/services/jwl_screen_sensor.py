@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import mss
+from mss.exception import ScreenShotError
 
 from meeting_assistant.services.jwl_service import JwlWindowInfo
 
@@ -119,6 +120,6 @@ class JwlScreenSensor:
     def capture(self, region: CaptureRegion) -> bytes | None:
         try:
             shot = self._capture.grab(region.monitor)
-        except (OSError, ValueError, mss.exception.ScreenShotError):
+        except (OSError, ValueError, ScreenShotError):
             return None
         return screenshot_to_luma(shot.bgra, shot.width, shot.height)
