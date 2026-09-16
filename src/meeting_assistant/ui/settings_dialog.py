@@ -51,7 +51,7 @@ class SettingsDialog(QDialog):
         self.zoom_combo = self._scene_combo(settings.scene_zoom, available_scenes)
 
         scenes_form.addRow("Fundo", self.background_combo)
-        scenes_form.addRow("Orador", self.speaker_combo)
+        scenes_form.addRow("Palco", self.speaker_combo)
         scenes_form.addRow("Mídia", self.media_combo)
         scenes_form.addRow("Zoom → Salão", self.zoom_combo)
         root.addWidget(scenes_group)
