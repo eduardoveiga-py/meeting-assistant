@@ -1,13 +1,6 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-try {
-    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-    $OutputEncoding = [Console]::OutputEncoding
-} catch {
-    # A codificação não é crítica para o funcionamento do setup.
-}
-
 function Write-Step([string]$Message) {
     Write-Host "`n==> $Message" -ForegroundColor Cyan
 }
@@ -21,7 +14,7 @@ function Invoke-Checked {
 
     & $FilePath @ArgumentList
     if ($LASTEXITCODE -ne 0) {
-        throw "$Description falhou com código de saída $LASTEXITCODE."
+        throw "$Description falhou com codigo de saida $LASTEXITCODE."
     }
 }
 
@@ -32,18 +25,22 @@ function Get-PythonReleaseInfo {
     )
 
     # Evitamos `python -c` aqui porque o Windows PowerShell 5.1 pode alterar
-    # aspas internas ao encaminhar argumentos para executáveis nativos.
+    # aspas internas ao encaminhar argumentos para executaveis nativos.
     $rawOutput = & $FilePath @PrefixArguments --version 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw "Não foi possível consultar a versão do Python em '$FilePath'."
+        throw "Nao foi possivel consultar a versao do Python em '$FilePath'."
     }
 
     $output = (($rawOutput | Out-String).Trim())
     $pattern = '^Python\s+(?<version>\d+\.\d+\.\d+)(?<pre>a\d+|b\d+|rc\d+)?(?:\s.*)?$'
-    $match = [regex]::Match($output, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    $match = [regex]::Match(
+        $output,
+        $pattern,
+        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+    )
 
     if (-not $match.Success) {
-        throw "Resposta inesperada ao consultar a versão do Python: $output"
+        throw "Resposta inesperada ao consultar a versao do Python: $output"
     }
 
     $releaseLevel = 'final'
@@ -66,15 +63,15 @@ function Get-PythonReleaseInfo {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
-Write-Step "Verificando Python 3.12 estável"
+Write-Step "Verificando Python 3.12 estavel"
 $basePython = Get-PythonReleaseInfo -FilePath 'py' -PrefixArguments @('-3.12')
 Write-Host "$($basePython.Raw) [$($basePython.ReleaseLevel)]"
 
 if ($basePython.ReleaseLevel -ne 'final') {
     throw (
-        "Foi encontrado $($basePython.Raw), uma versão de pré-lançamento. " +
-        "Instale uma versão final estável do Python 3.12 x64 antes de continuar. " +
-        "Use 'py -0p' para listar as instalações registradas."
+        "Foi encontrado $($basePython.Raw), uma versao de pre-lancamento. " +
+        "Instale uma versao final estavel do Python 3.12 x64 antes de continuar. " +
+        "Use 'py -0p' para listar as instalacoes registradas."
     )
 }
 
@@ -84,7 +81,7 @@ $createVenv = -not (Test-Path $venvPython)
 if (-not $createVenv) {
     $venvInfo = Get-PythonReleaseInfo -FilePath $venvPython
     if ($venvInfo.ReleaseLevel -ne 'final') {
-        Write-Step "Recriando ambiente virtual criado com Python de pré-lançamento"
+        Write-Step "Recriando ambiente virtual criado com Python de pre-lancamento"
         Remove-Item '.venv' -Recurse -Force
         $createVenv = $true
     }
@@ -93,7 +90,7 @@ if (-not $createVenv) {
 if ($createVenv) {
     Write-Step "Criando ambiente virtual"
     Invoke-Checked `
-        -Description 'Criação do ambiente virtual' `
+        -Description 'Criacao do ambiente virtual' `
         -FilePath 'py' `
         -ArgumentList @('-3.12', '-m', 'venv', '.venv')
 }
@@ -102,13 +99,13 @@ $python = Join-Path $repoRoot '.venv\Scripts\python.exe'
 
 Write-Step "Atualizando pip"
 Invoke-Checked `
-    -Description 'Atualização do pip' `
+    -Description 'Atualizacao do pip' `
     -FilePath $python `
     -ArgumentList @('-m', 'pip', 'install', '--upgrade', 'pip')
 
-Write-Step "Instalando Meeting Assistant e dependências de desenvolvimento"
+Write-Step "Instalando Meeting Assistant e dependencias de desenvolvimento"
 Invoke-Checked `
-    -Description 'Instalação das dependências' `
+    -Description 'Instalacao das dependencias' `
     -FilePath $python `
     -ArgumentList @('-m', 'pip', 'install', '-e', '.[dev]')
 
@@ -118,7 +115,7 @@ Invoke-Checked `
     -FilePath $python `
     -ArgumentList @('-m', 'pytest')
 
-Write-Step "Executando verificação de código"
+Write-Step "Executando verificacao de codigo"
 Invoke-Checked `
     -Description 'Ruff' `
     -FilePath $python `
