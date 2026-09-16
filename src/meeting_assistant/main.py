@@ -9,6 +9,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from meeting_assistant.core.state import AppState
+from meeting_assistant.services.display_service import DisplayService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.settings import SettingsService
 from meeting_assistant.ui.main_window import MainWindow
@@ -48,12 +49,14 @@ def main() -> int:
     settings = settings_service.load()
     state = AppState(simulation_enabled=settings.simulation_enabled)
 
-    obs_controller = ObsController(poll_interval=1.0)
+    obs_controller = ObsController(poll_interval=1.0, preview_interval=1.0)
+    display_service = DisplayService(app)
     window = MainWindow(
         state=state,
         settings=settings,
         settings_service=settings_service,
         obs_controller=obs_controller,
+        display_service=display_service,
         app_icon=app_icon,
     )
     if settings.always_on_top:
@@ -61,6 +64,7 @@ def main() -> int:
 
     app.aboutToQuit.connect(obs_controller.stop)
     window.show()
+    display_service.start()
 
     obs_controller.start(
         ObsConnectionConfig(
