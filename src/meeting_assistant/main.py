@@ -27,7 +27,6 @@ APP_USER_MODEL_ID = "MeetingAssistant.Desktop.3"
 def _set_windows_app_id() -> None:
     if sys.platform != "win32":
         return
-
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
 
 
@@ -78,10 +77,11 @@ def main() -> int:
             sensor_source=settings.scene_media,
             media_scene=settings.scene_media,
             eligible_return_scenes=eligible,
+            preferred_return_scene=settings.scene_speaker,
         )
 
     obs_config = current_obs_config()
-    obs_controller = ObsController(poll_interval=1.0, preview_interval=1.0)
+    obs_controller = ObsController(poll_interval=0.5, preview_interval=0.15)
     display_service = DisplayService(app)
     jwl_service = JwlService(interval_ms=2000)
     visual_probe = ObsVisualProbeService()
@@ -91,6 +91,7 @@ def main() -> int:
     )
     media_automation = MediaAutomationService(
         config_provider=current_media_automation_config,
+        sample_interval_seconds=0.18,
     )
 
     window = MainWindow(
