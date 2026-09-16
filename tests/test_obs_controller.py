@@ -1,6 +1,7 @@
 import base64
 
 from meeting_assistant.services.obs_controller import (
+    ObsController,
     decode_image_data,
     extract_current_scene,
     extract_scene_names,
@@ -43,3 +44,33 @@ def test_decode_image_data_accepts_data_url() -> None:
 
 def test_decode_image_data_rejects_invalid_base64() -> None:
     assert decode_image_data("data:image/jpeg;base64,not-valid-@@") is None
+
+
+def test_handle_set_scene_uses_explicit_obs_request() -> None:
+    class FakeClient:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict | None, bool]] = []
+            self.current_scene = "Palco"
+
+        def send(self, request: str, data=None, *, raw: bool = False):
+            self.calls.append((request, data, raw))
+            if request == "SetCurrentProgramScene":
+                self.current_scene = data["sceneName"]
+                return {}
+            if request == "GetCurrentProgramScene":
+                return {"currentProgramSceneName": self.current_scene}
+            raise AssertionError(f"request inesperado: {request}")
+
+    controller = ObsController()
+    client = FakeClient()
+    controller._client = client
+    controller._last_scene = "Palco"
+
+    controller._handle_set_scene("Mídias")
+
+    assert client.calls[0] == (
+        "SetCurrentProgramScene",
+        {"sceneName": "Mídias"},
+        True,
+    )
+    assert controller._last_scene == "Mídias"
