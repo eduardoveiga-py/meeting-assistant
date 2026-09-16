@@ -12,11 +12,13 @@ def sample(
     elapsed_ms: int,
     changed_percent: float,
     mean_difference: float = 1.0,
+    motion_percent: float = 0.0,
 ) -> VisualSample:
     return VisualSample(
         elapsed_ms=elapsed_ms,
         changed_percent=changed_percent,
         mean_difference=mean_difference,
+        motion_percent=motion_percent,
     )
 
 
@@ -54,6 +56,20 @@ def test_classify_samples_accepts_strong_signal_that_returns_to_baseline() -> No
     assert classify_samples(samples).startswith("Sinal forte")
 
 
+def test_classify_samples_accepts_motion_drop_when_baseline_stays_changed() -> None:
+    samples = [
+        sample(0, 0.0, motion_percent=0.0),
+        sample(1000, 80.0, 90.0, motion_percent=30.0),
+        sample(2000, 82.0, 92.0, motion_percent=24.0),
+        sample(3000, 82.0, 92.0, motion_percent=0.2),
+        sample(4000, 82.0, 92.0, motion_percent=0.1),
+        sample(5000, 82.0, 92.0, motion_percent=0.0),
+        sample(6000, 82.0, 92.0, motion_percent=0.0),
+    ]
+
+    assert classify_samples(samples).startswith("A fonte permaneceu diferente")
+
+
 def test_classify_samples_rejects_nearly_static_scene() -> None:
     samples = [sample(0, 0.1), sample(1000, 0.4), sample(2000, 0.6)]
 
@@ -81,7 +97,7 @@ def test_rank_results_prefers_largest_visual_change() -> None:
     )
     active = SourceProbeResult(
         source_name="Captura JW",
-        samples=(sample(0, 0.2, 0.2), sample(1000, 35.0, 42.0)),
+        samples=(sample(0, 0.2, 0.2), sample(1000, 35.0, 42.0, motion_percent=20.0)),
     )
 
     ranked = rank_results([static, active])
