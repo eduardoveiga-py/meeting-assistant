@@ -25,6 +25,17 @@ class VisualSample:
     elapsed_ms: int
     changed_percent: float
     mean_difference: float
+    motion_percent: float = 0.0
+    motion_mean_difference: float = 0.0
+    video_active: bool | None = None
+    video_showing: bool | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SourceMetadata:
+    source_name: str
+    input_kind: str | None
+    settings: tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +57,33 @@ class SourceProbeResult:
             return 0.0
         tail = self.samples[-min(4, len(self.samples)) :]
         return sum(sample.changed_percent for sample in tail) / len(tail)
+
+    @property
+    def peak_motion_percent(self) -> float:
+        return max((sample.motion_percent for sample in self.samples), default=0.0)
+
+    @property
+    def tail_motion_average(self) -> float:
+        if not self.samples:
+            return 0.0
+        tail = self.samples[-min(4, len(self.samples)) :]
+        return sum(sample.motion_percent for sample in tail) / len(tail)
+
+    @property
+    def active_values(self) -> tuple[bool, ...]:
+        values: list[bool] = []
+        for sample in self.samples:
+            if sample.video_active is not None and sample.video_active not in values:
+                values.append(sample.video_active)
+        return tuple(values)
+
+    @property
+    def showing_values(self) -> tuple[bool, ...]:
+        values: list[bool] = []
+        for sample in self.samples:
+            if sample.video_showing is not None and sample.video_showing not in values:
+                values.append(sample.video_showing)
+        return tuple(values)
 
 
 def extract_scene_source_names(payload: dict[str, Any]) -> list[str]:
@@ -105,11 +143,18 @@ def classify_samples(samples: list[VisualSample] | tuple[VisualSample, ...]) -> 
     peak = max(sample.changed_percent for sample in samples)
     tail = samples[-min(4, len(samples)) :]
     tail_average = sum(sample.changed_percent for sample in tail) / len(tail)
+    peak_motion = max(sample.motion_percent for sample in samples)
+    tail_motion = sum(sample.motion_percent for sample in tail) / len(tail)
 
     if peak >= 5.0 and tail_average <= 1.5:
         return (
             "Sinal forte: a fonte saiu claramente do estado de repouso e retornou ao final. "
             "Este é um bom candidato para automação."
+        )
+    if peak >= 5.0 and peak_motion >= 2.0 and tail_motion <= 0.5:
+        return (
+            "A fonte permaneceu diferente do baseline, mas o movimento caiu no final. "
+            "Isso pode distinguir reprodução ativa de um quadro final congelado."
         )
     if peak >= 5.0:
         return (
@@ -130,6 +175,7 @@ def rank_results(results: list[SourceProbeResult]) -> list[SourceProbeResult]:
         key=lambda result: (
             result.peak_changed_percent,
             result.peak_mean_difference,
+            result.peak_motion_percent,
         ),
         reverse=True,
     )
@@ -196,6 +242,7 @@ class ObsVisualProbeService(QObject):
             )
 
             targets = self._discover_targets(client, scene_name)
+            metadata = [self._get_metadata(client, target) for target in targets]
             baselines = self._calibrate(client, targets)
             if not baselines:
                 raise RuntimeError(
@@ -204,7 +251,7 @@ class ObsVisualProbeService(QObject):
 
             self.baseline_ready.emit()
             results = self._observe(client, baselines)
-            report = self._build_report(scene_name, targets, baselines, results)
+            report = self._build_report(scene_name, targets, baselines, metadata, results)
             path = self._save_report(report)
             self.finished.emit(report, str(path))
         except Exception as exc:
@@ -264,6 +311,40 @@ class ObsVisualProbeService(QObject):
         visit(scene_name)
         return targets
 
+    @staticmethod
+    def _get_metadata(client: obs.ReqClient, source_name: str) -> SourceMetadata:
+        input_kind: str | None = None
+        settings: tuple[tuple[str, str], ...] = ()
+        try:
+            payload = client.send(
+                "GetInputSettings",
+                {"inputName": source_name},
+                raw=True,
+            )
+            raw_kind = payload.get("inputKind") or payload.get("input_kind")
+            if isinstance(raw_kind, str) and raw_kind:
+                input_kind = raw_kind
+            raw_settings = payload.get("inputSettings") or payload.get("input_settings") or {}
+            if isinstance(raw_settings, dict):
+                values: list[tuple[str, str]] = []
+                for key in sorted(raw_settings):
+                    value = raw_settings[key]
+                    if isinstance(value, (str, int, float, bool)):
+                        rendered = str(value)
+                        if len(rendered) > 160:
+                            rendered = rendered[:157] + "..."
+                        values.append((str(key), rendered))
+                    if len(values) >= 10:
+                        break
+                settings = tuple(values)
+        except Exception:
+            pass
+        return SourceMetadata(
+            source_name=source_name,
+            input_kind=input_kind,
+            settings=settings,
+        )
+
     def _calibrate(
         self,
         client: obs.ReqClient,
@@ -293,6 +374,7 @@ class ObsVisualProbeService(QObject):
         sample_map: dict[str, list[VisualSample]] = {
             source_name: [] for source_name in baselines
         }
+        previous_frames = dict(baselines)
 
         while not self._stop_event.is_set():
             elapsed_ms = int((time.monotonic() - started_at) * 1000)
@@ -306,13 +388,21 @@ class ObsVisualProbeService(QObject):
                 if frame is None or len(frame) != len(reference):
                     continue
                 changed, mean = pixel_difference(reference, frame)
+                previous = previous_frames.get(source_name, reference)
+                motion, motion_mean = pixel_difference(previous, frame)
+                video_active, video_showing = self._get_active_state(client, source_name)
                 sample_map[source_name].append(
                     VisualSample(
                         elapsed_ms=elapsed_ms,
                         changed_percent=changed,
                         mean_difference=mean,
+                        motion_percent=motion,
+                        motion_mean_difference=motion_mean,
+                        video_active=video_active,
+                        video_showing=video_showing,
                     )
                 )
+                previous_frames[source_name] = frame
 
             self.progress_changed.emit(min(elapsed_ms, duration_ms), duration_ms)
             self._stop_event.wait(self._sample_interval)
@@ -322,6 +412,30 @@ class ObsVisualProbeService(QObject):
             SourceProbeResult(source_name=name, samples=tuple(samples))
             for name, samples in sample_map.items()
         ]
+
+    @staticmethod
+    def _get_active_state(
+        client: obs.ReqClient,
+        source_name: str,
+    ) -> tuple[bool | None, bool | None]:
+        try:
+            payload = client.send(
+                "GetSourceActive",
+                {"sourceName": source_name},
+                raw=True,
+            )
+        except Exception:
+            return None, None
+        active = payload.get("videoActive")
+        if active is None:
+            active = payload.get("video_active")
+        showing = payload.get("videoShowing")
+        if showing is None:
+            showing = payload.get("video_showing")
+        return (
+            active if isinstance(active, bool) else None,
+            showing if isinstance(showing, bool) else None,
+        )
 
     @staticmethod
     def _capture(client: obs.ReqClient, source_name: str) -> bytes | None:
@@ -349,10 +463,12 @@ class ObsVisualProbeService(QObject):
         scene_name: str,
         targets: list[str],
         baselines: dict[str, bytes],
+        metadata: list[SourceMetadata],
         results: list[SourceProbeResult],
     ) -> str:
         ranked = rank_results(results)
         best = ranked[0] if ranked else None
+        metadata_map = {item.source_name: item for item in metadata}
 
         lines = [
             "Meeting Assistant — descoberta de sensor visual pelo OBS",
@@ -366,18 +482,27 @@ class ObsVisualProbeService(QObject):
         ]
         for target in targets:
             state = "screenshot OK" if target in baselines else "sem screenshot válido"
-            lines.append(f"  • {target} — {state}")
+            meta = metadata_map.get(target)
+            kind = meta.input_kind if meta and meta.input_kind else "cena/indeterminado"
+            lines.append(f"  • {target} — {state} — tipo: {kind}")
+            if meta and meta.settings:
+                for key, value in meta.settings:
+                    lines.append(f"      {key} = {value}")
 
         lines.extend(["", "Ranking de sensores:"])
         if not ranked:
             lines.append("  nenhum sensor produziu amostras válidas")
         else:
             for index, result in enumerate(ranked, start=1):
+                active = "/".join(str(value) for value in result.active_values) or "n/d"
+                showing = "/".join(str(value) for value in result.showing_values) or "n/d"
                 lines.append(
-                    f"  {index}. {result.source_name} — pico "
-                    f"{result.peak_changed_percent:.2f}% • diferença média máx. "
-                    f"{result.peak_mean_difference:.2f} • final "
-                    f"{result.tail_average:.2f}% • {len(result.samples)} amostras"
+                    f"  {index}. {result.source_name} — baseline pico "
+                    f"{result.peak_changed_percent:.2f}% • movimento pico "
+                    f"{result.peak_motion_percent:.2f}% • movimento final "
+                    f"{result.tail_motion_average:.2f}% • baseline final "
+                    f"{result.tail_average:.2f}% • ativo {active} • exibindo {showing} • "
+                    f"{len(result.samples)} amostras"
                 )
 
         lines.extend(["", "Conclusão automática:"])
@@ -396,9 +521,9 @@ class ObsVisualProbeService(QObject):
         if best is not None and best.samples:
             lines.extend(["", f"Amostras do melhor candidato ({best.source_name}):"])
             lines.extend(
-                f"  +{sample.elapsed_ms / 1000:5.1f}s • alterado "
-                f"{sample.changed_percent:6.2f}% • diferença média "
-                f"{sample.mean_difference:6.2f}"
+                f"  +{sample.elapsed_ms / 1000:5.1f}s • baseline "
+                f"{sample.changed_percent:6.2f}% • movimento {sample.motion_percent:6.2f}% • "
+                f"ativo {sample.video_active!s:5} • exibindo {sample.video_showing!s:5}"
                 for sample in best.samples
             )
 
@@ -406,7 +531,9 @@ class ObsVisualProbeService(QObject):
             [
                 "",
                 "Observação:",
-                "O teste avalia a cena de Mídia e cada fonte visual encontrada dentro dela.",
+                "Baseline mede diferença contra o estado parado antes do Play.",
+                "Movimento mede diferença entre frames consecutivos.",
+                "Ativo/exibindo vêm do estado da fonte informado pelo OBS, quando disponível.",
                 "Nenhuma cena do OBS é alterada pelo probe.",
             ]
         )
