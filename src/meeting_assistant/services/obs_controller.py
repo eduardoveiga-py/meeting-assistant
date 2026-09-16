@@ -49,6 +49,47 @@ def decode_image_data(image_data: str) -> bytes | None:
         return None
 
 
+def ensure_fade_transition(client: obs.ReqClient, duration_ms: int = 350) -> None:
+    """Seleciona a transição Fade/Esmaecer do OBS e ajusta sua duração.
+
+    É best-effort: se uma versão do OBS não expuser a lista de transições, a troca
+    de cena continua funcionando com a transição que já estiver selecionada.
+    """
+
+    try:
+        payload = client.send("GetSceneTransitionList", raw=True)
+        transitions = payload.get("transitions", [])
+        fade_name: str | None = None
+        for item in transitions:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("transitionName") or item.get("transition_name")
+            kind = item.get("transitionKind") or item.get("transition_kind")
+            if not isinstance(name, str) or not name:
+                continue
+            normalized_name = name.casefold()
+            normalized_kind = str(kind or "").casefold()
+            if normalized_kind == "fade_transition" or any(
+                token in normalized_name for token in ("fade", "esmaecer")
+            ):
+                fade_name = name
+                break
+
+        if fade_name:
+            client.send(
+                "SetCurrentSceneTransition",
+                {"transitionName": fade_name},
+                raw=True,
+            )
+        client.send(
+            "SetCurrentSceneTransitionDuration",
+            {"transitionDuration": int(duration_ms)},
+            raw=True,
+        )
+    except Exception:
+        pass
+
+
 class ObsController(QObject):
     connected_changed = Signal(bool, str)
     scenes_changed = Signal(list)
@@ -57,10 +98,10 @@ class ObsController(QObject):
     preview_error = Signal(str)
     error = Signal(str)
 
-    def __init__(self, poll_interval: float = 1.0, preview_interval: float = 1.0) -> None:
+    def __init__(self, poll_interval: float = 0.5, preview_interval: float = 0.15) -> None:
         super().__init__()
-        self._poll_interval = max(0.5, poll_interval)
-        self._preview_interval = max(0.75, preview_interval)
+        self._poll_interval = max(0.25, poll_interval)
+        self._preview_interval = max(0.12, preview_interval)
         self._commands: queue.Queue[tuple[str, object | None]] = queue.Queue()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -113,9 +154,8 @@ class ObsController(QObject):
         next_reconnect = 0.0
 
         while not self._stop_event.is_set():
-            now = time.monotonic()
             try:
-                command, payload = self._commands.get(timeout=0.2)
+                command, payload = self._commands.get(timeout=0.05)
                 if command == "stop":
                     break
                 if command == "configure" and isinstance(payload, ObsConnectionConfig):
@@ -165,12 +205,13 @@ class ObsController(QObject):
             )
             version = client.send("GetVersion", raw=True)
             obs_version = version.get("obsVersion", "versão desconhecida")
+            ensure_fade_transition(client)
             self._client = client
             self._set_connected(True, f"OBS {obs_version} conectado")
             self._refresh_scene_list()
             self._refresh_current_scene()
             return True
-        except Exception as exc:  # obsws-python expõe vários tipos de erro
+        except Exception as exc:
             self._client = None
             self._set_connected(False, self._friendly_connection_error(exc))
             return False
@@ -208,9 +249,9 @@ class ObsController(QObject):
         request_data = {
             "sourceName": self._last_scene,
             "imageFormat": "jpeg",
-            "imageWidth": 320,
-            "imageHeight": 180,
-            "imageCompressionQuality": 55,
+            "imageWidth": 640,
+            "imageHeight": 360,
+            "imageCompressionQuality": 78,
         }
         try:
             payload = self._client.send("GetSourceScreenshot", request_data, raw=True)
@@ -232,6 +273,7 @@ class ObsController(QObject):
             self.error.emit("OBS desconectado; não foi possível trocar a cena.")
             return
         try:
+            ensure_fade_transition(self._client)
             self._client.send(
                 "SetCurrentProgramScene",
                 {"sceneName": scene_name},
