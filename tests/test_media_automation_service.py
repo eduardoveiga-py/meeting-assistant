@@ -23,6 +23,15 @@ class FakeObsClient:
         raw: bool = False,
     ) -> dict[str, object]:
         self.calls.append((request_type, request_data, raw))
+        if request_type == "GetSceneTransitionList":
+            return {
+                "transitions": [
+                    {
+                        "transitionName": "Esmaecer",
+                        "transitionKind": "fade_transition",
+                    }
+                ]
+            }
         return {}
 
 
@@ -32,7 +41,6 @@ def test_pixel_difference_identical_frames_is_zero() -> None:
 
 def test_pixel_difference_uses_pixel_threshold() -> None:
     changed = pixel_difference(bytes([0, 0, 0, 0]), bytes([0, 20, 0, 20]))
-
     assert changed == 50.0
 
 
@@ -57,7 +65,6 @@ def test_detector_requires_debounce_to_start_and_end() -> None:
 
 def test_detector_resets_start_counter_after_noise() -> None:
     detector = MediaSignalDetector(start_hits_required=2)
-
     assert detector.update(10.0) is None
     assert detector.update(0.0) is None
     assert detector.update(10.0) is None
@@ -66,7 +73,6 @@ def test_detector_resets_start_counter_after_noise() -> None:
 
 def test_detector_resets_end_counter_if_signal_returns() -> None:
     detector = MediaSignalDetector(start_hits_required=1, end_hits_required=2)
-
     assert detector.update(50.0) == MediaSignalEvent.STARTED
     assert detector.update(0.0) is None
     assert detector.update(50.0) is None
@@ -82,7 +88,6 @@ def test_should_restore_only_when_automation_still_owns_media_scene() -> None:
         current_scene="Mídias",
         media_scene="Mídias",
     )
-
     assert not should_restore_scene(
         auto_switched=True,
         manual_override=True,
@@ -90,7 +95,6 @@ def test_should_restore_only_when_automation_still_owns_media_scene() -> None:
         current_scene="Mídias",
         media_scene="Mídias",
     )
-
     assert not should_restore_scene(
         auto_switched=True,
         manual_override=False,
@@ -111,19 +115,23 @@ def test_jw_library_window_capture_scores_above_monitor_capture() -> None:
         "monitor_capture",
         {"monitor_id": r"\\?\DISPLAY#MEIA296"},
     )
-
     assert direct > monitor
     assert direct >= 100
 
 
-def test_set_program_scene_uses_explicit_obs_websocket_request() -> None:
+def test_set_program_scene_enforces_fade_then_switches() -> None:
     client = FakeObsClient()
 
     set_program_scene(client, "Mídias")  # type: ignore[arg-type]
 
-    assert client.calls == [
-        ("SetCurrentProgramScene", {"sceneName": "Mídias"}, True),
-    ]
+    request_types = [call[0] for call in client.calls]
+    assert "SetCurrentSceneTransition" in request_types
+    assert "SetCurrentSceneTransitionDuration" in request_types
+    assert client.calls[-1] == (
+        "SetCurrentProgramScene",
+        {"sceneName": "Mídias"},
+        True,
+    )
 
 
 def test_media_automation_can_be_enabled_explicitly() -> None:
@@ -132,6 +140,7 @@ def test_media_automation_can_be_enabled_explicitly() -> None:
         sensor_source="Mídias",
         media_scene="Mídias",
         eligible_return_scenes=("Texto do Ano", "Palco"),
+        preferred_return_scene="Palco",
     )
     service = MediaAutomationService(config_provider=lambda: config)
 
