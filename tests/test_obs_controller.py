@@ -46,7 +46,7 @@ def test_decode_image_data_rejects_invalid_base64() -> None:
     assert decode_image_data("data:image/jpeg;base64,not-valid-@@") is None
 
 
-def test_handle_set_scene_uses_explicit_obs_request() -> None:
+def test_handle_set_scene_uses_explicit_obs_request_after_fade_setup() -> None:
     class FakeClient:
         def __init__(self) -> None:
             self.calls: list[tuple[str, dict | None, bool]] = []
@@ -54,6 +54,20 @@ def test_handle_set_scene_uses_explicit_obs_request() -> None:
 
         def send(self, request: str, data=None, *, raw: bool = False):
             self.calls.append((request, data, raw))
+            if request == "GetSceneTransitionList":
+                return {
+                    "transitions": [
+                        {
+                            "transitionName": "Esmaecer",
+                            "transitionKind": "fade_transition",
+                        }
+                    ]
+                }
+            if request in {
+                "SetCurrentSceneTransition",
+                "SetCurrentSceneTransitionDuration",
+            }:
+                return {}
             if request == "SetCurrentProgramScene":
                 self.current_scene = data["sceneName"]
                 return {}
@@ -68,9 +82,14 @@ def test_handle_set_scene_uses_explicit_obs_request() -> None:
 
     controller._handle_set_scene("Mídias")
 
-    assert client.calls[0] == (
+    assert (
         "SetCurrentProgramScene",
         {"sceneName": "Mídias"},
         True,
+    ) in client.calls
+    assert client.calls.index(
+        ("SetCurrentSceneTransitionDuration", {"transitionDuration": 350}, True)
+    ) < client.calls.index(
+        ("SetCurrentProgramScene", {"sceneName": "Mídias"}, True)
     )
     assert controller._last_scene == "Mídias"
