@@ -6,9 +6,11 @@ import psutil
 from PySide6.QtCore import QObject, QTimer, Signal
 
 try:
+    import win32api
     import win32gui
     import win32process
 except ImportError:  # pragma: no cover - exercised only outside Windows
+    win32api = None
     win32gui = None
     win32process = None
 
@@ -27,6 +29,7 @@ class JwlWindowInfo:
     visible: bool
     minimized: bool
     foreground: bool
+    monitor_primary: bool | None = None
 
     @property
     def size(self) -> str:
@@ -45,6 +48,14 @@ def looks_like_jw_library(process_name: str, title: str) -> bool:
 
     compact_process = process.replace(" ", "").replace("_", "").replace("-", "")
     return "jwlibrary" in compact_process
+
+
+def describe_hosted_process(host_process_name: str, child_process_name: str) -> str:
+    if not child_process_name or child_process_name == host_process_name:
+        return host_process_name
+    if not host_process_name:
+        return child_process_name
+    return f"{host_process_name} → {child_process_name}"
 
 
 class JwlService(QObject):
@@ -88,6 +99,7 @@ class JwlService(QObject):
                 item.bottom,
                 item.visible,
                 item.minimized,
+                item.monitor_primary,
             )
             for item in snapshot
         )
@@ -124,10 +136,45 @@ class JwlService(QObject):
         return processes
 
     def _has_candidate_process(self) -> bool:
-        return any(
-            looks_like_jw_library(name, "")
-            for name in self._process_map().values()
-        )
+        return any(looks_like_jw_library(name, "") for name in self._process_map().values())
+
+    def _hosted_jwl_process_name(
+        self,
+        hwnd: int,
+        process_map: dict[int, str],
+    ) -> str:
+        if win32gui is None or win32process is None:
+            return ""
+
+        matches: list[str] = []
+
+        def child_callback(child_hwnd: int, _: object) -> bool:
+            try:
+                _, child_pid = win32process.GetWindowThreadProcessId(child_hwnd)
+                child_name = process_map.get(child_pid, "")
+                if looks_like_jw_library(child_name, ""):
+                    matches.append(child_name)
+            except (OSError, RuntimeError):
+                pass
+            return True
+
+        try:
+            win32gui.EnumChildWindows(hwnd, child_callback, None)
+        except (OSError, RuntimeError):
+            return ""
+        return matches[0] if matches else ""
+
+    def _monitor_primary(self, hwnd: int) -> bool | None:
+        if win32api is None:
+            return None
+        try:
+            monitor = win32api.MonitorFromWindow(hwnd, 0)
+            if not monitor:
+                return None
+            info = win32api.GetMonitorInfo(monitor)
+            return bool(int(info.get("Flags", 0)) & 1)
+        except (OSError, RuntimeError):
+            return None
 
     def _discover_windows(self, include_hidden: bool = False) -> list[JwlWindowInfo]:
         if win32gui is None or win32process is None:
@@ -151,9 +198,17 @@ class JwlService(QObject):
 
                 title = win32gui.GetWindowText(hwnd).strip()
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                process_name = process_map.get(pid, "")
-                if not looks_like_jw_library(process_name, title):
-                    return True
+                host_process_name = process_map.get(pid, "")
+                process_name = host_process_name
+
+                if not looks_like_jw_library(host_process_name, title):
+                    child_process_name = self._hosted_jwl_process_name(hwnd, process_map)
+                    if not child_process_name:
+                        return True
+                    process_name = describe_hosted_process(
+                        host_process_name,
+                        child_process_name,
+                    )
 
                 class_name = win32gui.GetClassName(hwnd)
                 left, top, right, bottom = win32gui.GetWindowRect(hwnd)
@@ -171,6 +226,7 @@ class JwlService(QObject):
                         visible=visible,
                         minimized=bool(win32gui.IsIconic(hwnd)),
                         foreground=hwnd == foreground_hwnd,
+                        monitor_primary=self._monitor_primary(hwnd),
                     )
                 )
             except (OSError, RuntimeError, psutil.Error):
