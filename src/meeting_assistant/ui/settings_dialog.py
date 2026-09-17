@@ -85,6 +85,40 @@ class SettingsDialog(QDialog):
         output_form.addRow("", output_hint)
         root.addWidget(output_group)
 
+        startup_group = QGroupBox("Inicialização da reunião")
+        startup_form = QFormLayout(startup_group)
+
+        self.zoom_join_edit = QLineEdit(settings.zoom_join_url)
+        self.zoom_join_edit.setPlaceholderText(
+            "https://...zoom.us/j/123456789?pwd=..."
+        )
+        self.zoom_join_edit.setToolTip(
+            "Cole o link normal da reunião. O Meeting Assistant o converte para "
+            "abrir diretamente no aplicativo Zoom."
+        )
+
+        self.obs_executable_edit = QLineEdit(settings.obs_executable)
+        self.obs_executable_edit.setPlaceholderText(
+            "Automático — normalmente C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe"
+        )
+        self.zoom_executable_edit = QLineEdit(settings.zoom_executable)
+        self.zoom_executable_edit.setPlaceholderText(
+            "Automático — normalmente %APPDATA%\\Zoom\\bin\\Zoom.exe"
+        )
+
+        startup_form.addRow("Link da reunião Zoom", self.zoom_join_edit)
+        startup_form.addRow("Executável do OBS", self.obs_executable_edit)
+        startup_form.addRow("Executável do Zoom", self.zoom_executable_edit)
+
+        startup_hint = QLabel(
+            "Deixe os caminhos vazios para detecção automática. "
+            "Para Zoom → Salão, ative uma vez no Zoom a opção 'Usar dois monitores' "
+            "antes de entrar na reunião."
+        )
+        startup_hint.setWordWrap(True)
+        startup_form.addRow("", startup_hint)
+        root.addWidget(startup_group)
+
         connection_group = QGroupBox("OBS WebSocket")
         connection_form = QFormLayout(connection_group)
 
@@ -139,3 +173,6 @@ class SettingsDialog(QDialog):
         settings.scene_speaker = self.speaker_combo.currentText().strip()
         settings.scene_media = self.media_combo.currentText().strip()
         settings.scene_zoom = self.zoom_combo.currentText().strip()
+        settings.zoom_join_url = self.zoom_join_edit.text().strip()
+        settings.obs_executable = self.obs_executable_edit.text().strip()
+        settings.zoom_executable = self.zoom_executable_edit.text().strip()
