@@ -9,8 +9,9 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from meeting_assistant.core.state import AppState
-from meeting_assistant.services.display_service import DisplayService
+from meeting_assistant.services.display_service import DisplayService, resolve_hall_display
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
+from meeting_assistant.services.jwl_secondary_window import JwlSecondaryWindowService
 from meeting_assistant.services.jwl_service import JwlService
 from meeting_assistant.services.media_automation_service import (
     MediaAutomationConfig,
@@ -84,6 +85,20 @@ def main() -> int:
     obs_controller = ObsController(poll_interval=0.5, preview_interval=0.15)
     display_service = DisplayService(app)
     jwl_service = JwlService(interval_ms=2000)
+
+    def current_hall_display():
+        if settings.simulation_enabled:
+            return None
+        return resolve_hall_display(
+            display_service.snapshot(),
+            settings.hall_display_key,
+        )
+
+    jwl_secondary = JwlSecondaryWindowService(
+        display_provider=current_hall_display,
+        interval_ms=450,
+    )
+
     visual_probe = ObsVisualProbeService()
     jwl_probe = JwlProbeService(
         visual_probe=visual_probe,
@@ -91,7 +106,7 @@ def main() -> int:
     )
     media_automation = MediaAutomationService(
         config_provider=current_media_automation_config,
-        window_provider=lambda: jwl_service.scan(include_hidden=False),
+        secondary_window_provider=lambda: jwl_secondary.current,
         sample_interval_seconds=0.18,
     )
 
@@ -105,6 +120,10 @@ def main() -> int:
         jwl_probe=jwl_probe,
         app_icon=app_icon,
     )
+    # Startup routing belongs to the media automation now. Preserving the OBS
+    # scene here is essential when Meeting Assistant is reopened mid-video.
+    window._startup_scene_applied = True
+
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
@@ -114,8 +133,17 @@ def main() -> int:
     media_automation.media_ended.connect(obs_controller.set_program_scene)
     media_automation.error.connect(window.set_automation_status)
     window.automation_enabled_changed.connect(media_automation.set_enabled)
+    window.automation_enabled_changed.connect(jwl_secondary.set_guard_enabled)
+    jwl_secondary.status_changed.connect(
+        lambda _ok, message: (
+            window.set_automation_status(message)
+            if state.automation_enabled and not media_automation.enabled
+            else None
+        )
+    )
 
     app.aboutToQuit.connect(media_automation.stop)
+    app.aboutToQuit.connect(jwl_secondary.stop)
     app.aboutToQuit.connect(obs_controller.stop)
     app.aboutToQuit.connect(jwl_probe.stop)
     app.aboutToQuit.connect(jwl_service.stop)
@@ -123,6 +151,7 @@ def main() -> int:
     window.show()
     display_service.start()
     jwl_service.start()
+    jwl_secondary.start()
     obs_controller.start(obs_config)
     media_automation.start()
     media_automation.set_enabled(False)
