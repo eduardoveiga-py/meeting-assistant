@@ -10,8 +10,9 @@ from PySide6.QtWidgets import QApplication
 
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.automation_coordinator import AutomationCoordinator
-from meeting_assistant.services.display_service import DisplayService, resolve_hall_display
-from meeting_assistant.services.hall_output_guard import HallOutputGuard
+from meeting_assistant.services.display_service import DisplayInfo, DisplayService, resolve_hall_display
+from meeting_assistant.services.hall_output_guard import HallOutputGuard, HallOutputTarget
+from meeting_assistant.services.idle_reference_store import IdleReferenceStore
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService
 from meeting_assistant.services.media_automation_service import (
@@ -67,6 +68,7 @@ def main() -> int:
     display_service = DisplayService(app)
     jwl_service = JwlService(interval_ms=2000)
     visual_probe = ObsVisualProbeService()
+    idle_reference_store = IdleReferenceStore()
 
     def current_obs_config() -> ObsConnectionConfig:
         return ObsConnectionConfig(
@@ -78,21 +80,39 @@ def main() -> int:
     def current_probe_config() -> tuple[ObsConnectionConfig, str]:
         return current_obs_config(), settings.scene_media
 
-    def current_hall_display_bounds() -> tuple[int, int, int, int] | None:
+    def current_hall_display() -> DisplayInfo | None:
         if settings.simulation_enabled:
             return None
-        hall_display = resolve_hall_display(
+        return resolve_hall_display(
             display_service.snapshot(),
             settings.hall_display_key,
         )
+
+    def current_hall_target() -> HallOutputTarget | None:
+        hall_display = current_hall_display()
         if hall_display is None:
             return None
-        return (
-            hall_display.x,
-            hall_display.y,
-            hall_display.width,
-            hall_display.height,
+        return HallOutputTarget(
+            device_name=hall_display.name,
+            bounds=(
+                hall_display.x,
+                hall_display.y,
+                hall_display.width,
+                hall_display.height,
+            ),
         )
+
+    def current_hall_display_bounds() -> tuple[int, int, int, int] | None:
+        target = current_hall_target()
+        return target.bounds if target is not None else None
+
+    def current_idle_reference_key() -> str:
+        if settings.simulation_enabled:
+            return "simulation"
+        hall_display = current_hall_display()
+        if hall_display is None:
+            return ""
+        return f"{hall_display.key}|{settings.scene_media}"
 
     def current_media_automation_config() -> MediaAutomationConfig:
         eligible = tuple(
@@ -108,21 +128,28 @@ def main() -> int:
             preferred_return_scene=settings.scene_speaker,
             hall_display_bounds=current_hall_display_bounds(),
             simulation_enabled=settings.simulation_enabled,
+            idle_reference_key=current_idle_reference_key(),
         )
 
     jwl_probe = JwlProbeService(
         visual_probe=visual_probe,
         config_provider=current_probe_config,
     )
-    media_automation = MediaAutomationService(
-        config_provider=current_media_automation_config,
-        window_provider=lambda: jwl_service.scan(include_hidden=False),
-        sample_interval_seconds=0.18,
-    )
     hall_output_guard = HallOutputGuard(
-        bounds_provider=current_hall_display_bounds,
+        target_provider=current_hall_target,
         window_provider=lambda: jwl_service.scan(include_hidden=True),
         interval_ms=350,
+    )
+    media_automation = MediaAutomationService(
+        config_provider=current_media_automation_config,
+        window_provider=lambda: jwl_service.scan(include_hidden=True),
+        target_hwnd_provider=lambda: hall_output_guard.tracked_hwnd,
+        reference_store=idle_reference_store,
+        sample_interval_seconds=0.18,
+    )
+    automation_coordinator = AutomationCoordinator(
+        media_automation=media_automation,
+        hall_output_guard=hall_output_guard,
     )
 
     window = MainWindow(
@@ -138,14 +165,6 @@ def main() -> int:
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
-    automation_coordinator = AutomationCoordinator(
-        obs_controller=obs_controller,
-        media_automation=media_automation,
-        hall_output_guard=hall_output_guard,
-        palco_scene_provider=lambda: settings.scene_speaker,
-        current_scene_provider=lambda: window.current_obs_scene,
-    )
-
     media_automation.status_changed.connect(window.set_automation_status)
     media_automation.signal_changed.connect(window.set_automation_signal)
     media_automation.media_started.connect(obs_controller.set_program_scene)
@@ -153,10 +172,7 @@ def main() -> int:
     media_automation.error.connect(window.set_automation_status)
     hall_output_guard.error.connect(window.set_automation_status)
     automation_coordinator.status_changed.connect(window.set_automation_status)
-
     window.automation_enabled_changed.connect(automation_coordinator.request)
-    obs_controller.scene_changed.connect(automation_coordinator.on_scene_changed)
-    obs_controller.connected_changed.connect(automation_coordinator.on_obs_connected)
 
     app.aboutToQuit.connect(hall_output_guard.stop)
     app.aboutToQuit.connect(media_automation.stop)
