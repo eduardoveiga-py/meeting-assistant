@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QApplication
 
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.display_service import DisplayService, resolve_hall_display
+from meeting_assistant.services.hall_monitor_sensor import HallMonitorSensorRegionProvider
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService
 from meeting_assistant.services.jwl_uia_secondary_window import JwlUiaSecondaryWindowService
@@ -94,6 +95,7 @@ def main() -> int:
         display_provider=current_hall_display,
         interval_ms=650,
     )
+    hall_capture_region = HallMonitorSensorRegionProvider(current_hall_display)
 
     jwl_probe = JwlProbeService(
         secondary_service=jwl_secondary,
@@ -103,6 +105,7 @@ def main() -> int:
     media_automation = MediaAutomationService(
         config_provider=current_media_automation_config,
         secondary_window_provider=lambda: jwl_secondary.current,
+        capture_region_provider=hall_capture_region,
         sample_interval_seconds=0.18,
     )
 
