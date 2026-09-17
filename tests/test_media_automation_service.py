@@ -1,8 +1,13 @@
+from meeting_assistant.services.jwl_secondary_window import (
+    JwlSecondaryWindowInfo,
+    WindowRect,
+)
 from meeting_assistant.services.media_automation_service import (
     MediaAutomationConfig,
     MediaAutomationService,
     MediaSignalDetector,
     MediaSignalEvent,
+    capture_region_for_secondary,
     pixel_difference,
     sensor_candidate_score,
     set_program_scene,
@@ -33,6 +38,23 @@ class FakeObsClient:
                 ]
             }
         return {}
+
+
+def secondary_window() -> JwlSecondaryWindowInfo:
+    return JwlSecondaryWindowInfo(
+        hwnd=42,
+        pid=100,
+        process_name="ApplicationFrameHost.exe",
+        title="Second Display \u200e- JW Library",
+        class_name="ApplicationFrameWindow",
+        rect=WindowRect(-1280, 0, 0, 720),
+        visible=True,
+        minimized=False,
+        topmost=True,
+        title_bar_visible=False,
+        has_jwl_core_window=True,
+        score=2000,
+    )
 
 
 def test_pixel_difference_identical_frames_is_zero() -> None:
@@ -78,6 +100,57 @@ def test_detector_resets_end_counter_if_signal_returns() -> None:
     assert detector.update(50.0) is None
     assert detector.update(0.0) is None
     assert detector.update(0.0) == MediaSignalEvent.ENDED
+
+
+def test_capture_region_is_derived_only_from_secondary_window() -> None:
+    region = capture_region_for_secondary(secondary_window())
+    assert region.hwnd == 42
+    assert region.left >= -1280
+    assert region.top >= 0
+    assert region.width <= 960
+    assert region.height <= 540
+    assert region.left + region.width <= 0
+    assert region.top + region.height <= 720
+
+
+def test_initial_classifier_recovers_media_already_active() -> None:
+    config = MediaAutomationConfig(
+        obs=ObsConnectionConfig(host="127.0.0.1", port=4455, password=""),
+        sensor_source="Mídias",
+        media_scene="Mídias",
+        eligible_return_scenes=("Texto do Ano", "Palco"),
+        preferred_return_scene="Palco",
+    )
+    service = MediaAutomationService(
+        config_provider=lambda: config,
+        secondary_window_provider=secondary_window,
+    )
+
+    event, idle_hits = service._classify_initial_state(80.0, 0)
+    assert event is None
+    event, idle_hits = service._classify_initial_state(82.0, idle_hits)
+    assert event == MediaSignalEvent.STARTED
+    assert idle_hits == 0
+
+
+def test_initial_classifier_routes_idle_to_palco() -> None:
+    config = MediaAutomationConfig(
+        obs=ObsConnectionConfig(host="127.0.0.1", port=4455, password=""),
+        sensor_source="Mídias",
+        media_scene="Mídias",
+        eligible_return_scenes=("Texto do Ano", "Palco"),
+        preferred_return_scene="Palco",
+    )
+    service = MediaAutomationService(
+        config_provider=lambda: config,
+        secondary_window_provider=secondary_window,
+    )
+
+    event, idle_hits = service._classify_initial_state(0.2, 0)
+    assert event is None
+    event, idle_hits = service._classify_initial_state(0.3, idle_hits)
+    assert event == MediaSignalEvent.ENDED
+    assert idle_hits == 0
 
 
 def test_should_restore_only_when_automation_still_owns_media_scene() -> None:
@@ -144,7 +217,7 @@ def test_media_automation_can_be_enabled_explicitly() -> None:
     )
     service = MediaAutomationService(
         config_provider=lambda: config,
-        window_provider=lambda: [],
+        secondary_window_provider=lambda: None,
     )
 
     assert service.enabled is False
