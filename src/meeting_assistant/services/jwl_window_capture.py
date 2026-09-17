@@ -40,17 +40,49 @@ def _window_area(window: JwlWindowInfo) -> int:
     return max(0, window.right - window.left) * max(0, window.bottom - window.top)
 
 
+def monitor_index_for_display(
+    displays: list[DisplayInfo],
+    target: DisplayInfo | None,
+) -> int | None:
+    """Return the 1-based monitor index expected by windows-capture.
+
+    Qt preserves the native screen list order. windows-capture exposes monitor
+    indices as 1-based values, so the same list position plus one is used here.
+    The target is matched by stable key first, then by geometry as a fallback.
+    """
+
+    if target is None:
+        return None
+
+    for index, display in enumerate(displays, start=1):
+        if display.key == target.key:
+            return index
+
+    for index, display in enumerate(displays, start=1):
+        if (
+            display.x,
+            display.y,
+            display.width,
+            display.height,
+        ) == (
+            target.x,
+            target.y,
+            target.width,
+            target.height,
+        ):
+            return index
+    return None
+
+
 def select_jwl_capture_target(
     windows: list[JwlWindowInfo],
     hall_display: DisplayInfo | None,
 ) -> CaptureTarget | None:
     """Select the visible JW Library window that belongs to the Hall display.
 
-    Coordinate overlap is preferred. Windows can expose monitor geometry through
-    a DPI coordinate space that differs from Qt's QScreen geometry, so when the
-    overlap is zero we may safely fall back to a JW Library window that Win32
-    explicitly reports on a non-primary monitor. We never fall back to a window
-    known to be on the primary/operator monitor.
+    Kept as a fallback for diagnostics. The production direction is monitor
+    capture because some JW Library presentation windows are not exposed as a
+    discoverable top-level HWND.
     """
 
     candidates = [
@@ -91,12 +123,11 @@ def select_jwl_capture_target(
 
 
 class JwlWindowCapture(QObject):
-    """Live Windows Graphics Capture stream for one JW Library HWND.
+    """Live Windows Graphics Capture stream for a JW Library window or monitor.
 
-    The native capture callback never touches Qt widgets. It copies the newest
-    frame into a single-slot buffer; a Qt timer then publishes at most one
-    current frame per UI tick. This naturally drops stale frames instead of
-    building a signal backlog during video playback.
+    The native callback only copies the newest frame into a single-slot buffer.
+    A Qt timer publishes the latest frame on the UI thread, dropping stale frames
+    instead of allowing video playback to build a signal backlog.
     """
 
     frame_ready = Signal(object, float, int, int)
@@ -117,13 +148,45 @@ class JwlWindowCapture(QObject):
         self._capture: Any | None = None
         self._capture_control: Any | None = None
         self._hwnd: int | None = None
+        self._monitor_index: int | None = None
+        self._source_description = ""
         self._closed_by_us = False
 
     @property
     def hwnd(self) -> int | None:
         return self._hwnd
 
+    @property
+    def monitor_index(self) -> int | None:
+        return self._monitor_index
+
     def start(self, hwnd: int) -> bool:
+        if hwnd <= 0:
+            self.status_changed.emit(False, "HWND inválido para captura.")
+            return False
+        return self._start_capture(
+            window_hwnd=hwnd,
+            monitor_index=None,
+            source_description=f"janela HWND {hwnd}",
+        )
+
+    def start_monitor(self, monitor_index: int) -> bool:
+        if monitor_index <= 0:
+            self.status_changed.emit(False, "Índice de monitor inválido para captura.")
+            return False
+        return self._start_capture(
+            window_hwnd=None,
+            monitor_index=monitor_index,
+            source_description=f"monitor {monitor_index}",
+        )
+
+    def _start_capture(
+        self,
+        *,
+        window_hwnd: int | None,
+        monitor_index: int | None,
+        source_description: str,
+    ) -> bool:
         self.stop()
 
         if sys.platform != "win32":
@@ -135,11 +198,10 @@ class JwlWindowCapture(QObject):
                 "Dependência windows-capture não instalada. Execute scripts/setup-dev.ps1.",
             )
             return False
-        if hwnd <= 0:
-            self.status_changed.emit(False, "HWND inválido para captura.")
-            return False
 
-        self._hwnd = hwnd
+        self._hwnd = window_hwnd
+        self._monitor_index = monitor_index
+        self._source_description = source_description
         self._closed_by_us = False
         self._frame_times.clear()
         self._latest_sequence = 0
@@ -151,7 +213,8 @@ class JwlWindowCapture(QObject):
                 draw_border=False,
                 secondary_window=False,
                 minimum_update_interval=33,
-                window_hwnd=hwnd,
+                monitor_index=monitor_index,
+                window_hwnd=window_hwnd,
             )
 
             @capture.event
@@ -159,8 +222,6 @@ class JwlWindowCapture(QObject):
                 frame: Frame,
                 _capture_control: InternalCaptureControl,
             ) -> None:
-                # windows-capture exposes a zero-copy native-backed ndarray.
-                # Retained pixels must be copied before this callback returns.
                 bgr = np.ascontiguousarray(frame.frame_buffer[:, :, :3]).copy()
                 now = time.perf_counter()
                 with self._lock:
@@ -176,18 +237,23 @@ class JwlWindowCapture(QObject):
                 if not self._closed_by_us:
                     self.status_changed.emit(
                         False,
-                        "A janela capturada foi fechada ou a sessão de captura terminou.",
+                        "A fonte capturada foi fechada ou a sessão de captura terminou.",
                     )
 
             self._capture = capture
             self._capture_control = capture.start_free_threaded()
             self._timer.start()
-            self.status_changed.emit(True, f"Captura direta ativa • HWND {hwnd}")
+            self.status_changed.emit(
+                True,
+                f"Captura direta ativa • {source_description}",
+            )
             return True
         except Exception as exc:  # noqa: BLE001 - native capture failures must be surfaced safely
             self._capture = None
             self._capture_control = None
             self._hwnd = None
+            self._monitor_index = None
+            self._source_description = ""
             self.status_changed.emit(False, f"Falha ao iniciar captura direta: {exc}")
             return False
 
@@ -199,6 +265,8 @@ class JwlWindowCapture(QObject):
         self._capture_control = None
         self._capture = None
         self._hwnd = None
+        self._monitor_index = None
+        self._source_description = ""
 
         with self._lock:
             self._latest_bgr = None
