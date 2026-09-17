@@ -57,6 +57,7 @@ class HallOutputWindow(QWidget):
         self._idle_image = QImage()
         self._media_image = QImage()
         self._capture_excluded = False
+        self._target_screen: QScreen | None = None
 
         self._idle_label = QLabel(self)
         self._media_label = QLabel(self)
@@ -80,16 +81,29 @@ class HallOutputWindow(QWidget):
     def media_opacity(self) -> float:
         return float(self._media_opacity.opacity())
 
-    def show_on_screen(self, screen: QScreen) -> None:
-        """Show fullscreen on the requested physical screen without taking focus."""
+    def prepare_for_screen(self, screen: QScreen) -> bool:
+        """Bind the native window to a screen and exclude it before it becomes visible."""
 
-        # Materialize the native handle before assigning its screen.
-        self.winId()
+        self._target_screen = screen
+        native_id = int(self.winId())
         handle = self.windowHandle()
         if handle is not None:
             handle.setScreen(screen)
         self.setGeometry(screen.geometry())
-        self.showFullScreen()
+
+        excluded = exclude_window_from_capture(native_id)
+        if excluded != self._capture_excluded:
+            self._capture_excluded = excluded
+            self.capture_exclusion_changed.emit(excluded)
+        return excluded
+
+    def show_on_screen(self, screen: QScreen) -> None:
+        """Cover exactly the requested physical screen without using showFullScreen()."""
+
+        self.prepare_for_screen(screen)
+        self.setGeometry(screen.geometry())
+        self.show()
+        self.setGeometry(screen.geometry())
         self.raise_()
 
     def set_idle_image(self, image: QImage) -> None:
@@ -153,3 +167,5 @@ class HallOutputWindow(QWidget):
         if excluded != self._capture_excluded:
             self._capture_excluded = excluded
             self.capture_exclusion_changed.emit(excluded)
+        if self._target_screen is not None:
+            self.setGeometry(self._target_screen.geometry())
