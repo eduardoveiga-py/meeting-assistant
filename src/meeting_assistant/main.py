@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QApplication
 
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.display_service import DisplayService, resolve_hall_display
+from meeting_assistant.services.hall_output_guard import HallOutputGuard
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService
 from meeting_assistant.services.media_automation_service import (
@@ -76,27 +77,27 @@ def main() -> int:
     def current_probe_config() -> tuple[ObsConnectionConfig, str]:
         return current_obs_config(), settings.scene_media
 
+    def current_hall_display_bounds() -> tuple[int, int, int, int] | None:
+        if settings.simulation_enabled:
+            return None
+        hall_display = resolve_hall_display(
+            display_service.snapshot(),
+            settings.hall_display_key,
+        )
+        if hall_display is None:
+            return None
+        return (
+            hall_display.x,
+            hall_display.y,
+            hall_display.width,
+            hall_display.height,
+        )
+
     def current_media_automation_config() -> MediaAutomationConfig:
         eligible = tuple(
             scene
             for scene in (settings.scene_background, settings.scene_speaker)
             if scene
-        )
-        hall_display = None
-        if not settings.simulation_enabled:
-            hall_display = resolve_hall_display(
-                display_service.snapshot(),
-                settings.hall_display_key,
-            )
-        hall_bounds = (
-            (
-                hall_display.x,
-                hall_display.y,
-                hall_display.width,
-                hall_display.height,
-            )
-            if hall_display is not None
-            else None
         )
         return MediaAutomationConfig(
             obs=current_obs_config(),
@@ -104,7 +105,7 @@ def main() -> int:
             media_scene=settings.scene_media,
             eligible_return_scenes=eligible,
             preferred_return_scene=settings.scene_speaker,
-            hall_display_bounds=hall_bounds,
+            hall_display_bounds=current_hall_display_bounds(),
             simulation_enabled=settings.simulation_enabled,
         )
 
@@ -116,6 +117,11 @@ def main() -> int:
         config_provider=current_media_automation_config,
         window_provider=lambda: jwl_service.scan(include_hidden=False),
         sample_interval_seconds=0.18,
+    )
+    hall_output_guard = HallOutputGuard(
+        bounds_provider=current_hall_display_bounds,
+        window_provider=lambda: jwl_service.scan(include_hidden=True),
+        interval_ms=350,
     )
 
     window = MainWindow(
@@ -131,13 +137,61 @@ def main() -> int:
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
+    automation_requested = False
+    automation_armed = False
+
+    def arm_automation_after_palco(scene_name: str) -> None:
+        nonlocal automation_armed
+        if not automation_requested or automation_armed:
+            return
+        if scene_name != settings.scene_speaker:
+            return
+        automation_armed = True
+        media_automation.set_enabled(True)
+
+    def handle_automation_request(enabled: bool) -> None:
+        nonlocal automation_requested, automation_armed
+        automation_requested = enabled
+        if not enabled:
+            automation_armed = False
+            media_automation.set_enabled(False)
+            hall_output_guard.set_enabled(False)
+            return
+
+        automation_armed = False
+        media_automation.set_enabled(False)
+        hall_output_guard.set_enabled(True)
+        window.set_automation_status(
+            "Preparando automação: retornando o OBS para Palco antes de armar o sensor…"
+        )
+        if settings.scene_speaker:
+            obs_controller.set_program_scene(settings.scene_speaker)
+        else:
+            window.set_automation_status(
+                "Não foi possível ativar: configure a cena Palco em Ajustes."
+            )
+
+    def handle_obs_connection_for_automation(connected: bool, _message: str) -> None:
+        if not connected or not automation_requested or automation_armed:
+            return
+        window.set_automation_status(
+            "OBS reconectado; retornando para Palco antes de rearmar a automação…"
+        )
+        if settings.scene_speaker:
+            obs_controller.set_program_scene(settings.scene_speaker)
+
     media_automation.status_changed.connect(window.set_automation_status)
     media_automation.signal_changed.connect(window.set_automation_signal)
     media_automation.media_started.connect(obs_controller.set_program_scene)
     media_automation.media_ended.connect(obs_controller.set_program_scene)
     media_automation.error.connect(window.set_automation_status)
-    window.automation_enabled_changed.connect(media_automation.set_enabled)
+    hall_output_guard.error.connect(window.set_automation_status)
 
+    window.automation_enabled_changed.connect(handle_automation_request)
+    obs_controller.scene_changed.connect(arm_automation_after_palco)
+    obs_controller.connected_changed.connect(handle_obs_connection_for_automation)
+
+    app.aboutToQuit.connect(hall_output_guard.stop)
     app.aboutToQuit.connect(media_automation.stop)
     app.aboutToQuit.connect(obs_controller.stop)
     app.aboutToQuit.connect(jwl_probe.stop)
@@ -146,9 +200,11 @@ def main() -> int:
     window.show()
     display_service.start()
     jwl_service.start()
+    hall_output_guard.start()
     obs_controller.start(obs_config)
     media_automation.start()
     media_automation.set_enabled(False)
+    hall_output_guard.set_enabled(False)
 
     return app.exec()
 
