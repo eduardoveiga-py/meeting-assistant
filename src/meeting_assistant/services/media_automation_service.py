@@ -10,12 +10,17 @@ from typing import Any
 import obsws_python as obs
 from PySide6.QtCore import QObject, Signal
 
+from meeting_assistant.services.jwl_idle_reference import (
+    JwlIdleReference,
+    JwlIdleReferenceStore,
+)
 from meeting_assistant.services.jwl_screen_sensor import (
+    SAMPLE_HEIGHT,
+    SAMPLE_WIDTH,
     CaptureRegion,
     JwlScreenSensor,
-    choose_capture_regions,
 )
-from meeting_assistant.services.jwl_service import JwlWindowInfo
+from meeting_assistant.services.jwl_secondary_window import JwlSecondaryWindowInfo
 from meeting_assistant.services.obs_controller import (
     ObsConnectionConfig,
     ensure_fade_transition,
@@ -40,12 +45,12 @@ class MediaAutomationConfig:
 
 @dataclass(slots=True)
 class MediaSignalDetector:
-    """Converte diferença visual em início/fim com debounce curto."""
+    """Convert visual difference into start/end events with short debounce."""
 
     start_threshold: float = 3.0
     end_threshold: float = 1.5
     start_hits_required: int = 2
-    end_hits_required: int = 2
+    end_hits_required: int = 3
     active: bool = False
     start_hits: int = 0
     end_hits: int = 0
@@ -96,7 +101,7 @@ def sensor_candidate_score(
     input_kind: str | None,
     settings: dict[str, Any],
 ) -> int:
-    """Mantido para compatibilidade dos diagnósticos antigos."""
+    """Compatibility helper retained for older OBS diagnostics."""
 
     score = 0
     name = source_name.casefold()
@@ -116,8 +121,6 @@ def sensor_candidate_score(
 
 
 def set_program_scene(client: obs.ReqClient, scene_name: str) -> None:
-    """Helper mantido para testes e operações OBS diretas."""
-
     ensure_fade_transition(client)
     client.send(
         "SetCurrentProgramScene",
@@ -142,8 +145,26 @@ def should_restore_scene(
     )
 
 
+def capture_region_for_secondary(window: JwlSecondaryWindowInfo) -> CaptureRegion:
+    """Use one stable central crop from the actual Hall-output window."""
+
+    width = window.rect.width
+    height = window.rect.height
+    crop_width = min(960, max(320, int(width * 0.76)))
+    crop_height = min(540, max(180, int(height * 0.66)))
+    left = window.rect.left + max(0, (width - crop_width) // 2)
+    top = window.rect.top + max(0, (height - crop_height) // 2)
+    return CaptureRegion(
+        hwnd=window.hwnd,
+        left=left,
+        top=top,
+        width=crop_width,
+        height=crop_height,
+    )
+
+
 class MediaAutomationService(QObject):
-    """Detecta mídia observando pixels reais das janelas do JW Library no Windows."""
+    """Automate Palco/Mídias from the real JW Library second-display window."""
 
     status_changed = Signal(str)
     signal_changed = Signal(str, float, bool)
@@ -154,12 +175,15 @@ class MediaAutomationService(QObject):
     def __init__(
         self,
         config_provider: Callable[[], MediaAutomationConfig],
-        window_provider: Callable[[], list[JwlWindowInfo]],
+        secondary_window_provider: Callable[[], JwlSecondaryWindowInfo | None],
+        *,
+        reference_store: JwlIdleReferenceStore | None = None,
         sample_interval_seconds: float = 0.18,
     ) -> None:
         super().__init__()
         self._config_provider = config_provider
-        self._window_provider = window_provider
+        self._secondary_window_provider = secondary_window_provider
+        self._reference_store = reference_store or JwlIdleReferenceStore()
         self._sample_interval = max(0.12, sample_interval_seconds)
         self._stop_event = threading.Event()
         self._enabled_event = threading.Event()
@@ -176,10 +200,16 @@ class MediaAutomationService(QObject):
         if enabled:
             self._enabled_event.set()
             self._last_signal_emit_at = 0.0
-            self._emit_status("Automação ativada; calibrando pixels do JW Library…")
+            self._emit_status("Automação ativada; localizando a saída do JW Library…")
         else:
             self._enabled_event.clear()
             self._emit_status("Automação pausada; monitoramento de mídia suspenso.")
+
+    def reset_idle_reference(self) -> None:
+        self._reference_store.clear()
+        self._emit_status(
+            "Referência de repouso apagada; a próxima ativação fará nova calibração."
+        )
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -200,20 +230,17 @@ class MediaAutomationService(QObject):
 
     def _run(self) -> None:
         sensor: JwlScreenSensor | None = None
-        regions: list[CaptureRegion] = []
-        baselines: dict[int, bytes] = {}
         active_config: MediaAutomationConfig | None = None
-        was_enabled = False
+        reference = self._reference_store.load()
+        active_hwnd = 0
+        initial_route_pending = True
+        idle_hits = 0
 
         while not self._stop_event.is_set():
             if not self._enabled_event.is_set():
-                if was_enabled:
-                    self._emit_status(
-                        "Automação pausada; monitoramento de mídia suspenso."
-                    )
-                was_enabled = False
-                regions = []
-                baselines = {}
+                active_hwnd = 0
+                initial_route_pending = True
+                idle_hits = 0
                 self._detector.reset()
                 if sensor is not None:
                     sensor.close()
@@ -221,13 +248,21 @@ class MediaAutomationService(QObject):
                 self._stop_event.wait(0.15)
                 continue
 
-            was_enabled = True
             config = self._config_provider()
             if config != active_config:
                 active_config = config
-                regions = []
-                baselines = {}
+                initial_route_pending = True
+                idle_hits = 0
                 self._detector.reset()
+
+            window = self._secondary_window_provider()
+            if window is None:
+                self._emit_status(
+                    "Automação aguardando a saída secundária do JW Library na Tela do Salão…"
+                )
+                active_hwnd = 0
+                self._stop_event.wait(0.35)
+                continue
 
             if sensor is None:
                 try:
@@ -237,116 +272,156 @@ class MediaAutomationService(QObject):
                     self._stop_event.wait(1.0)
                     continue
 
-            if not regions or not baselines:
-                regions = choose_capture_regions(self._window_provider())
-                if not regions:
-                    self._emit_status(
-                        "Automação aguardando uma janela visível do JW Library…"
-                    )
-                    self._stop_event.wait(0.5)
-                    continue
-
-                baselines = self._calibrate(sensor, regions)
-                if not baselines:
-                    if not self._enabled_event.is_set():
-                        continue
-                    self._emit_status("Recalibrando a saída visual do JW Library…")
-                    regions = []
-                    self._stop_event.wait(0.5)
-                    continue
-
+            if active_hwnd != window.hwnd:
+                active_hwnd = window.hwnd
+                initial_route_pending = True
+                idle_hits = 0
                 self._detector.reset()
+
+            region = capture_region_for_secondary(window)
+
+            if reference is None:
+                reference = self._calibrate_first_reference(sensor, region)
+                if reference is None:
+                    self._stop_event.wait(0.35)
+                    continue
+                try:
+                    self._reference_store.save(reference)
+                except (OSError, ValueError) as exc:
+                    self._emit_error(f"Não foi possível salvar o repouso do JW Library: {exc}")
+                    reference = None
+                    self._stop_event.wait(0.7)
+                    continue
                 self._emit_status(
-                    "Automação pronta: aguardando foto/vídeo do JW Library."
+                    "Referência do Texto do Ano salva; iniciando automação em Palco."
                 )
-                self.signal_changed.emit("JW Library / Windows", 0.0, False)
+                self.signal_changed.emit("JW Library / Tela do Salão", 0.0, False)
+                self.media_ended.emit(config.preferred_return_scene or "")
+                initial_route_pending = False
+                self._detector.reset()
+                self._stop_event.wait(self._sample_interval)
+                continue
+
+            frame = sensor.capture(region)
+            if frame is None:
+                self._emit_status(
+                    "Saída JWL localizada, mas o frame ainda não pôde ser lido; tentando novamente…"
+                )
+                self._stop_event.wait(0.3)
                 continue
 
             try:
-                changed_percent = self._sample_difference(sensor, regions, baselines)
-                event = self._detector.update(changed_percent)
+                changed_percent = pixel_difference(reference.pixels, frame)
+            except ValueError:
+                # Reference format changed. Do not guess a state; require one new
+                # calibration rather than switching the Hall incorrectly.
+                self._reference_store.clear()
+                reference = None
+                initial_route_pending = True
+                self._emit_status("Referência visual incompatível; recalibrando em segurança…")
+                continue
+
+            if initial_route_pending:
+                event, idle_hits = self._classify_initial_state(changed_percent, idle_hits)
                 self._emit_signal_snapshot(changed_percent, force=event is not None)
-
                 if event == MediaSignalEvent.STARTED:
+                    self._detector.active = True
                     self.media_started.emit(config.media_scene)
-                    self._emit_status("Foto/vídeo detectado: solicitando Mídias.")
-                elif event == MediaSignalEvent.ENDED:
-                    return_scene = config.preferred_return_scene or ""
-                    self.media_ended.emit(return_scene)
                     self._emit_status(
-                        "Saída voltou ao repouso: solicitando retorno para Palco."
+                        "Mídia já estava ativa ao iniciar; recuperando a cena Mídias."
                     )
-
+                    initial_route_pending = False
+                elif event == MediaSignalEvent.ENDED:
+                    self._detector.reset()
+                    self.media_ended.emit(config.preferred_return_scene or "")
+                    self._emit_status(
+                        "Saída JWL está em repouso; mantendo/recuperando Palco."
+                    )
+                    initial_route_pending = False
                 self._stop_event.wait(self._sample_interval)
-            except Exception as exc:
-                self._emit_error(f"Automação visual: {exc}")
-                regions = []
-                baselines = {}
-                self._detector.reset()
-                self._stop_event.wait(0.5)
+                continue
+
+            event = self._detector.update(changed_percent)
+            self._emit_signal_snapshot(changed_percent, force=event is not None)
+
+            if event == MediaSignalEvent.STARTED:
+                self.media_started.emit(config.media_scene)
+                self._emit_status("Foto/vídeo detectado na Tela do Salão: solicitando Mídias.")
+            elif event == MediaSignalEvent.ENDED:
+                self.media_ended.emit(config.preferred_return_scene or "")
+                self._emit_status("Texto do Ano reapareceu: solicitando retorno para Palco.")
+
+            self._stop_event.wait(self._sample_interval)
 
         if sensor is not None:
             sensor.close()
 
-    def _calibrate(
+    def _calibrate_first_reference(
         self,
         sensor: JwlScreenSensor,
-        regions: list[CaptureRegion],
-    ) -> dict[int, bytes]:
+        region: CaptureRegion,
+    ) -> JwlIdleReference | None:
         self._emit_status(
-            "Calibrando: deixe o JW Library sem foto/vídeo por cerca de 1 segundo."
+            "Primeira calibração: mantenha o Texto do Ano visível na Tela do Salão por 1 segundo."
         )
-        candidates: dict[int, bytes] = {}
-        stable_hits: dict[int, int] = {region.hwnd: 0 for region in regions}
-        deadline = time.monotonic() + 4.0
+        previous: bytes | None = None
+        stable_hits = 0
+        deadline = time.monotonic() + 5.0
 
         while (
             time.monotonic() < deadline
             and not self._stop_event.is_set()
             and self._enabled_event.is_set()
         ):
-            for region in regions:
-                frame = sensor.capture(region)
-                if frame is None:
-                    continue
-                previous = candidates.get(region.hwnd)
-                if previous is None:
-                    candidates[region.hwnd] = frame
-                    continue
-                if pixel_difference(previous, frame) <= 1.0:
-                    stable_hits[region.hwnd] += 1
-                else:
-                    candidates[region.hwnd] = frame
-                    stable_hits[region.hwnd] = 0
-
-            ready = {
-                hwnd: candidates[hwnd]
-                for hwnd, hits in stable_hits.items()
-                if hits >= 3 and hwnd in candidates
-            }
-            if ready:
-                return ready
-            self._stop_event.wait(0.18)
-        return {}
-
-    @staticmethod
-    def _sample_difference(
-        sensor: JwlScreenSensor,
-        regions: list[CaptureRegion],
-        baselines: dict[int, bytes],
-    ) -> float:
-        differences: list[float] = []
-        for region in regions:
-            baseline = baselines.get(region.hwnd)
-            if baseline is None:
-                continue
             frame = sensor.capture(region)
-            if frame is None or len(frame) != len(baseline):
+            if frame is None:
+                self._stop_event.wait(0.18)
                 continue
-            differences.append(pixel_difference(baseline, frame))
-        if not differences:
-            raise RuntimeError("nenhuma região do JW Library pôde ser capturada")
-        return max(differences)
+            if previous is None:
+                previous = frame
+                self._stop_event.wait(0.18)
+                continue
+
+            if pixel_difference(previous, frame) <= 0.8:
+                stable_hits += 1
+            else:
+                stable_hits = 0
+                previous = frame
+
+            if stable_hits >= 5:
+                return JwlIdleReference(
+                    pixels=frame,
+                    sample_width=SAMPLE_WIDTH,
+                    sample_height=SAMPLE_HEIGHT,
+                )
+            self._stop_event.wait(0.18)
+
+        self._emit_status(
+            "Não foi possível calibrar o repouso; mantenha o Texto do Ano parado e tente novamente."
+        )
+        return None
+
+    def _classify_initial_state(
+        self,
+        changed_percent: float,
+        idle_hits: int,
+    ) -> tuple[MediaSignalEvent | None, int]:
+        if changed_percent >= self._detector.start_threshold:
+            self._detector.start_hits += 1
+            idle_hits = 0
+            if self._detector.start_hits >= self._detector.start_hits_required:
+                self._detector.start_hits = 0
+                return MediaSignalEvent.STARTED, 0
+            return None, 0
+
+        self._detector.start_hits = 0
+        if changed_percent <= self._detector.end_threshold:
+            idle_hits += 1
+            if idle_hits >= 2:
+                return MediaSignalEvent.ENDED, 0
+            return None, idle_hits
+
+        return None, 0
 
     def _emit_signal_snapshot(self, changed_percent: float, *, force: bool = False) -> None:
         now = time.monotonic()
@@ -354,7 +429,7 @@ class MediaAutomationService(QObject):
             return
         self._last_signal_emit_at = now
         self.signal_changed.emit(
-            "JW Library / Windows",
+            "JW Library / Tela do Salão",
             changed_percent,
             self._detector.active,
         )
