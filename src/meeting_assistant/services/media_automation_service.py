@@ -36,6 +36,8 @@ class MediaAutomationConfig:
     media_scene: str
     eligible_return_scenes: tuple[str, ...]
     preferred_return_scene: str | None = None
+    hall_display_bounds: tuple[int, int, int, int] | None = None
+    simulation_enabled: bool = False
 
 
 @dataclass(slots=True)
@@ -108,13 +110,7 @@ def active_region_signal(
     differences: dict[int, float],
     trigger_hwnds: set[int],
 ) -> float | None:
-    """Retorna o menor desvio entre as regiões que dispararam a mídia.
-
-    Em instalações com duas telas, a janela principal do JW Library pode continuar
-    em outra página depois que a saída do Salão já voltou ao Texto do Ano. O fim da
-    mídia é confirmado quando pelo menos uma das regiões que participou do início
-    retorna ao próprio baseline, em vez de depender do maior desvio global.
-    """
+    """Retorna o menor desvio entre as regiões que dispararam a mídia."""
 
     values = [
         differences[hwnd]
@@ -176,7 +172,7 @@ def should_restore_scene(
 
 
 class MediaAutomationService(QObject):
-    """Detecta mídia observando pixels reais das janelas do JW Library no Windows."""
+    """Detecta mídia observando pixels reais do JW Library no monitor correto."""
 
     status_changed = Signal(str)
     signal_changed = Signal(str, float, bool)
@@ -202,6 +198,7 @@ class MediaAutomationService(QObject):
         self._last_signal_emit_at = 0.0
         self._trigger_hwnds: set[int] = set()
         self._active_since = 0.0
+        self._sensor_label = "JW Library / Windows"
 
     @property
     def enabled(self) -> bool:
@@ -264,6 +261,13 @@ class MediaAutomationService(QObject):
                 baselines = {}
                 self._reset_detection()
 
+            if not config.simulation_enabled and config.hall_display_bounds is None:
+                self._emit_status(
+                    "Automação aguardando a Tela do Salão configurada aparecer no Windows…"
+                )
+                self._stop_event.wait(0.5)
+                continue
+
             if sensor is None:
                 try:
                     sensor = JwlScreenSensor()
@@ -273,11 +277,25 @@ class MediaAutomationService(QObject):
                     continue
 
             if not regions or not baselines:
-                regions = choose_capture_regions(self._window_provider())
+                preferred_bounds = (
+                    None if config.simulation_enabled else config.hall_display_bounds
+                )
+                self._sensor_label = (
+                    "JW Library / Simulação"
+                    if config.simulation_enabled
+                    else "JW Library / Tela do Salão"
+                )
+                regions = choose_capture_regions(
+                    self._window_provider(),
+                    preferred_display_bounds=preferred_bounds,
+                )
                 if not regions:
-                    self._emit_status(
-                        "Automação aguardando uma janela visível do JW Library…"
+                    message = (
+                        "Automação aguardando a saída do JW Library na Tela do Salão…"
+                        if not config.simulation_enabled
+                        else "Automação aguardando uma janela visível do JW Library…"
                     )
+                    self._emit_status(message)
                     self._stop_event.wait(0.5)
                     continue
 
@@ -295,7 +313,7 @@ class MediaAutomationService(QObject):
                 self._emit_status(
                     "Automação pronta: aguardando foto/vídeo do JW Library."
                 )
-                self.signal_changed.emit("JW Library / Windows", 0.0, False)
+                self.signal_changed.emit(self._sensor_label, 0.0, False)
                 continue
 
             try:
@@ -349,7 +367,6 @@ class MediaAutomationService(QObject):
             self._detector.end_hits = 0
             return None, max(differences.values())
 
-        # Evita interpretar animações/transições do início como fim imediato.
         if time.monotonic() - self._active_since < 0.8:
             self._detector.end_hits = 0
             return None, active_signal
@@ -399,8 +416,6 @@ class MediaAutomationService(QObject):
                 return ready
             self._stop_event.wait(0.18)
 
-        # Se uma janela não puder estabilizar, preserva as demais regiões estáveis
-        # em vez de bloquear toda a automação.
         return ready
 
     @staticmethod
@@ -431,7 +446,7 @@ class MediaAutomationService(QObject):
             return
         self._last_signal_emit_at = now
         self.signal_changed.emit(
-            "JW Library / Windows",
+            self._sensor_label,
             changed_percent,
             self._detector.active,
         )
