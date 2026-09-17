@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QCloseEvent, QImage
+from PySide6.QtGui import QCloseEvent, QImage, QScreen
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -21,20 +21,43 @@ from meeting_assistant.services.settings import SettingsService
 from meeting_assistant.ui.hall_output_window import HallOutputWindow
 
 
+def _screen_for_display(screens: list[QScreen], display: object) -> QScreen | None:
+    """Resolve QScreen by exact geometry instead of relying on list indexes."""
+
+    for screen in screens:
+        geometry = screen.geometry()
+        if (
+            geometry.x(),
+            geometry.y(),
+            geometry.width(),
+            geometry.height(),
+        ) == (
+            display.x,
+            display.y,
+            display.width,
+            display.height,
+        ):
+            return screen
+    return None
+
+
 class HallOutputTestDialog(QDialog):
     def __init__(
         self,
         *,
         capture: JwlWindowCapture,
         hall_output: HallOutputWindow,
+        hall_screen: QScreen,
         idle_store: HallIdleReferenceStore,
         hall_description: str,
     ) -> None:
         super().__init__()
         self.capture = capture
         self.hall_output = hall_output
+        self.hall_screen = hall_screen
         self.idle_store = idle_store
         self.latest_frame = QImage()
+        self._output_started = False
 
         self.setWindowTitle("Meeting Assistant — teste da Saída do Salão")
         self.resize(620, 330)
@@ -52,19 +75,21 @@ class HallOutputTestDialog(QDialog):
         description.setWordWrap(True)
         root.addWidget(description)
 
-        self.capture_status = QLabel("Iniciando captura…")
+        self.capture_status = QLabel("Iniciando captura antes de abrir a saída fullscreen…")
         self.capture_status.setWordWrap(True)
         root.addWidget(self.capture_status)
 
-        self.output_status = QLabel("Abrindo HallOutputWindow…")
+        self.output_status = QLabel(
+            "A HallOutputWindow só será mostrada depois que chegar o primeiro frame válido."
+        )
         self.output_status.setWordWrap(True)
         root.addWidget(self.output_status)
 
         explanation = QLabel(
-            "A segunda tela agora está coberta por uma janela do Meeting Assistant. "
-            "Mesmo assim, a captura continua lendo o JW Library que está por baixo. "
-            "Com o Texto do Ano visível no JW Library, use 'Salvar repouso'. Depois teste "
-            "os dois fades enquanto troca entre Texto do Ano, foto e vídeo no JW Library."
+            "A janela do Salão nunca é aberta antes da captura funcionar. Quando o primeiro "
+            "frame chegar, ela cobre somente a Tela do Salão e fica excluída da própria "
+            "captura. Com o Texto do Ano visível no JW Library, use 'Salvar repouso'. Depois "
+            "teste os dois fades enquanto troca entre Texto do Ano, foto e vídeo."
         )
         explanation.setWordWrap(True)
         explanation.setStyleSheet("color: #666;")
@@ -97,31 +122,48 @@ class HallOutputTestDialog(QDialog):
             self.hall_output.set_idle_image(idle)
             self.show_idle_button.setEnabled(True)
             self.output_status.setText(
-                f"Referência de repouso carregada: {idle.width()}×{idle.height()}."
+                f"Referência de repouso carregada: {idle.width()}×{idle.height()}. "
+                "Aguardando captura para abrir a Tela do Salão."
             )
         else:
             self.show_idle_button.setEnabled(False)
-            self.output_status.setText(
-                "Nenhuma referência de repouso salva ainda. Mostre o Texto do Ano e salve."
-            )
+
+        self.save_idle_button.setEnabled(False)
+        self.show_media_button.setEnabled(False)
 
     def _on_frame(self, image: object, fps: float, width: int, height: int) -> None:
         if not isinstance(image, QImage):
             return
+
         self.latest_frame = image.copy()
         self.hall_output.update_media_frame(image)
         self.capture_status.setText(
             f"Captura: {width}×{height} • {fps:.1f} fps • frames ao vivo chegando normalmente"
         )
 
+        if not self._output_started:
+            self.hall_output.show_media(animated=False)
+            self.hall_output.show_on_screen(self.hall_screen)
+            self._output_started = True
+            self.save_idle_button.setEnabled(True)
+            self.show_media_button.setEnabled(True)
+            self.output_status.setText(
+                "Primeiro frame recebido. HallOutputWindow aberta somente na Tela do Salão."
+            )
+
     def _on_capture_status(self, ok: bool, message: str) -> None:
         prefix = "Captura OK" if ok else "Falha de captura"
         self.capture_status.setText(f"{prefix}: {message}")
+        if not ok and not self._output_started:
+            self.output_status.setText(
+                "A saída fullscreen NÃO foi aberta porque a captura falhou. "
+                "A tela principal permanece intacta."
+            )
 
     def _on_exclusion_changed(self, excluded: bool) -> None:
         if excluded:
             self.output_status.setText(
-                "HallOutputWindow fullscreen • excluída da captura • sem recursão"
+                "HallOutputWindow na Tela do Salão • excluída da captura • sem recursão"
             )
         else:
             self.output_status.setText(
@@ -183,17 +225,14 @@ def main() -> int:
         )
         return 3
 
-    hall_screen_index = next(
-        (
-            index
-            for index, display in enumerate(displays)
-            if display.key == hall_display.key
-        ),
-        None,
-    )
-    screens = app.screens()
-    if hall_screen_index is None or hall_screen_index >= len(screens):
-        QMessageBox.critical(None, "Tela não encontrada", "QScreen da Tela do Salão não foi resolvido.")
+    hall_screen = _screen_for_display(app.screens(), hall_display)
+    if hall_screen is None:
+        QMessageBox.critical(
+            None,
+            "Tela não encontrada",
+            f"A Tela do Salão foi detectada, mas seu QScreen não corresponde à geometria "
+            f"{hall_display.x},{hall_display.y} {hall_display.width}×{hall_display.height}.",
+        )
         return 4
 
     capture = JwlWindowCapture(ui_interval_ms=33)
@@ -203,20 +242,17 @@ def main() -> int:
     controller = HallOutputTestDialog(
         capture=capture,
         hall_output=hall_output,
+        hall_screen=hall_screen,
         idle_store=idle_store,
         hall_description=(
             f"Tela do Salão: {hall_display.label}\n"
-            f"Captura: monitor {monitor_index} • HallOutputWindow: fullscreen/excluída da captura"
+            f"Captura: monitor {monitor_index} • saída só abre após o primeiro frame válido"
         ),
     )
     controller.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
     controller.show()
 
-    hall_output.show_on_screen(screens[hall_screen_index])
-    hall_output.show_media(animated=False)
-
-    if not capture.start_monitor(monitor_index):
-        controller.capture_status.setText("Falha ao iniciar a captura da Tela do Salão.")
+    capture.start_monitor(monitor_index)
 
     return app.exec()
 
