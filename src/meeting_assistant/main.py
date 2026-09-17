@@ -45,6 +45,9 @@ def main() -> int:
     _set_windows_app_id()
     _configure_qt_logging()
 
+    # QApplication must be constructed before pywinauto/comtypes is imported.
+    # The JW Library UIA service intentionally performs that import lazily on
+    # its own STA worker thread, after Qt has established OLE and DPI awareness.
     app = QApplication(sys.argv)
     app.setApplicationName("Meeting Assistant")
     app.setOrganizationName("Meeting Assistant")
