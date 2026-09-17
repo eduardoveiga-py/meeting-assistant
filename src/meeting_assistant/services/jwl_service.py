@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import psutil
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -56,6 +56,30 @@ def describe_hosted_process(host_process_name: str, child_process_name: str) -> 
     if not host_process_name:
         return child_process_name
     return f"{host_process_name} → {child_process_name}"
+
+
+def is_related_jwl_host_window(
+    process_name: str,
+    pid: int,
+    known_jwl_host_pids: set[int],
+) -> bool:
+    """Return whether a title-less top-level window belongs to a known JWL host.
+
+    JW Library may create its fullscreen presentation window as a sibling of the
+    titled operator window. Both are commonly hosted by the same
+    ApplicationFrameHost process, while the presentation sibling has no useful
+    title. Once a PID is proven to host JW Library, those sibling windows are
+    safe candidates for monitor-based selection.
+    """
+
+    if pid not in known_jwl_host_pids:
+        return False
+
+    normalized = process_name.casefold().replace(" ", "")
+    return normalized == "applicationframehost.exe" or looks_like_jw_library(
+        process_name,
+        "",
+    )
 
 
 class JwlService(QObject):
@@ -181,7 +205,7 @@ class JwlService(QObject):
             return []
 
         process_map = self._process_map()
-        windows: list[JwlWindowInfo] = []
+        raw_windows: list[JwlWindowInfo] = []
         try:
             foreground_hwnd = win32gui.GetForegroundWindow()
         except (OSError, RuntimeError):
@@ -198,21 +222,10 @@ class JwlService(QObject):
 
                 title = win32gui.GetWindowText(hwnd).strip()
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                host_process_name = process_map.get(pid, "")
-                process_name = host_process_name
-
-                if not looks_like_jw_library(host_process_name, title):
-                    child_process_name = self._hosted_jwl_process_name(hwnd, process_map)
-                    if not child_process_name:
-                        return True
-                    process_name = describe_hosted_process(
-                        host_process_name,
-                        child_process_name,
-                    )
-
+                process_name = process_map.get(pid, "")
                 class_name = win32gui.GetClassName(hwnd)
                 left, top, right, bottom = win32gui.GetWindowRect(hwnd)
-                windows.append(
+                raw_windows.append(
                     JwlWindowInfo(
                         hwnd=hwnd,
                         pid=pid,
@@ -234,5 +247,44 @@ class JwlService(QObject):
             return True
 
         win32gui.EnumWindows(callback, None)
+
+        classified_by_hwnd: dict[int, JwlWindowInfo] = {}
+        known_jwl_host_pids: set[int] = set()
+
+        # Pass 1: establish trusted JW Library host PIDs from titled/direct
+        # windows or from a JWLibrary.exe child hosted by ApplicationFrameHost.
+        for item in raw_windows:
+            if looks_like_jw_library(item.process_name, item.title):
+                classified_by_hwnd[item.hwnd] = item
+                known_jwl_host_pids.add(item.pid)
+                continue
+
+            child_process_name = self._hosted_jwl_process_name(item.hwnd, process_map)
+            if not child_process_name:
+                continue
+
+            classified_by_hwnd[item.hwnd] = replace(
+                item,
+                process_name=describe_hosted_process(
+                    item.process_name,
+                    child_process_name,
+                ),
+            )
+            known_jwl_host_pids.add(item.pid)
+
+        # Pass 2: include title-less sibling windows of a proven JW Library
+        # host. The Hall output is then selected by monitor/geometry, so an
+        # operator window on the primary display cannot win by accident.
+        for item in raw_windows:
+            if item.hwnd in classified_by_hwnd:
+                continue
+            if is_related_jwl_host_window(
+                item.process_name,
+                item.pid,
+                known_jwl_host_pids,
+            ):
+                classified_by_hwnd[item.hwnd] = item
+
+        windows = list(classified_by_hwnd.values())
         windows.sort(key=lambda item: (not item.visible, item.top, item.left, item.hwnd))
         return windows
