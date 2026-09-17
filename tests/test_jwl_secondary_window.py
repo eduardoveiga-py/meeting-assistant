@@ -90,6 +90,39 @@ def test_fullscreen_borderless_jwl_core_on_hall_display_is_selected() -> None:
     assert score >= 650
 
 
+def test_top_level_core_window_on_hall_display_is_selected() -> None:
+    display = hall_display()
+    score = score_secondary_candidate(
+        title="JW Library",
+        class_name="Windows.UI.Core.CoreWindow",
+        rect=WindowRect(-1280, 0, 0, 720),
+        minimized=False,
+        topmost=True,
+        title_bar_visible=False,
+        has_jwl_core_window=False,
+        monitor_primary=False,
+        target_display=display,
+    )
+    assert score >= 650
+
+
+def test_jwl_process_can_identify_titleless_hall_window() -> None:
+    display = hall_display()
+    score = score_secondary_candidate(
+        title="",
+        class_name="Windows.UI.Core.CoreWindow",
+        rect=WindowRect(-1280, 0, 0, 720),
+        minimized=False,
+        topmost=True,
+        title_bar_visible=False,
+        has_jwl_core_window=False,
+        monitor_primary=False,
+        target_display=display,
+        process_name="JWLibrary.exe",
+    )
+    assert score >= 650
+
+
 def test_mixed_dpi_geometry_mismatch_keeps_native_secondary_candidate() -> None:
     display = hall_display()
     score = score_secondary_candidate(
