@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Protocol
 
 from PySide6.QtCore import QObject, Signal
-
-
-class SceneController(Protocol):
-    def set_program_scene(self, scene_name: str) -> None: ...
 
 
 class ToggleService(Protocol):
@@ -15,24 +10,18 @@ class ToggleService(Protocol):
 
 
 class AutomationCoordinator(QObject):
-    """Garante estado inicial determinístico antes de armar a automação."""
+    """Liga/desliga guardião e sensor como uma única automação operacional."""
 
     status_changed = Signal(str)
 
     def __init__(
         self,
-        obs_controller: SceneController,
         media_automation: ToggleService,
         hall_output_guard: ToggleService,
-        palco_scene_provider: Callable[[], str],
-        current_scene_provider: Callable[[], str | None],
     ) -> None:
         super().__init__()
-        self._obs = obs_controller
         self._media_automation = media_automation
         self._hall_output_guard = hall_output_guard
-        self._palco_scene_provider = palco_scene_provider
-        self._current_scene_provider = current_scene_provider
         self._requested = False
         self._armed = False
 
@@ -46,62 +35,16 @@ class AutomationCoordinator(QObject):
 
     def request(self, enabled: bool) -> None:
         self._requested = enabled
+        self._armed = enabled
         if not enabled:
-            self._armed = False
             self._media_automation.set_enabled(False)
             self._hall_output_guard.set_enabled(False)
+            self.status_changed.emit("Automação pausada.")
             return
 
-        self._armed = False
-        self._media_automation.set_enabled(False)
+        # O guardião vem primeiro para fornecer um HWND estável ao sensor.
         self._hall_output_guard.set_enabled(True)
-        palco_scene = self._palco_scene_provider().strip()
-        if not palco_scene:
-            self._hall_output_guard.set_enabled(False)
-            self.status_changed.emit(
-                "Não foi possível ativar: configure a cena Palco em Ajustes."
-            )
-            return
-
-        current_scene = (self._current_scene_provider() or "").strip()
-        if current_scene == palco_scene:
-            self.status_changed.emit(
-                "OBS já está em Palco; armando o sensor de mídia…"
-            )
-            self._arm()
-            return
-
-        self.status_changed.emit(
-            "Preparando automação: retornando o OBS para Palco antes de armar o sensor…"
-        )
-        self._obs.set_program_scene(palco_scene)
-
-    def on_scene_changed(self, scene_name: str) -> None:
-        if not self._requested or self._armed:
-            return
-        if scene_name != self._palco_scene_provider().strip():
-            return
-        self._arm()
-
-    def on_obs_connected(self, connected: bool, _message: str) -> None:
-        if not connected or not self._requested or self._armed:
-            return
-        palco_scene = self._palco_scene_provider().strip()
-        if not palco_scene:
-            return
-
-        current_scene = (self._current_scene_provider() or "").strip()
-        if current_scene == palco_scene:
-            self._arm()
-            return
-
-        self.status_changed.emit(
-            "OBS reconectado; retornando para Palco antes de rearmar a automação…"
-        )
-        self._obs.set_program_scene(palco_scene)
-
-    def _arm(self) -> None:
-        if not self._requested or self._armed:
-            return
-        self._armed = True
         self._media_automation.set_enabled(True)
+        self.status_changed.emit(
+            "Verificando o estado atual da Tela do Salão antes de escolher Palco ou Mídias…"
+        )
