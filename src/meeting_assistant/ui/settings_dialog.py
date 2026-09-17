@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
     QGroupBox,
+    QLabel,
     QLineEdit,
     QSpinBox,
     QVBoxLayout,
 )
 
+from meeting_assistant.services.display_service import DisplayInfo
 from meeting_assistant.services.settings import AppSettings
 
 
@@ -19,14 +22,52 @@ class SettingsDialog(QDialog):
         self,
         settings: AppSettings,
         available_scenes: list[str],
+        available_displays: list[DisplayInfo],
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Ajustes do Meeting Assistant")
         self.setModal(True)
-        self.setMinimumWidth(430)
+        self.setMinimumWidth(520)
 
         root = QVBoxLayout(self)
+
+        output_group = QGroupBox("Saída do Salão")
+        output_form = QFormLayout(output_group)
+
+        self.simulation_check = QCheckBox("Usar modo de simulação")
+        self.simulation_check.setChecked(settings.simulation_enabled)
+        self.simulation_check.setToolTip(
+            "Quando ativado, o Meeting Assistant não considera a tela física como saída do Salão."
+        )
+
+        self.hall_display_combo = QComboBox()
+        self.hall_display_combo.addItem(
+            "Automático — segunda tela física (padrão)",
+            "",
+        )
+        for display in available_displays:
+            self.hall_display_combo.addItem(display.label, display.key)
+
+        selected_index = self.hall_display_combo.findData(settings.hall_display_key)
+        if selected_index < 0 and settings.hall_display_key:
+            self.hall_display_combo.addItem(
+                "Monitor configurado — atualmente desconectado",
+                settings.hall_display_key,
+            )
+            selected_index = self.hall_display_combo.count() - 1
+        self.hall_display_combo.setCurrentIndex(max(0, selected_index))
+
+        output_form.addRow("Modo", self.simulation_check)
+        output_form.addRow("Monitor do Salão", self.hall_display_combo)
+
+        output_hint = QLabel(
+            "No modo físico, a segunda tela é usada automaticamente por padrão. "
+            "Você pode fixar um monitor específico nesta lista."
+        )
+        output_hint.setWordWrap(True)
+        output_form.addRow("", output_hint)
+        root.addWidget(output_group)
 
         connection_group = QGroupBox("OBS WebSocket")
         connection_form = QFormLayout(connection_group)
@@ -73,6 +114,8 @@ class SettingsDialog(QDialog):
         return combo
 
     def apply_to(self, settings: AppSettings) -> None:
+        settings.simulation_enabled = self.simulation_check.isChecked()
+        settings.hall_display_key = str(self.hall_display_combo.currentData() or "")
         settings.obs_host = self.host_edit.text().strip() or "127.0.0.1"
         settings.obs_port = self.port_spin.value()
         settings.obs_password = self.password_edit.text()
