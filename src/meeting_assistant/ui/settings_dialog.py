@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -13,7 +14,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from meeting_assistant.services.display_service import DisplayInfo
+from meeting_assistant.services.display_service import (
+    DisplayInfo,
+    display_info_from_screen,
+)
 from meeting_assistant.services.settings import AppSettings
 
 
@@ -22,13 +26,25 @@ class SettingsDialog(QDialog):
         self,
         settings: AppSettings,
         available_scenes: list[str],
-        available_displays: list[DisplayInfo],
         parent=None,
+        available_displays: list[DisplayInfo] | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Ajustes do Meeting Assistant")
         self.setModal(True)
         self.setMinimumWidth(520)
+
+        if available_displays is None:
+            app = QGuiApplication.instance()
+            primary = app.primaryScreen() if app is not None else None
+            available_displays = (
+                [
+                    display_info_from_screen(screen, primary=screen is primary)
+                    for screen in app.screens()
+                ]
+                if app is not None
+                else []
+            )
 
         root = QVBoxLayout(self)
 
