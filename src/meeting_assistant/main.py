@@ -9,15 +9,17 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from meeting_assistant.core.state import AppState
-from meeting_assistant.services.display_service import DisplayService
+from meeting_assistant.services.display_service import DisplayService, resolve_hall_display
+from meeting_assistant.services.hall_monitor_sensor import HallMonitorSensorRegionProvider
+from meeting_assistant.services.jwl_fast_window_guard import JwlFastWindowGuard
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService
+from meeting_assistant.services.jwl_uia_secondary_window import JwlUiaSecondaryWindowService
 from meeting_assistant.services.media_automation_service import (
     MediaAutomationConfig,
     MediaAutomationService,
 )
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
-from meeting_assistant.services.obs_visual_probe_service import ObsVisualProbeService
 from meeting_assistant.services.settings import SettingsService
 from meeting_assistant.ui.main_window import MainWindow
 
@@ -44,6 +46,9 @@ def main() -> int:
     _set_windows_app_id()
     _configure_qt_logging()
 
+    # QApplication must be constructed before pywinauto/comtypes is imported.
+    # The JW Library UIA service intentionally performs that import lazily on
+    # its own STA worker thread, after Qt has established OLE and DPI awareness.
     app = QApplication(sys.argv)
     app.setApplicationName("Meeting Assistant")
     app.setOrganizationName("Meeting Assistant")
@@ -63,9 +68,6 @@ def main() -> int:
             password=settings.obs_password,
         )
 
-    def current_probe_config() -> tuple[ObsConnectionConfig, str]:
-        return current_obs_config(), settings.scene_media
-
     def current_media_automation_config() -> MediaAutomationConfig:
         eligible = tuple(
             scene
@@ -84,14 +86,43 @@ def main() -> int:
     obs_controller = ObsController(poll_interval=0.5, preview_interval=0.15)
     display_service = DisplayService(app)
     jwl_service = JwlService(interval_ms=2000)
-    visual_probe = ObsVisualProbeService()
+
+    display_cache = display_service.snapshot()
+
+    def update_display_cache(displays) -> None:
+        nonlocal display_cache
+        display_cache = list(displays)
+
+    display_service.displays_changed.connect(update_display_cache)
+
+    def current_hall_display():
+        if settings.simulation_enabled:
+            return None
+        return resolve_hall_display(
+            list(display_cache),
+            settings.hall_display_key,
+        )
+
+    jwl_secondary = JwlUiaSecondaryWindowService(
+        display_provider=current_hall_display,
+        interval_ms=650,
+    )
+    jwl_fast_guard = JwlFastWindowGuard(
+        candidate_provider=lambda: jwl_secondary.current,
+        display_provider=current_hall_display,
+        interval_ms=180,
+    )
+    hall_capture_region = HallMonitorSensorRegionProvider(current_hall_display)
+
     jwl_probe = JwlProbeService(
-        visual_probe=visual_probe,
-        config_provider=current_probe_config,
+        secondary_service=jwl_secondary,
+        display_snapshot_provider=lambda: list(display_cache),
+        target_display_provider=current_hall_display,
     )
     media_automation = MediaAutomationService(
         config_provider=current_media_automation_config,
-        window_provider=lambda: jwl_service.scan(include_hidden=False),
+        secondary_window_provider=lambda: jwl_secondary.current,
+        capture_region_provider=hall_capture_region,
         sample_interval_seconds=0.18,
     )
 
@@ -105,6 +136,10 @@ def main() -> int:
         jwl_probe=jwl_probe,
         app_icon=app_icon,
     )
+    # Startup routing belongs to the media automation now. Preserving the OBS
+    # scene here is essential when Meeting Assistant is reopened mid-video.
+    window._startup_scene_applied = True
+
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
@@ -114,8 +149,19 @@ def main() -> int:
     media_automation.media_ended.connect(obs_controller.set_program_scene)
     media_automation.error.connect(window.set_automation_status)
     window.automation_enabled_changed.connect(media_automation.set_enabled)
+    window.automation_enabled_changed.connect(jwl_secondary.set_guard_enabled)
+    window.automation_enabled_changed.connect(jwl_fast_guard.set_enabled)
+    jwl_secondary.status_changed.connect(
+        lambda _ok, message: (
+            window.set_automation_status(message)
+            if state.automation_enabled and not media_automation.enabled
+            else None
+        )
+    )
 
     app.aboutToQuit.connect(media_automation.stop)
+    app.aboutToQuit.connect(jwl_fast_guard.stop)
+    app.aboutToQuit.connect(jwl_secondary.stop)
     app.aboutToQuit.connect(obs_controller.stop)
     app.aboutToQuit.connect(jwl_probe.stop)
     app.aboutToQuit.connect(jwl_service.stop)
@@ -123,6 +169,8 @@ def main() -> int:
     window.show()
     display_service.start()
     jwl_service.start()
+    jwl_secondary.start()
+    jwl_fast_guard.start()
     obs_controller.start(obs_config)
     media_automation.start()
     media_automation.set_enabled(False)
