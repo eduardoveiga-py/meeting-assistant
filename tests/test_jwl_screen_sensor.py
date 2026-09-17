@@ -37,6 +37,31 @@ def test_window_center_identifies_hall_display() -> None:
     assert not window_center_inside_display(window, (0, 0, 1920, 1080))
 
 
+def test_tracked_hwnd_is_authoritative_even_if_geometry_is_ambiguous() -> None:
+    operator_window = _window(
+        hwnd=1,
+        left=0,
+        top=0,
+        right=1920,
+        bottom=1080,
+        foreground=True,
+    )
+    hall_output = _window(
+        hwnd=2,
+        left=0,
+        top=0,
+        right=1920,
+        bottom=1080,
+    )
+
+    regions = choose_capture_regions(
+        [operator_window, hall_output],
+        preferred_hwnd=2,
+    )
+
+    assert [region.hwnd for region in regions] == [2]
+
+
 def test_physical_mode_only_captures_jw_window_on_selected_hall_display() -> None:
     operator_window = _window(
         hwnd=1,
