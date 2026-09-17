@@ -9,6 +9,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from meeting_assistant.core.state import AppState
+from meeting_assistant.services.automation_coordinator import AutomationCoordinator
 from meeting_assistant.services.display_service import DisplayService, resolve_hall_display
 from meeting_assistant.services.hall_output_guard import HallOutputGuard
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
@@ -123,6 +124,12 @@ def main() -> int:
         window_provider=lambda: jwl_service.scan(include_hidden=True),
         interval_ms=350,
     )
+    automation_coordinator = AutomationCoordinator(
+        obs_controller=obs_controller,
+        media_automation=media_automation,
+        hall_output_guard=hall_output_guard,
+        palco_scene_provider=lambda: settings.scene_speaker,
+    )
 
     window = MainWindow(
         state=state,
@@ -137,59 +144,17 @@ def main() -> int:
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
-    automation_requested = False
-    automation_armed = False
-
-    def arm_automation_after_palco(scene_name: str) -> None:
-        nonlocal automation_armed
-        if not automation_requested or automation_armed:
-            return
-        if scene_name != settings.scene_speaker:
-            return
-        automation_armed = True
-        media_automation.set_enabled(True)
-
-    def handle_automation_request(enabled: bool) -> None:
-        nonlocal automation_requested, automation_armed
-        automation_requested = enabled
-        if not enabled:
-            automation_armed = False
-            media_automation.set_enabled(False)
-            hall_output_guard.set_enabled(False)
-            return
-
-        automation_armed = False
-        media_automation.set_enabled(False)
-        hall_output_guard.set_enabled(True)
-        window.set_automation_status(
-            "Preparando automação: retornando o OBS para Palco antes de armar o sensor…"
-        )
-        if settings.scene_speaker:
-            obs_controller.set_program_scene(settings.scene_speaker)
-        else:
-            window.set_automation_status(
-                "Não foi possível ativar: configure a cena Palco em Ajustes."
-            )
-
-    def handle_obs_connection_for_automation(connected: bool, _message: str) -> None:
-        if not connected or not automation_requested or automation_armed:
-            return
-        window.set_automation_status(
-            "OBS reconectado; retornando para Palco antes de rearmar a automação…"
-        )
-        if settings.scene_speaker:
-            obs_controller.set_program_scene(settings.scene_speaker)
-
     media_automation.status_changed.connect(window.set_automation_status)
     media_automation.signal_changed.connect(window.set_automation_signal)
     media_automation.media_started.connect(obs_controller.set_program_scene)
     media_automation.media_ended.connect(obs_controller.set_program_scene)
     media_automation.error.connect(window.set_automation_status)
     hall_output_guard.error.connect(window.set_automation_status)
+    automation_coordinator.status_changed.connect(window.set_automation_status)
 
-    window.automation_enabled_changed.connect(handle_automation_request)
-    obs_controller.scene_changed.connect(arm_automation_after_palco)
-    obs_controller.connected_changed.connect(handle_obs_connection_for_automation)
+    window.automation_enabled_changed.connect(automation_coordinator.request)
+    obs_controller.scene_changed.connect(automation_coordinator.on_scene_changed)
+    obs_controller.connected_changed.connect(automation_coordinator.on_obs_connected)
 
     app.aboutToQuit.connect(hall_output_guard.stop)
     app.aboutToQuit.connect(media_automation.stop)
@@ -203,8 +168,7 @@ def main() -> int:
     hall_output_guard.start()
     obs_controller.start(obs_config)
     media_automation.start()
-    media_automation.set_enabled(False)
-    hall_output_guard.set_enabled(False)
+    automation_coordinator.request(False)
 
     return app.exec()
 
