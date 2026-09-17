@@ -19,8 +19,10 @@ from meeting_assistant.services.media_automation_service import (
     MediaAutomationConfig,
     MediaAutomationService,
 )
+from meeting_assistant.services.meeting_launcher import MeetingLauncherService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.settings import SettingsService
+from meeting_assistant.services.zoom_hall_service import ZoomHallService
 from meeting_assistant.ui.main_window import MainWindow
 
 APP_USER_MODEL_ID = "MeetingAssistant.Desktop.3"
@@ -125,6 +127,11 @@ def main() -> int:
         capture_region_provider=hall_capture_region,
         sample_interval_seconds=0.18,
     )
+    meeting_launcher = MeetingLauncherService(lambda: settings)
+    zoom_hall = ZoomHallService(
+        display_provider=current_hall_display,
+        jwl_window_provider=lambda: jwl_secondary.current,
+    )
 
     window = MainWindow(
         state=state,
@@ -134,6 +141,8 @@ def main() -> int:
         display_service=display_service,
         jwl_service=jwl_service,
         jwl_probe=jwl_probe,
+        meeting_launcher=meeting_launcher,
+        zoom_hall_service=zoom_hall,
         app_icon=app_icon,
     )
     # Startup routing belongs to the media automation now. Preserving the OBS
@@ -148,9 +157,19 @@ def main() -> int:
     media_automation.media_started.connect(obs_controller.set_program_scene)
     media_automation.media_ended.connect(obs_controller.set_program_scene)
     media_automation.error.connect(window.set_automation_status)
-    window.automation_enabled_changed.connect(media_automation.set_enabled)
-    window.automation_enabled_changed.connect(jwl_secondary.set_guard_enabled)
-    window.automation_enabled_changed.connect(jwl_fast_guard.set_enabled)
+    def apply_automation_runtime(enabled: bool) -> None:
+        effective = bool(enabled and not zoom_hall.active)
+        media_automation.set_enabled(effective)
+        jwl_secondary.set_guard_enabled(effective)
+        jwl_fast_guard.set_enabled(effective)
+
+    window.automation_enabled_changed.connect(apply_automation_runtime)
+    zoom_hall.about_to_show.connect(lambda: apply_automation_runtime(False))
+    zoom_hall.active_changed.connect(
+        lambda active, _message: (
+            apply_automation_runtime(state.automation_enabled) if not active else None
+        )
+    )
     jwl_secondary.status_changed.connect(
         lambda _ok, message: (
             window.set_automation_status(message)
@@ -160,6 +179,7 @@ def main() -> int:
     )
 
     app.aboutToQuit.connect(media_automation.stop)
+    app.aboutToQuit.connect(lambda: zoom_hall.restore_jwl() if zoom_hall.active else None)
     app.aboutToQuit.connect(jwl_fast_guard.stop)
     app.aboutToQuit.connect(jwl_secondary.stop)
     app.aboutToQuit.connect(obs_controller.stop)
