@@ -38,7 +38,7 @@ class AppState:
     automation_enabled: bool = False
     manual_override: bool = False
     second_display_available: bool = False
-    simulation_enabled: bool = True
+    simulation_enabled: bool = False
 
     @property
     def can_use_audience_output(self) -> bool:
