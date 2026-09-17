@@ -33,8 +33,6 @@ def window_center_inside_display(
     window: JwlWindowInfo,
     display_bounds: tuple[int, int, int, int],
 ) -> bool:
-    """Retorna True quando o centro da janela está dentro do monitor alvo."""
-
     display_x, display_y, display_width, display_height = display_bounds
     center_x = window.left + max(0, window.right - window.left) // 2
     center_y = window.top + max(0, window.bottom - window.top) // 2
@@ -47,15 +45,13 @@ def window_center_inside_display(
 def choose_capture_regions(
     windows: list[JwlWindowInfo],
     preferred_display_bounds: tuple[int, int, int, int] | None = None,
+    preferred_hwnd: int | None = None,
 ) -> list[CaptureRegion]:
-    """Seleciona regiões centrais das janelas visíveis do JW Library.
+    """Seleciona pequenas regiões centrais das janelas do JW Library.
 
-    Em modo físico, ``preferred_display_bounds`` restringe o sensor às janelas
-    realmente posicionadas na Tela do Salão. Isso impede que rolagem, thumbnails
-    ou navegação na janela principal do JW Library disparem a automação.
-
-    Em simulação, sem monitor preferido, mantém o fallback histórico de observar
-    até três janelas candidatas.
+    Em modo físico, ``preferred_hwnd`` é a fonte de verdade: ele vem do guardião
+    que identificou persistentemente a janela de saída do Salão. A geometria do
+    monitor é mantida apenas como fallback para simulação/compatibilidade.
     """
 
     candidates = [
@@ -67,7 +63,9 @@ def choose_capture_regions(
         and item.bottom - item.top >= 300
     ]
 
-    if preferred_display_bounds is not None:
+    if preferred_hwnd is not None:
+        candidates = [item for item in candidates if item.hwnd == preferred_hwnd]
+    elif preferred_display_bounds is not None:
         candidates = [
             item
             for item in candidates
@@ -83,7 +81,7 @@ def choose_capture_regions(
         reverse=True,
     )
 
-    max_regions = 1 if preferred_display_bounds is not None else 3
+    max_regions = 1 if (preferred_hwnd is not None or preferred_display_bounds is not None) else 3
     regions: list[CaptureRegion] = []
     for item in candidates[:max_regions]:
         window_width = item.right - item.left
@@ -112,8 +110,6 @@ def screenshot_to_luma(
     output_width: int = SAMPLE_WIDTH,
     output_height: int = SAMPLE_HEIGHT,
 ) -> bytes:
-    """Reduz um frame BGRA para uma amostra de luminância pequena."""
-
     if width <= 0 or height <= 0:
         raise ValueError("dimensões de captura inválidas")
     expected = width * height * 4
