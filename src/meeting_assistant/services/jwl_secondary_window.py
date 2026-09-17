@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import psutil
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -137,7 +137,7 @@ def score_secondary_candidate(
     if not title_bar_visible:
         score += 170
     if minimized:
-        score += 20  # minimized secondary output must remain discoverable
+        score += 20
 
     if target_display is not None:
         overlap = rect_overlap_ratio(rect, target_display)
@@ -150,8 +150,6 @@ def score_secondary_candidate(
         if is_fullscreen_on_display(rect, target_display):
             score += 300
 
-    # ApplicationFrameHost also hosts unrelated UWP apps. A structural JW signal
-    # is mandatory unless the special secondary-window title is present.
     if not is_explicit_jwl_secondary_title(title) and not has_jwl_core_window:
         return -10_000
     return score
@@ -331,15 +329,16 @@ class JwlSecondaryWindowService(QObject):
     @staticmethod
     def _window_rect(hwnd: int) -> WindowRect:
         try:
-            placement = win32gui.GetWindowPlacement(hwnd)
-            # rcNormalPosition remains useful while the window is minimized.
-            if placement and len(placement) >= 5:
-                left, top, right, bottom = placement[4]
-                rect = WindowRect(left, top, right, bottom)
-                if rect.width >= 100 and rect.height >= 100:
-                    return rect
+            if win32gui.IsIconic(hwnd):
+                placement = win32gui.GetWindowPlacement(hwnd)
+                if placement and len(placement) >= 5:
+                    left, top, right, bottom = placement[4]
+                    rect = WindowRect(left, top, right, bottom)
+                    if rect.width >= 100 and rect.height >= 100:
+                        return rect
         except (OSError, RuntimeError, TypeError, ValueError):
             pass
+
         left, top, right, bottom = win32gui.GetWindowRect(hwnd)
         return WindowRect(left, top, right, bottom)
 
@@ -398,7 +397,6 @@ class JwlSecondaryWindowService(QObject):
             return item
         try:
             if item.minimized:
-                # Restore without intentionally taking keyboard focus.
                 win32gui.ShowWindow(item.hwnd, win32con.SW_SHOWNOACTIVATE)
 
             overlap = rect_overlap_ratio(item.rect, target)
