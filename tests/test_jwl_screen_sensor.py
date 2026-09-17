@@ -38,7 +38,7 @@ def test_window_center_identifies_hall_display() -> None:
 
 
 def test_physical_mode_only_captures_jw_window_on_selected_hall_display() -> None:
-    primary = _window(
+    operator_window = _window(
         hwnd=1,
         left=0,
         top=0,
@@ -55,7 +55,7 @@ def test_physical_mode_only_captures_jw_window_on_selected_hall_display() -> Non
     )
 
     regions = choose_capture_regions(
-        [primary, hall_output],
+        [operator_window, hall_output],
         preferred_display_bounds=(1920, 0, 1920, 1080),
     )
 
@@ -63,7 +63,7 @@ def test_physical_mode_only_captures_jw_window_on_selected_hall_display() -> Non
 
 
 def test_physical_mode_does_not_fall_back_to_operator_window() -> None:
-    primary = _window(
+    operator_window = _window(
         hwnd=1,
         left=0,
         top=0,
@@ -73,7 +73,7 @@ def test_physical_mode_does_not_fall_back_to_operator_window() -> None:
     )
 
     regions = choose_capture_regions(
-        [primary],
+        [operator_window],
         preferred_display_bounds=(1920, 0, 1920, 1080),
     )
 
