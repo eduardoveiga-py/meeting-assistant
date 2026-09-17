@@ -25,12 +25,14 @@ class AutomationCoordinator(QObject):
         media_automation: ToggleService,
         hall_output_guard: ToggleService,
         palco_scene_provider: Callable[[], str],
+        current_scene_provider: Callable[[], str | None],
     ) -> None:
         super().__init__()
         self._obs = obs_controller
         self._media_automation = media_automation
         self._hall_output_guard = hall_output_guard
         self._palco_scene_provider = palco_scene_provider
+        self._current_scene_provider = current_scene_provider
         self._requested = False
         self._armed = False
 
@@ -55,9 +57,18 @@ class AutomationCoordinator(QObject):
         self._hall_output_guard.set_enabled(True)
         palco_scene = self._palco_scene_provider().strip()
         if not palco_scene:
+            self._hall_output_guard.set_enabled(False)
             self.status_changed.emit(
                 "Não foi possível ativar: configure a cena Palco em Ajustes."
             )
+            return
+
+        current_scene = (self._current_scene_provider() or "").strip()
+        if current_scene == palco_scene:
+            self.status_changed.emit(
+                "OBS já está em Palco; armando o sensor de mídia…"
+            )
+            self._arm()
             return
 
         self.status_changed.emit(
@@ -70,8 +81,7 @@ class AutomationCoordinator(QObject):
             return
         if scene_name != self._palco_scene_provider().strip():
             return
-        self._armed = True
-        self._media_automation.set_enabled(True)
+        self._arm()
 
     def on_obs_connected(self, connected: bool, _message: str) -> None:
         if not connected or not self._requested or self._armed:
@@ -79,7 +89,19 @@ class AutomationCoordinator(QObject):
         palco_scene = self._palco_scene_provider().strip()
         if not palco_scene:
             return
+
+        current_scene = (self._current_scene_provider() or "").strip()
+        if current_scene == palco_scene:
+            self._arm()
+            return
+
         self.status_changed.emit(
             "OBS reconectado; retornando para Palco antes de rearmar a automação…"
         )
         self._obs.set_program_scene(palco_scene)
+
+    def _arm(self) -> None:
+        if not self._requested or self._armed:
+            return
+        self._armed = True
+        self._media_automation.set_enabled(True)
