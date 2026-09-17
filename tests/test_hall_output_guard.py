@@ -27,7 +27,22 @@ def _window(
     )
 
 
-def test_guard_selects_only_window_on_hall_display() -> None:
+def test_guard_prefers_windows_monitor_identity_over_geometry() -> None:
+    operator = _window(hwnd=1, left=0, top=0, right=1920, bottom=1080)
+    hall = _window(hwnd=2, left=0, top=0, right=1920, bottom=1080)
+    devices = {1: r"\\.\DISPLAY1", 2: r"\\.\DISPLAY2"}
+
+    selected = select_hall_window(
+        [operator, hall],
+        (1920, 0, 1920, 1080),
+        device_name=r"\\.\DISPLAY2",
+        monitor_device_resolver=devices.get,
+    )
+
+    assert selected == hall
+
+
+def test_guard_selects_only_window_on_hall_display_by_geometry_fallback() -> None:
     operator = _window(hwnd=1, left=0, top=0, right=1920, bottom=1080)
     hall = _window(hwnd=2, left=1920, top=0, right=3840, bottom=1080)
 
