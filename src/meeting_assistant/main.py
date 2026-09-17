@@ -18,7 +18,6 @@ from meeting_assistant.services.media_automation_service import (
     MediaAutomationService,
 )
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
-from meeting_assistant.services.obs_visual_probe_service import ObsVisualProbeService
 from meeting_assistant.services.settings import SettingsService
 from meeting_assistant.ui.main_window import MainWindow
 
@@ -64,9 +63,6 @@ def main() -> int:
             password=settings.obs_password,
         )
 
-    def current_probe_config() -> tuple[ObsConnectionConfig, str]:
-        return current_obs_config(), settings.scene_media
-
     def current_media_automation_config() -> MediaAutomationConfig:
         eligible = tuple(
             scene
@@ -99,10 +95,10 @@ def main() -> int:
         interval_ms=450,
     )
 
-    visual_probe = ObsVisualProbeService()
     jwl_probe = JwlProbeService(
-        visual_probe=visual_probe,
-        config_provider=current_probe_config,
+        secondary_service=jwl_secondary,
+        display_snapshot_provider=display_service.snapshot,
+        target_display_provider=current_hall_display,
     )
     media_automation = MediaAutomationService(
         config_provider=current_media_automation_config,
