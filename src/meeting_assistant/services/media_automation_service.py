@@ -264,6 +264,13 @@ class MediaAutomationService(QObject):
                 self._stop_event.wait(0.35)
                 continue
 
+            if window.minimized or not window.visible:
+                self._emit_status(
+                    "Saída JWL encontrada; aguardando restauração segura na Tela do Salão…"
+                )
+                self._stop_event.wait(0.25)
+                continue
+
             if sensor is None:
                 try:
                     sensor = JwlScreenSensor()
@@ -313,8 +320,6 @@ class MediaAutomationService(QObject):
             try:
                 changed_percent = pixel_difference(reference.pixels, frame)
             except ValueError:
-                # Reference format changed. Do not guess a state; require one new
-                # calibration rather than switching the Hall incorrectly.
                 self._reference_store.clear()
                 reference = None
                 initial_route_pending = True
@@ -323,16 +328,19 @@ class MediaAutomationService(QObject):
 
             if initial_route_pending:
                 event, idle_hits = self._classify_initial_state(changed_percent, idle_hits)
-                self._emit_signal_snapshot(changed_percent, force=event is not None)
                 if event == MediaSignalEvent.STARTED:
                     self._detector.active = True
+                elif event == MediaSignalEvent.ENDED:
+                    self._detector.reset()
+                self._emit_signal_snapshot(changed_percent, force=event is not None)
+
+                if event == MediaSignalEvent.STARTED:
                     self.media_started.emit(config.media_scene)
                     self._emit_status(
                         "Mídia já estava ativa ao iniciar; recuperando a cena Mídias."
                     )
                     initial_route_pending = False
                 elif event == MediaSignalEvent.ENDED:
-                    self._detector.reset()
                     self.media_ended.emit(config.preferred_return_scene or "")
                     self._emit_status(
                         "Saída JWL está em repouso; mantendo/recuperando Palco."
