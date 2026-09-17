@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.display_service import DisplayService, resolve_hall_display
 from meeting_assistant.services.hall_monitor_sensor import HallMonitorSensorRegionProvider
+from meeting_assistant.services.jwl_fast_window_guard import JwlFastWindowGuard
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService
 from meeting_assistant.services.jwl_uia_secondary_window import JwlUiaSecondaryWindowService
@@ -106,6 +107,11 @@ def main() -> int:
         display_provider=current_hall_display,
         interval_ms=650,
     )
+    jwl_fast_guard = JwlFastWindowGuard(
+        candidate_provider=lambda: jwl_secondary.current,
+        display_provider=current_hall_display,
+        interval_ms=180,
+    )
     hall_capture_region = HallMonitorSensorRegionProvider(current_hall_display)
 
     jwl_probe = JwlProbeService(
@@ -144,6 +150,7 @@ def main() -> int:
     media_automation.error.connect(window.set_automation_status)
     window.automation_enabled_changed.connect(media_automation.set_enabled)
     window.automation_enabled_changed.connect(jwl_secondary.set_guard_enabled)
+    window.automation_enabled_changed.connect(jwl_fast_guard.set_enabled)
     jwl_secondary.status_changed.connect(
         lambda _ok, message: (
             window.set_automation_status(message)
@@ -153,6 +160,7 @@ def main() -> int:
     )
 
     app.aboutToQuit.connect(media_automation.stop)
+    app.aboutToQuit.connect(jwl_fast_guard.stop)
     app.aboutToQuit.connect(jwl_secondary.stop)
     app.aboutToQuit.connect(obs_controller.stop)
     app.aboutToQuit.connect(jwl_probe.stop)
@@ -162,6 +170,7 @@ def main() -> int:
     display_service.start()
     jwl_service.start()
     jwl_secondary.start()
+    jwl_fast_guard.start()
     obs_controller.start(obs_config)
     media_automation.start()
     media_automation.set_enabled(False)
