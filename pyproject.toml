@@ -4,16 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "meeting-assistant"
-version = "0.4.2"
+version = "0.4.3"
 description = "Assistente de operação para reuniões com OBS, Zoom e JW Library"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "PySide6>=6.8,<7",
     "mss>=10,<11",
+    "numpy>=2,<3; sys_platform == 'win32'",
     "obsws-python>=1.8,<2",
     "psutil>=6,<8",
     "pywin32>=308; sys_platform == 'win32'",
+    "windows-capture>=2.0.1,<3; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
