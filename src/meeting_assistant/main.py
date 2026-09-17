@@ -10,8 +10,15 @@ from PySide6.QtWidgets import QApplication
 
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.automation_coordinator import AutomationCoordinator
-from meeting_assistant.services.display_service import DisplayInfo, DisplayService, resolve_hall_display
-from meeting_assistant.services.hall_output_guard import HallOutputGuard, HallOutputTarget
+from meeting_assistant.services.display_service import (
+    DisplayInfo,
+    DisplayService,
+    resolve_hall_display,
+)
+from meeting_assistant.services.hall_output_guard import (
+    HallOutputGuard,
+    HallOutputTarget,
+)
 from meeting_assistant.services.idle_reference_store import IdleReferenceStore
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService
