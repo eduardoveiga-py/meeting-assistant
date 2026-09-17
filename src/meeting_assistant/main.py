@@ -12,6 +12,10 @@ from meeting_assistant.core.state import AppState
 from meeting_assistant.services.display_service import DisplayService
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService
+from meeting_assistant.services.media_automation_service import (
+    MediaAutomationConfig,
+    MediaAutomationService,
+)
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.obs_visual_probe_service import ObsVisualProbeService
 from meeting_assistant.services.settings import SettingsService
@@ -23,7 +27,6 @@ APP_USER_MODEL_ID = "MeetingAssistant.Desktop.3"
 def _set_windows_app_id() -> None:
     if sys.platform != "win32":
         return
-
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
 
 
@@ -51,25 +54,45 @@ def main() -> int:
     settings_service = SettingsService()
     settings = settings_service.load()
     state = AppState(simulation_enabled=settings.simulation_enabled)
+    state.automation_enabled = False
 
-    def current_probe_config() -> tuple[ObsConnectionConfig, str]:
-        return (
-            ObsConnectionConfig(
-                host=settings.obs_host,
-                port=settings.obs_port,
-                password=settings.obs_password,
-            ),
-            settings.scene_media,
+    def current_obs_config() -> ObsConnectionConfig:
+        return ObsConnectionConfig(
+            host=settings.obs_host,
+            port=settings.obs_port,
+            password=settings.obs_password,
         )
 
-    obs_config, _ = current_probe_config()
-    obs_controller = ObsController(poll_interval=1.0, preview_interval=1.0)
+    def current_probe_config() -> tuple[ObsConnectionConfig, str]:
+        return current_obs_config(), settings.scene_media
+
+    def current_media_automation_config() -> MediaAutomationConfig:
+        eligible = tuple(
+            scene
+            for scene in (settings.scene_background, settings.scene_speaker)
+            if scene
+        )
+        return MediaAutomationConfig(
+            obs=current_obs_config(),
+            sensor_source=settings.scene_media,
+            media_scene=settings.scene_media,
+            eligible_return_scenes=eligible,
+            preferred_return_scene=settings.scene_speaker,
+        )
+
+    obs_config = current_obs_config()
+    obs_controller = ObsController(poll_interval=0.5, preview_interval=0.15)
     display_service = DisplayService(app)
     jwl_service = JwlService(interval_ms=2000)
     visual_probe = ObsVisualProbeService()
     jwl_probe = JwlProbeService(
         visual_probe=visual_probe,
         config_provider=current_probe_config,
+    )
+    media_automation = MediaAutomationService(
+        config_provider=current_media_automation_config,
+        window_provider=lambda: jwl_service.scan(include_hidden=False),
+        sample_interval_seconds=0.18,
     )
 
     window = MainWindow(
@@ -85,6 +108,14 @@ def main() -> int:
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
+    media_automation.status_changed.connect(window.set_automation_status)
+    media_automation.signal_changed.connect(window.set_automation_signal)
+    media_automation.media_started.connect(obs_controller.set_program_scene)
+    media_automation.media_ended.connect(obs_controller.set_program_scene)
+    media_automation.error.connect(window.set_automation_status)
+    window.automation_enabled_changed.connect(media_automation.set_enabled)
+
+    app.aboutToQuit.connect(media_automation.stop)
     app.aboutToQuit.connect(obs_controller.stop)
     app.aboutToQuit.connect(jwl_probe.stop)
     app.aboutToQuit.connect(jwl_service.stop)
@@ -93,6 +124,8 @@ def main() -> int:
     display_service.start()
     jwl_service.start()
     obs_controller.start(obs_config)
+    media_automation.start()
+    media_automation.set_enabled(False)
 
     return app.exec()
 
