@@ -91,6 +91,39 @@ def pixel_difference(reference: bytes, current: bytes) -> float:
     return (changed / len(reference)) * 100.0
 
 
+def select_trigger_hwnds(
+    differences: dict[int, float],
+    threshold: float,
+) -> set[int]:
+    """Registra somente as regiões que realmente mudaram quando a mídia começou."""
+
+    return {
+        hwnd
+        for hwnd, changed_percent in differences.items()
+        if changed_percent >= threshold
+    }
+
+
+def active_region_signal(
+    differences: dict[int, float],
+    trigger_hwnds: set[int],
+) -> float | None:
+    """Retorna o menor desvio entre as regiões que dispararam a mídia.
+
+    Em instalações com duas telas, a janela principal do JW Library pode continuar
+    em outra página depois que a saída do Salão já voltou ao Texto do Ano. O fim da
+    mídia é confirmado quando pelo menos uma das regiões que participou do início
+    retorna ao próprio baseline, em vez de depender do maior desvio global.
+    """
+
+    values = [
+        differences[hwnd]
+        for hwnd in trigger_hwnds
+        if hwnd in differences
+    ]
+    return min(values) if values else None
+
+
 def sensor_candidate_score(
     source_name: str,
     input_kind: str | None,
@@ -167,6 +200,8 @@ class MediaAutomationService(QObject):
         self._detector = MediaSignalDetector()
         self._last_status: str | None = None
         self._last_signal_emit_at = 0.0
+        self._trigger_hwnds: set[int] = set()
+        self._active_since = 0.0
 
     @property
     def enabled(self) -> bool:
@@ -214,7 +249,7 @@ class MediaAutomationService(QObject):
                 was_enabled = False
                 regions = []
                 baselines = {}
-                self._detector.reset()
+                self._reset_detection()
                 if sensor is not None:
                     sensor.close()
                     sensor = None
@@ -227,7 +262,7 @@ class MediaAutomationService(QObject):
                 active_config = config
                 regions = []
                 baselines = {}
-                self._detector.reset()
+                self._reset_detection()
 
             if sensor is None:
                 try:
@@ -255,7 +290,8 @@ class MediaAutomationService(QObject):
                     self._stop_event.wait(0.5)
                     continue
 
-                self._detector.reset()
+                regions = [region for region in regions if region.hwnd in baselines]
+                self._reset_detection()
                 self._emit_status(
                     "Automação pronta: aguardando foto/vídeo do JW Library."
                 )
@@ -263,8 +299,11 @@ class MediaAutomationService(QObject):
                 continue
 
             try:
-                changed_percent = self._sample_difference(sensor, regions, baselines)
-                event = self._detector.update(changed_percent)
+                differences = self._sample_differences(sensor, regions, baselines)
+                if not differences:
+                    raise RuntimeError("nenhuma região do JW Library pôde ser capturada")
+
+                event, changed_percent = self._update_detection(differences)
                 self._emit_signal_snapshot(changed_percent, force=event is not None)
 
                 if event == MediaSignalEvent.STARTED:
@@ -276,17 +315,47 @@ class MediaAutomationService(QObject):
                     self._emit_status(
                         "Saída voltou ao repouso: solicitando retorno para Palco."
                     )
+                    self._trigger_hwnds.clear()
+                    self._active_since = 0.0
 
                 self._stop_event.wait(self._sample_interval)
             except Exception as exc:
                 self._emit_error(f"Automação visual: {exc}")
                 regions = []
                 baselines = {}
-                self._detector.reset()
+                self._reset_detection()
                 self._stop_event.wait(0.5)
 
         if sensor is not None:
             sensor.close()
+
+    def _update_detection(
+        self,
+        differences: dict[int, float],
+    ) -> tuple[MediaSignalEvent | None, float]:
+        if not self._detector.active:
+            changed_percent = max(differences.values())
+            event = self._detector.update(changed_percent)
+            if event == MediaSignalEvent.STARTED:
+                self._trigger_hwnds = select_trigger_hwnds(
+                    differences,
+                    self._detector.start_threshold,
+                )
+                self._active_since = time.monotonic()
+            return event, changed_percent
+
+        active_signal = active_region_signal(differences, self._trigger_hwnds)
+        if active_signal is None:
+            self._detector.end_hits = 0
+            return None, max(differences.values())
+
+        # Evita interpretar animações/transições do início como fim imediato.
+        if time.monotonic() - self._active_since < 0.8:
+            self._detector.end_hits = 0
+            return None, active_signal
+
+        event = self._detector.update(active_signal)
+        return event, active_signal
 
     def _calibrate(
         self,
@@ -298,7 +367,9 @@ class MediaAutomationService(QObject):
         )
         candidates: dict[int, bytes] = {}
         stable_hits: dict[int, int] = {region.hwnd: 0 for region in regions}
+        expected_hwnds = {region.hwnd for region in regions}
         deadline = time.monotonic() + 4.0
+        ready: dict[int, bytes] = {}
 
         while (
             time.monotonic() < deadline
@@ -324,18 +395,21 @@ class MediaAutomationService(QObject):
                 for hwnd, hits in stable_hits.items()
                 if hits >= 3 and hwnd in candidates
             }
-            if ready:
+            if ready.keys() >= expected_hwnds:
                 return ready
             self._stop_event.wait(0.18)
-        return {}
+
+        # Se uma janela não puder estabilizar, preserva as demais regiões estáveis
+        # em vez de bloquear toda a automação.
+        return ready
 
     @staticmethod
-    def _sample_difference(
+    def _sample_differences(
         sensor: JwlScreenSensor,
         regions: list[CaptureRegion],
         baselines: dict[int, bytes],
-    ) -> float:
-        differences: list[float] = []
+    ) -> dict[int, float]:
+        differences: dict[int, float] = {}
         for region in regions:
             baseline = baselines.get(region.hwnd)
             if baseline is None:
@@ -343,10 +417,13 @@ class MediaAutomationService(QObject):
             frame = sensor.capture(region)
             if frame is None or len(frame) != len(baseline):
                 continue
-            differences.append(pixel_difference(baseline, frame))
-        if not differences:
-            raise RuntimeError("nenhuma região do JW Library pôde ser capturada")
-        return max(differences)
+            differences[region.hwnd] = pixel_difference(baseline, frame)
+        return differences
+
+    def _reset_detection(self) -> None:
+        self._detector.reset()
+        self._trigger_hwnds.clear()
+        self._active_since = 0.0
 
     def _emit_signal_snapshot(self, changed_percent: float, *, force: bool = False) -> None:
         now = time.monotonic()
