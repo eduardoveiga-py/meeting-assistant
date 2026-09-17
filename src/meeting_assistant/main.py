@@ -124,12 +124,6 @@ def main() -> int:
         window_provider=lambda: jwl_service.scan(include_hidden=True),
         interval_ms=350,
     )
-    automation_coordinator = AutomationCoordinator(
-        obs_controller=obs_controller,
-        media_automation=media_automation,
-        hall_output_guard=hall_output_guard,
-        palco_scene_provider=lambda: settings.scene_speaker,
-    )
 
     window = MainWindow(
         state=state,
@@ -143,6 +137,14 @@ def main() -> int:
     )
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+
+    automation_coordinator = AutomationCoordinator(
+        obs_controller=obs_controller,
+        media_automation=media_automation,
+        hall_output_guard=hall_output_guard,
+        palco_scene_provider=lambda: settings.scene_speaker,
+        current_scene_provider=lambda: window.current_obs_scene,
+    )
 
     media_automation.status_changed.connect(window.set_automation_status)
     media_automation.signal_changed.connect(window.set_automation_signal)
