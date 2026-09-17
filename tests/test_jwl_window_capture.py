@@ -19,7 +19,15 @@ def display(*, key: str, x: int, primary: bool) -> DisplayInfo:
     )
 
 
-def window(*, hwnd: int, left: int, top: int, right: int, bottom: int) -> JwlWindowInfo:
+def window(
+    *,
+    hwnd: int,
+    left: int,
+    top: int,
+    right: int,
+    bottom: int,
+    monitor_primary: bool | None = None,
+) -> JwlWindowInfo:
     return JwlWindowInfo(
         hwnd=hwnd,
         pid=100,
@@ -33,6 +41,7 @@ def window(*, hwnd: int, left: int, top: int, right: int, bottom: int) -> JwlWin
         visible=True,
         minimized=False,
         foreground=False,
+        monitor_primary=monitor_primary,
     )
 
 
@@ -48,9 +57,42 @@ def test_physical_capture_targets_window_on_hall_display() -> None:
     assert target.overlap_area == 1920 * 1080
 
 
+def test_physical_capture_uses_win32_secondary_monitor_when_coordinates_differ() -> None:
+    hall = display(key="DISPLAY2", x=1920, primary=False)
+    operator = window(
+        hwnd=10,
+        left=0,
+        top=0,
+        right=1920,
+        bottom=1080,
+        monitor_primary=True,
+    )
+    hall_output = window(
+        hwnd=20,
+        left=-1280,
+        top=-2160,
+        right=0,
+        bottom=-1440,
+        monitor_primary=False,
+    )
+
+    target = select_jwl_capture_target([operator, hall_output], hall)
+
+    assert target is not None
+    assert target.window.hwnd == 20
+    assert target.overlap_area == 0
+
+
 def test_physical_capture_does_not_fall_back_to_operator_window() -> None:
     hall = display(key="DISPLAY2", x=1920, primary=False)
-    operator = window(hwnd=10, left=0, top=0, right=1920, bottom=1080)
+    operator = window(
+        hwnd=10,
+        left=0,
+        top=0,
+        right=1920,
+        bottom=1080,
+        monitor_primary=True,
+    )
 
     target = select_jwl_capture_target([operator], hall)
 
