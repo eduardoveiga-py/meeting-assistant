@@ -1,6 +1,9 @@
 from meeting_assistant.services.display_service import DisplayInfo
 from meeting_assistant.services.jwl_secondary_window import WindowRect
-from meeting_assistant.services.jwl_uia_secondary_window import uia_media_candidate_score
+from meeting_assistant.services.jwl_uia_secondary_window import (
+    desktop_top_level_windows,
+    uia_media_candidate_score,
+)
 
 
 def hall_display() -> DisplayInfo:
@@ -17,6 +20,21 @@ def hall_display() -> DisplayInfo:
         primary=False,
         device_pixel_ratio=1.5,
     )
+
+
+def test_desktop_enumeration_uses_windows_api() -> None:
+    class FakeDesktop:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def windows(self):
+            self.calls += 1
+            return ["jw", "other"]
+
+    desktop = FakeDesktop()
+
+    assert desktop_top_level_windows(desktop) == ["jw", "other"]
+    assert desktop.calls == 1
 
 
 def test_uia_topmost_verified_jwl_on_secondary_is_strong_candidate() -> None:
