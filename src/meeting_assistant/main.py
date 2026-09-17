@@ -83,11 +83,19 @@ def main() -> int:
     display_service = DisplayService(app)
     jwl_service = JwlService(interval_ms=2000)
 
+    display_cache = display_service.snapshot()
+
+    def update_display_cache(displays) -> None:
+        nonlocal display_cache
+        display_cache = list(displays)
+
+    display_service.displays_changed.connect(update_display_cache)
+
     def current_hall_display():
         if settings.simulation_enabled:
             return None
         return resolve_hall_display(
-            display_service.snapshot(),
+            list(display_cache),
             settings.hall_display_key,
         )
 
@@ -99,7 +107,7 @@ def main() -> int:
 
     jwl_probe = JwlProbeService(
         secondary_service=jwl_secondary,
-        display_snapshot_provider=display_service.snapshot,
+        display_snapshot_provider=lambda: list(display_cache),
         target_display_provider=current_hall_display,
     )
     media_automation = MediaAutomationService(
