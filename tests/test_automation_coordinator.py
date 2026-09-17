@@ -17,11 +17,27 @@ class FakeToggleService:
         self.values.append(enabled)
 
 
+def make_coordinator(
+    obs: FakeSceneController,
+    media: FakeToggleService,
+    guard: FakeToggleService,
+    current_scene: list[str | None],
+) -> AutomationCoordinator:
+    return AutomationCoordinator(
+        obs,
+        media,
+        guard,
+        lambda: "Palco",
+        lambda: current_scene[0],
+    )
+
+
 def test_automation_requests_palco_before_arming_sensor() -> None:
     obs = FakeSceneController()
     media = FakeToggleService()
     guard = FakeToggleService()
-    coordinator = AutomationCoordinator(obs, media, guard, lambda: "Palco")
+    current_scene: list[str | None] = ["Mídias"]
+    coordinator = make_coordinator(obs, media, guard, current_scene)
 
     coordinator.request(True)
 
@@ -35,18 +51,37 @@ def test_automation_requests_palco_before_arming_sensor() -> None:
     assert coordinator.armed is False
     assert media.values == [False]
 
+    current_scene[0] = "Palco"
     coordinator.on_scene_changed("Palco")
     assert coordinator.armed is True
     assert media.values == [False, True]
+
+
+def test_automation_arms_immediately_when_obs_is_already_on_palco() -> None:
+    obs = FakeSceneController()
+    media = FakeToggleService()
+    guard = FakeToggleService()
+    current_scene: list[str | None] = ["Palco"]
+    coordinator = make_coordinator(obs, media, guard, current_scene)
+
+    coordinator.request(True)
+
+    assert coordinator.requested is True
+    assert coordinator.armed is True
+    assert obs.scenes == []
+    assert media.values == [False, True]
+    assert guard.values == [True]
 
 
 def test_pausing_automation_disables_sensor_and_hall_guard() -> None:
     obs = FakeSceneController()
     media = FakeToggleService()
     guard = FakeToggleService()
-    coordinator = AutomationCoordinator(obs, media, guard, lambda: "Palco")
+    current_scene: list[str | None] = ["Mídias"]
+    coordinator = make_coordinator(obs, media, guard, current_scene)
 
     coordinator.request(True)
+    current_scene[0] = "Palco"
     coordinator.on_scene_changed("Palco")
     coordinator.request(False)
 
@@ -60,7 +95,8 @@ def test_reconnect_requests_palco_again_before_arming() -> None:
     obs = FakeSceneController()
     media = FakeToggleService()
     guard = FakeToggleService()
-    coordinator = AutomationCoordinator(obs, media, guard, lambda: "Palco")
+    current_scene: list[str | None] = ["Mídias"]
+    coordinator = make_coordinator(obs, media, guard, current_scene)
 
     coordinator.request(True)
     coordinator.on_obs_connected(True, "reconectado")
@@ -68,3 +104,18 @@ def test_reconnect_requests_palco_again_before_arming() -> None:
     assert obs.scenes == ["Palco", "Palco"]
     assert coordinator.armed is False
     assert media.values == [False]
+
+
+def test_reconnect_arms_immediately_when_palco_is_already_confirmed() -> None:
+    obs = FakeSceneController()
+    media = FakeToggleService()
+    guard = FakeToggleService()
+    current_scene: list[str | None] = ["Mídias"]
+    coordinator = make_coordinator(obs, media, guard, current_scene)
+
+    coordinator.request(True)
+    current_scene[0] = "Palco"
+    coordinator.on_obs_connected(True, "reconectado")
+
+    assert coordinator.armed is True
+    assert media.values == [False, True]
