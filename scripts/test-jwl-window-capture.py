@@ -104,6 +104,26 @@ class CapturePreviewDialog(QDialog):
         super().closeEvent(event)
 
 
+def _candidate_diagnostics(windows: list[object]) -> str:
+    if not windows:
+        return "Nenhuma janela candidata do JW Library foi classificada."
+
+    lines = ["Janelas candidatas classificadas:"]
+    for window in windows[:8]:
+        monitor = (
+            "principal"
+            if window.monitor_primary is True
+            else "secundário"
+            if window.monitor_primary is False
+            else "monitor desconhecido"
+        )
+        lines.append(
+            f"• HWND {window.hwnd} • {window.size} • {monitor} • "
+            f"{window.process_name} • {window.title or '(sem título)'}"
+        )
+    return "\n".join(lines)
+
+
 def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("Meeting Assistant Capture Test")
@@ -123,15 +143,22 @@ def main() -> int:
             "Saída do JW Library não encontrada",
             "Não encontrei uma janela visível do JW Library na Tela do Salão.\n\n"
             f"Tela resolvida: {hall_text}\n\n"
-            "Abra a saída do JW Library na segunda tela e execute este teste novamente.",
+            f"{_candidate_diagnostics(windows)}\n\n"
+            "Deixe a saída do JW Library aberta e envie uma captura desta mensagem.",
         )
         return 2
 
     window = target.window
     hall_text = hall_display.label if hall_display else "fallback de diagnóstico"
+    selection = (
+        "posição/área da Tela 2"
+        if target.overlap_area > 0
+        else "monitor físico secundário (fallback DPI)"
+    )
     source_description = (
         f"Alvo: HWND {window.hwnd} • {window.size} • {window.title or window.process_name}\n"
-        f"Tela do Salão: {hall_text}"
+        f"Tela do Salão: {hall_text}\n"
+        f"Seleção: {selection}"
     )
 
     capture = JwlWindowCapture(ui_interval_ms=33)
