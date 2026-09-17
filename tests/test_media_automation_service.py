@@ -53,6 +53,7 @@ def secondary_window() -> JwlSecondaryWindowInfo:
         topmost=True,
         title_bar_visible=False,
         has_jwl_core_window=True,
+        monitor_primary=False,
         score=2000,
     )
 
