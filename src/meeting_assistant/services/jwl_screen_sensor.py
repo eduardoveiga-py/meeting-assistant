@@ -29,12 +29,33 @@ class CaptureRegion:
         }
 
 
-def choose_capture_regions(windows: list[JwlWindowInfo]) -> list[CaptureRegion]:
-    """Seleciona pequenas regiões centrais das janelas visíveis do JW Library.
+def window_center_inside_display(
+    window: JwlWindowInfo,
+    display_bounds: tuple[int, int, int, int],
+) -> bool:
+    """Retorna True quando o centro da janela está dentro do monitor alvo."""
 
-    O sensor observa no máximo três janelas. Isso cobre o caso em que o JW Library
-    mantém uma janela principal e uma janela de saída de mídia separada, sem
-    capturar o monitor inteiro.
+    display_x, display_y, display_width, display_height = display_bounds
+    center_x = window.left + max(0, window.right - window.left) // 2
+    center_y = window.top + max(0, window.bottom - window.top) // 2
+    return (
+        display_x <= center_x < display_x + display_width
+        and display_y <= center_y < display_y + display_height
+    )
+
+
+def choose_capture_regions(
+    windows: list[JwlWindowInfo],
+    preferred_display_bounds: tuple[int, int, int, int] | None = None,
+) -> list[CaptureRegion]:
+    """Seleciona regiões centrais das janelas visíveis do JW Library.
+
+    Em modo físico, ``preferred_display_bounds`` restringe o sensor às janelas
+    realmente posicionadas na Tela do Salão. Isso impede que rolagem, thumbnails
+    ou navegação na janela principal do JW Library disparem a automação.
+
+    Em simulação, sem monitor preferido, mantém o fallback histórico de observar
+    até três janelas candidatas.
     """
 
     candidates = [
@@ -45,6 +66,14 @@ def choose_capture_regions(windows: list[JwlWindowInfo]) -> list[CaptureRegion]:
         and item.right - item.left >= 400
         and item.bottom - item.top >= 300
     ]
+
+    if preferred_display_bounds is not None:
+        candidates = [
+            item
+            for item in candidates
+            if window_center_inside_display(item, preferred_display_bounds)
+        ]
+
     candidates.sort(
         key=lambda item: (
             item.class_name == "ApplicationFrameWindow",
@@ -54,8 +83,9 @@ def choose_capture_regions(windows: list[JwlWindowInfo]) -> list[CaptureRegion]:
         reverse=True,
     )
 
+    max_regions = 1 if preferred_display_bounds is not None else 3
     regions: list[CaptureRegion] = []
-    for item in candidates[:3]:
+    for item in candidates[:max_regions]:
         window_width = item.right - item.left
         window_height = item.bottom - item.top
         crop_width = min(640, max(320, int(window_width * 0.72)))
