@@ -1,9 +1,19 @@
 from meeting_assistant.services.display_service import DisplayInfo
 from meeting_assistant.services.jwl_service import JwlWindowInfo
-from meeting_assistant.services.jwl_window_capture import select_jwl_capture_target
+from meeting_assistant.services.jwl_window_capture import (
+    monitor_index_for_display,
+    select_jwl_capture_target,
+)
 
 
-def display(*, key: str, x: int, primary: bool) -> DisplayInfo:
+def display(
+    *,
+    key: str,
+    x: int,
+    primary: bool,
+    width: int = 1920,
+    height: int = 1080,
+) -> DisplayInfo:
     return DisplayInfo(
         key=key,
         name=key,
@@ -12,8 +22,8 @@ def display(*, key: str, x: int, primary: bool) -> DisplayInfo:
         serial="",
         x=x,
         y=0,
-        width=1920,
-        height=1080,
+        width=width,
+        height=height,
         primary=primary,
         device_pixel_ratio=1.0,
     )
@@ -43,6 +53,21 @@ def window(
         foreground=False,
         monitor_primary=monitor_primary,
     )
+
+
+def test_monitor_index_for_display_is_one_based() -> None:
+    primary = display(key="DISPLAY1", x=0, primary=True)
+    hall = display(key="DISPLAY2", x=1920, primary=False, width=1280, height=720)
+
+    assert monitor_index_for_display([primary, hall], hall) == 2
+
+
+def test_monitor_index_for_display_falls_back_to_geometry() -> None:
+    primary = display(key="DISPLAY1", x=0, primary=True)
+    listed_hall = display(key="DISPLAY2-runtime", x=-1280, primary=False, width=1280, height=720)
+    selected_hall = display(key="DISPLAY2-saved", x=-1280, primary=False, width=1280, height=720)
+
+    assert monitor_index_for_display([primary, listed_hall], selected_hall) == 2
 
 
 def test_physical_capture_targets_window_on_hall_display() -> None:
