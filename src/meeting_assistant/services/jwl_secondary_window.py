@@ -11,10 +11,12 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from meeting_assistant.services.display_service import DisplayInfo
 
 try:
+    import win32api
     import win32con
     import win32gui
     import win32process
 except ImportError:  # pragma: no cover - Windows-only implementation
+    win32api = None
     win32con = None
     win32gui = None
     win32process = None
@@ -64,6 +66,7 @@ class JwlSecondaryWindowInfo:
     topmost: bool
     title_bar_visible: bool
     has_jwl_core_window: bool
+    monitor_primary: bool | None
     score: int
 
     @property
@@ -79,10 +82,17 @@ def normalize_window_title(title: str) -> str:
 
 def is_explicit_jwl_secondary_title(title: str) -> bool:
     normalized = normalize_window_title(title)
+    prefixes = (
+        "second display",
+        "second screen",
+        "segunda tela",
+        "segundo monitor",
+        "segunda pantalla",
+    )
     return (
         "jw library" in normalized
         and "sign language" not in normalized
-        and any(prefix in normalized for prefix in ("second display", "second screen"))
+        and any(prefix in normalized for prefix in prefixes)
     )
 
 
@@ -119,6 +129,7 @@ def score_secondary_candidate(
     topmost: bool,
     title_bar_visible: bool,
     has_jwl_core_window: bool,
+    monitor_primary: bool | None,
     target_display: DisplayInfo | None,
 ) -> int:
     normalized = normalize_window_title(title)
@@ -146,7 +157,16 @@ def score_secondary_candidate(
         elif overlap >= 0.30:
             score += 120
         else:
-            score -= 700
+            # Qt and Win32 can expose different coordinate spaces on mixed-DPI
+            # desktops. A geometry mismatch is therefore evidence, not a veto.
+            score -= 250
+
+        if monitor_primary is not None:
+            if monitor_primary == target_display.primary:
+                score += 100
+            else:
+                score -= 350
+
         if is_fullscreen_on_display(rect, target_display):
             score += 300
 
@@ -165,13 +185,7 @@ def choose_secondary_candidate(
 
 
 class JwlSecondaryWindowService(QObject):
-    """Find and protect the real JW Library second-display window.
-
-    Discovery intentionally does not trust ApplicationFrameHost.exe by itself.
-    The host process is shared by unrelated UWP applications. Instead, the
-    secondary output is recognized by the special JWL title when present or by
-    its embedded Windows.UI.Core.CoreWindow plus fullscreen/title-bar traits.
-    """
+    """Find and protect the real JW Library second-display window."""
 
     window_changed = Signal(object)
     status_changed = Signal(bool, str)
@@ -278,6 +292,7 @@ class JwlSecondaryWindowService(QObject):
                 title_bar_visible = self._has_visible_title_bar(hwnd)
                 ex_style = int(win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE))
                 topmost = bool(ex_style & win32con.WS_EX_TOPMOST)
+                monitor_primary = self._monitor_primary_for_rect(rect)
                 score = score_secondary_candidate(
                     title=title,
                     class_name=class_name,
@@ -286,6 +301,7 @@ class JwlSecondaryWindowService(QObject):
                     topmost=topmost,
                     title_bar_visible=title_bar_visible,
                     has_jwl_core_window=has_core,
+                    monitor_primary=monitor_primary,
                     target_display=target_display,
                 )
                 candidates.append(
@@ -301,6 +317,7 @@ class JwlSecondaryWindowService(QObject):
                         topmost=topmost,
                         title_bar_visible=title_bar_visible,
                         has_jwl_core_window=has_core,
+                        monitor_primary=monitor_primary,
                         score=score,
                     )
                 )
@@ -341,6 +358,20 @@ class JwlSecondaryWindowService(QObject):
 
         left, top, right, bottom = win32gui.GetWindowRect(hwnd)
         return WindowRect(left, top, right, bottom)
+
+    @staticmethod
+    def _monitor_primary_for_rect(rect: WindowRect) -> bool | None:
+        if win32api is None or win32con is None:
+            return None
+        try:
+            monitor = win32api.MonitorFromPoint(
+                rect.center,
+                win32con.MONITOR_DEFAULTTONEAREST,
+            )
+            info = win32api.GetMonitorInfo(monitor)
+            return bool(int(info.get("Flags", 0)) & 1)
+        except (OSError, RuntimeError, TypeError, ValueError):
+            return None
 
     @staticmethod
     def _has_visible_title_bar(hwnd: int) -> bool:
@@ -400,7 +431,12 @@ class JwlSecondaryWindowService(QObject):
                 win32gui.ShowWindow(item.hwnd, win32con.SW_SHOWNOACTIVATE)
 
             overlap = rect_overlap_ratio(item.rect, target)
-            if overlap < 0.90 or not is_fullscreen_on_display(item.rect, target):
+            geometry_matches = overlap >= 0.90 and is_fullscreen_on_display(item.rect, target)
+            same_monitor_role = (
+                item.monitor_primary is not None
+                and item.monitor_primary == target.primary
+            )
+            if not geometry_matches and not same_monitor_role:
                 flags = (
                     win32con.SWP_NOACTIVATE
                     | win32con.SWP_SHOWWINDOW
