@@ -36,16 +36,21 @@ def _intersection_area(window: JwlWindowInfo, display: DisplayInfo) -> int:
     return max(0, right - left) * max(0, bottom - top)
 
 
+def _window_area(window: JwlWindowInfo) -> int:
+    return max(0, window.right - window.left) * max(0, window.bottom - window.top)
+
+
 def select_jwl_capture_target(
     windows: list[JwlWindowInfo],
     hall_display: DisplayInfo | None,
 ) -> CaptureTarget | None:
     """Select the visible JW Library window that belongs to the Hall display.
 
-    In physical mode, only windows that overlap the selected Hall display are
-    accepted. This deliberately avoids falling back to the operator window on
-    the primary display. Without a Hall display (diagnostic/simulation), the
-    largest visible non-minimized JW Library window is used.
+    Coordinate overlap is preferred. Windows can expose monitor geometry through
+    a DPI coordinate space that differs from Qt's QScreen geometry, so when the
+    overlap is zero we may safely fall back to a JW Library window that Win32
+    explicitly reports on a non-primary monitor. We never fall back to a window
+    known to be on the primary/operator monitor.
     """
 
     candidates = [
@@ -60,28 +65,29 @@ def select_jwl_capture_target(
         return None
 
     if hall_display is None:
-        window = max(
-            candidates,
-            key=lambda item: (item.right - item.left) * (item.bottom - item.top),
-        )
+        window = max(candidates, key=_window_area)
         return CaptureTarget(window=window, overlap_area=0)
 
     ranked = [
         CaptureTarget(window=window, overlap_area=_intersection_area(window, hall_display))
         for window in candidates
     ]
-    ranked = [target for target in ranked if target.overlap_area > 0]
-    if not ranked:
-        return None
+    overlapping = [target for target in ranked if target.overlap_area > 0]
+    if overlapping:
+        return max(
+            overlapping,
+            key=lambda target: (target.overlap_area, _window_area(target.window)),
+        )
 
-    return max(
-        ranked,
-        key=lambda target: (
-            target.overlap_area,
-            (target.window.right - target.window.left)
-            * (target.window.bottom - target.window.top),
-        ),
-    )
+    if not hall_display.primary:
+        secondary_candidates = [
+            window for window in candidates if window.monitor_primary is False
+        ]
+        if secondary_candidates:
+            window = max(secondary_candidates, key=_window_area)
+            return CaptureTarget(window=window, overlap_area=0)
+
+    return None
 
 
 class JwlWindowCapture(QObject):
