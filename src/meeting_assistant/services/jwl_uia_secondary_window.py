@@ -33,6 +33,7 @@ except ImportError:  # pragma: no cover - Windows-only implementation
     win32process = None
 
 _CORE_WINDOW_CLASS = "Windows.UI.Core.CoreWindow"
+_FRAME_WINDOW_CLASS = "ApplicationFrameWindow"
 _JWL_MEDIA_CHILD_CLASSES = {
     "Microsoft.UI.Xaml.Controls.WebView2",
     "ProgressRing",
@@ -46,6 +47,40 @@ def desktop_top_level_windows(desktop: Any) -> list[Any]:
     return list(desktop.windows())
 
 
+def choose_native_monitor_rect(
+    target_display: DisplayInfo,
+    monitors: list[tuple[bool, WindowRect]],
+) -> WindowRect:
+    """Choose the Win32 monitor that best corresponds to a Qt display.
+
+    Qt may expose logical coordinates while Win32 uses physical pixels. Monitor
+    role and pixel dimensions (Qt size * DPR) are therefore stronger signals
+    than comparing the origins directly.
+    """
+
+    fallback = WindowRect(
+        target_display.x,
+        target_display.y,
+        target_display.x + target_display.width,
+        target_display.y + target_display.height,
+    )
+    if not monitors:
+        return fallback
+
+    same_role = [item for item in monitors if item[0] == target_display.primary]
+    pool = same_role or monitors
+    expected_width = round(target_display.width * max(1.0, target_display.device_pixel_ratio))
+    expected_height = round(target_display.height * max(1.0, target_display.device_pixel_ratio))
+
+    def score(item: tuple[bool, WindowRect]) -> int:
+        _primary, rect = item
+        physical_delta = abs(rect.width - expected_width) + abs(rect.height - expected_height)
+        logical_delta = abs(rect.width - target_display.width) + abs(rect.height - target_display.height)
+        return min(physical_delta, logical_delta)
+
+    return min(pool, key=score)[1]
+
+
 def uia_media_candidate_score(
     *,
     name: str,
@@ -55,19 +90,25 @@ def uia_media_candidate_score(
     monitor_primary: bool | None,
     target_display: DisplayInfo | None,
     rect: WindowRect,
+    target_point: bool = False,
 ) -> int:
     """Rank a desktop UIA element as JW Library's media/output window."""
 
-    if not title_has_jw_library(name):
+    named_jwl = title_has_jw_library(name)
+    if not named_jwl and not (target_point and core_verified):
         return -10_000
 
     score = 500
+    if named_jwl:
+        score += 250
     if class_name:
         score += 30
     if topmost:
         score += 700
     if core_verified:
         score += 900
+    if target_point:
+        score += 800
 
     if target_display is not None:
         overlap = rect_overlap_ratio(rect, target_display)
@@ -196,6 +237,7 @@ class JwlUiaSecondaryWindowService(QObject):
     def _worker_loop(self) -> None:
         desktop_class: Any = None
         import_error: str | None = None
+        protected: JwlSecondaryWindowInfo | None = None
 
         if sys.platform == "win32":
             try:
@@ -230,6 +272,12 @@ class JwlUiaSecondaryWindowService(QObject):
             rows: list[dict[str, Any]] = []
             error = import_error
 
+            if guard_enabled and target is not None and protected is not None:
+                if self._is_window(protected.hwnd):
+                    protected = self._ensure_window(protected, target)
+                else:
+                    protected = None
+
             if desktop_class is not None:
                 try:
                     candidates, rows = self._scan_uia_candidates_sync(target, desktop_class)
@@ -237,16 +285,26 @@ class JwlUiaSecondaryWindowService(QObject):
                         best = max(candidates, key=lambda item: item.score)
                         if best.score >= 1300:
                             candidate = best
+                            protected = best
+
                     if candidate is not None and guard_enabled and target is not None:
                         candidate = self._ensure_window(candidate, target)
-                        candidates, rows = self._scan_uia_candidates_sync(target, desktop_class)
-                        if candidates:
-                            best = max(candidates, key=lambda item: item.score)
-                            if best.score >= 1300:
-                                candidate = best
+                        protected = candidate
+                    elif candidate is None and guard_enabled and protected is not None:
+                        # UIA may temporarily stop returning a minimized UWP
+                        # surface. Keep controlling the last verified HWND as
+                        # long as Windows says that handle still exists.
+                        if self._is_window(protected.hwnd):
+                            candidate = self._ensure_window(protected, target)
+                            protected = candidate
+                        else:
+                            protected = None
                     error = None
                 except Exception as exc:  # noqa: BLE001 - one UIA cycle may fail transiently
                     error = repr(exc)
+                    if guard_enabled and target is not None and protected is not None:
+                        if self._is_window(protected.hwnd):
+                            candidate = self._ensure_window(protected, target)
 
             self._worker_result.emit(
                 {
@@ -318,26 +376,41 @@ class JwlUiaSecondaryWindowService(QObject):
         desktop_class: Any,
     ) -> tuple[list[JwlSecondaryWindowInfo], list[dict[str, Any]]]:
         desktop = desktop_class(backend="uia", allow_magic_lookup=False)
-        wrappers = desktop_top_level_windows(desktop)
+        wrappers: list[tuple[Any, bool]] = [
+            (wrapper, False) for wrapper in desktop_top_level_windows(desktop)
+        ]
+
+        if target_display is not None:
+            target_rect = self._native_target_rect(target_display)
+            try:
+                point_wrapper = desktop.top_from_point(*target_rect.center)
+                point_handle = self._wrapper_handle(point_wrapper)
+                existing_handles = {self._wrapper_handle(wrapper) for wrapper, _ in wrappers}
+                if point_handle > 0 and point_handle not in existing_handles:
+                    wrappers.append((point_wrapper, True))
+                elif point_handle > 0:
+                    wrappers = [
+                        (wrapper, is_target or self._wrapper_handle(wrapper) == point_handle)
+                        for wrapper, is_target in wrappers
+                    ]
+            except Exception:  # noqa: BLE001 - point lookup is a fallback only
+                pass
+
         candidates: list[JwlSecondaryWindowInfo] = []
         rows: list[dict[str, Any]] = []
 
-        for wrapper in wrappers:
+        for wrapper, target_point in wrappers:
             try:
                 info = wrapper.element_info
                 name = str(getattr(info, "name", "") or "").strip()
                 class_name = str(getattr(info, "class_name", "") or "")
-                handle = int(getattr(info, "handle", 0) or 0)
-                if handle <= 0:
-                    try:
-                        handle = int(wrapper.handle)
-                    except Exception:  # noqa: BLE001
-                        handle = 0
+                handle = self._wrapper_handle(wrapper)
 
                 relevant = bool(
-                    title_has_jw_library(name)
+                    target_point
+                    or title_has_jw_library(name)
                     or "jw" in normalize_window_title(name)
-                    or class_name in {_CORE_WINDOW_CLASS, "ApplicationFrameWindow"}
+                    or class_name in {_CORE_WINDOW_CLASS, _FRAME_WINDOW_CLASS}
                 )
                 if not relevant:
                     continue
@@ -354,6 +427,7 @@ class JwlUiaSecondaryWindowService(QObject):
                     monitor_primary=monitor_primary,
                     target_display=target_display,
                     rect=rect,
+                    target_point=target_point,
                 )
                 pid = self._pid_for_handle(handle)
                 row = {
@@ -370,12 +444,13 @@ class JwlUiaSecondaryWindowService(QObject):
                     "minimized": self._is_minimized(handle),
                     "monitor_primary": monitor_primary,
                     "core_verified": core_verified,
+                    "target_point": target_point,
                     "score": score,
                     "children": self._uia_child_inventory(wrapper),
                 }
                 rows.append(row)
 
-                if not title_has_jw_library(name) or handle <= 0:
+                if handle <= 0 or score < 1300:
                     continue
                 candidates.append(
                     JwlSecondaryWindowInfo(
@@ -402,7 +477,29 @@ class JwlUiaSecondaryWindowService(QObject):
         return candidates, rows
 
     @staticmethod
+    def _wrapper_handle(wrapper: Any) -> int:
+        try:
+            handle = int(getattr(wrapper.element_info, "handle", 0) or 0)
+            if handle > 0:
+                return handle
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            return int(wrapper.handle)
+        except Exception:  # noqa: BLE001
+            return 0
+
+    @staticmethod
     def _verify_jwl_core(wrapper: Any) -> bool:
+        try:
+            info = wrapper.element_info
+            wrapper_class = str(getattr(info, "class_name", "") or "")
+        except Exception:  # noqa: BLE001
+            wrapper_class = ""
+
+        if wrapper_class == _CORE_WINDOW_CLASS:
+            return JwlUiaSecondaryWindowService._core_has_media_descendant(wrapper)
+
         try:
             children = wrapper.children()
         except Exception:  # noqa: BLE001
@@ -416,18 +513,27 @@ class JwlUiaSecondaryWindowService(QObject):
                 core_name = str(getattr(info, "name", "") or "")
                 if core_name and not title_has_jw_library(core_name):
                     continue
-                try:
-                    descendants = child.descendants()
-                except Exception:  # noqa: BLE001
-                    descendants = []
-                if not descendants:
+                if JwlUiaSecondaryWindowService._core_has_media_descendant(child):
                     return True
-                for descendant in descendants:
-                    d_info = descendant.element_info
-                    d_class = str(getattr(d_info, "class_name", "") or "")
-                    d_type = str(getattr(d_info, "control_type", "") or "")
-                    if d_class in _JWL_MEDIA_CHILD_CLASSES or d_type == "ProgressBar":
-                        return True
+            except Exception:  # noqa: BLE001
+                continue
+        return False
+
+    @staticmethod
+    def _core_has_media_descendant(wrapper: Any) -> bool:
+        try:
+            descendants = wrapper.descendants()
+        except Exception:  # noqa: BLE001
+            descendants = []
+        if not descendants:
+            return True
+        for descendant in descendants:
+            try:
+                d_info = descendant.element_info
+                d_class = str(getattr(d_info, "class_name", "") or "")
+                d_type = str(getattr(d_info, "control_type", "") or "")
+                if d_class in _JWL_MEDIA_CHILD_CLASSES or d_type == "ProgressBar":
+                    return True
             except Exception:  # noqa: BLE001
                 continue
         return False
@@ -463,16 +569,25 @@ class JwlUiaSecondaryWindowService(QObject):
         if win32gui is None or win32con is None:
             return item
         try:
+            if not win32gui.IsWindow(item.hwnd):
+                return item
+
             if win32gui.IsIconic(item.hwnd):
+                # SW_SHOWNOACTIVATE restores the most recent size/position like
+                # SW_SHOWNORMAL, but deliberately does not steal operator focus.
                 win32gui.ShowWindow(item.hwnd, win32con.SW_SHOWNOACTIVATE)
 
+            target_rect = self._native_target_rect(target)
             refreshed_rect = self._rect_for_handle(item.hwnd) or item.rect
             monitor_primary = self._monitor_primary_for_rect(refreshed_rect)
-            overlap = rect_overlap_ratio(refreshed_rect, target)
-            same_monitor_role = (
-                monitor_primary is not None and monitor_primary == target.primary
+            wrong_monitor = monitor_primary is None or monitor_primary != target.primary
+            wrong_geometry = (
+                abs(refreshed_rect.left - target_rect.left) > 8
+                or abs(refreshed_rect.top - target_rect.top) > 8
+                or abs(refreshed_rect.width - target_rect.width) > 8
+                or abs(refreshed_rect.height - target_rect.height) > 8
             )
-            if overlap < 0.65 and not same_monitor_role:
+            if wrong_monitor or wrong_geometry or not self._is_visible(item.hwnd):
                 flags = (
                     win32con.SWP_NOACTIVATE
                     | win32con.SWP_SHOWWINDOW
@@ -481,14 +596,14 @@ class JwlUiaSecondaryWindowService(QObject):
                 win32gui.SetWindowPos(
                     item.hwnd,
                     win32con.HWND_TOPMOST,
-                    target.x,
-                    target.y,
-                    target.width,
-                    target.height,
+                    target_rect.left,
+                    target_rect.top,
+                    target_rect.width,
+                    target_rect.height,
                     flags,
                 )
 
-            refreshed_rect = self._rect_for_handle(item.hwnd) or refreshed_rect
+            refreshed_rect = self._rect_for_handle(item.hwnd) or target_rect
             return JwlSecondaryWindowInfo(
                 hwnd=item.hwnd,
                 pid=item.pid,
@@ -506,6 +621,29 @@ class JwlUiaSecondaryWindowService(QObject):
             )
         except (OSError, RuntimeError):
             return item
+
+    def _native_target_rect(self, target: DisplayInfo) -> WindowRect:
+        if win32api is None:
+            return WindowRect(
+                target.x,
+                target.y,
+                target.x + target.width,
+                target.y + target.height,
+            )
+        monitors: list[tuple[bool, WindowRect]] = []
+        try:
+            for monitor, _hdc, rect in win32api.EnumDisplayMonitors():
+                info = win32api.GetMonitorInfo(monitor)
+                left, top, right, bottom = info.get("Monitor", rect)
+                monitors.append(
+                    (
+                        bool(int(info.get("Flags", 0)) & 1),
+                        WindowRect(int(left), int(top), int(right), int(bottom)),
+                    )
+                )
+        except (OSError, RuntimeError, TypeError, ValueError):
+            monitors = []
+        return choose_native_monitor_rect(target, monitors)
 
     @staticmethod
     def _rect_for_wrapper(handle: int, wrapper: Any) -> WindowRect:
@@ -529,6 +667,15 @@ class JwlUiaSecondaryWindowService(QObject):
             return WindowRect(int(left), int(top), int(right), int(bottom))
         except (OSError, RuntimeError):
             return None
+
+    @staticmethod
+    def _is_window(handle: int) -> bool:
+        if handle <= 0 or win32gui is None:
+            return False
+        try:
+            return bool(win32gui.IsWindow(handle))
+        except (OSError, RuntimeError):
+            return False
 
     @staticmethod
     def _is_topmost(handle: int) -> bool:
