@@ -40,6 +40,7 @@ def make_candidate(*, hwnd: int, score: int) -> JwlSecondaryWindowInfo:
         topmost=True,
         title_bar_visible=False,
         has_jwl_core_window=True,
+        monitor_primary=False,
         score=score,
     )
 
@@ -67,6 +68,7 @@ def test_main_window_on_primary_is_penalized_even_with_jwl_core() -> None:
         topmost=False,
         title_bar_visible=True,
         has_jwl_core_window=True,
+        monitor_primary=True,
         target_display=display,
     )
     assert score < 650
@@ -82,6 +84,23 @@ def test_fullscreen_borderless_jwl_core_on_hall_display_is_selected() -> None:
         topmost=True,
         title_bar_visible=False,
         has_jwl_core_window=True,
+        monitor_primary=False,
+        target_display=display,
+    )
+    assert score >= 650
+
+
+def test_mixed_dpi_geometry_mismatch_keeps_native_secondary_candidate() -> None:
+    display = hall_display()
+    score = score_secondary_candidate(
+        title="JW Library",
+        class_name="ApplicationFrameWindow",
+        rect=WindowRect(-1920, 0, 0, 1080),
+        minimized=False,
+        topmost=True,
+        title_bar_visible=False,
+        has_jwl_core_window=True,
+        monitor_primary=False,
         target_display=display,
     )
     assert score >= 650
@@ -97,6 +116,7 @@ def test_unrelated_application_frame_host_is_never_a_candidate() -> None:
         topmost=True,
         title_bar_visible=False,
         has_jwl_core_window=False,
+        monitor_primary=False,
         target_display=display,
     )
     assert score < 0
@@ -112,6 +132,7 @@ def test_special_secondary_title_is_strongest_signal() -> None:
         topmost=True,
         title_bar_visible=False,
         has_jwl_core_window=False,
+        monitor_primary=False,
         target_display=display,
     )
     assert score >= 1000
