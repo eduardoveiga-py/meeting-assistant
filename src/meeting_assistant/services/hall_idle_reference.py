@@ -15,9 +15,10 @@ class HallIdleReferenceStore:
     @staticmethod
     def default_path() -> Path:
         root = os.getenv("LOCALAPPDATA")
+        filename = "hall-output-idle-reference-v1.png"
         if root:
-            return Path(root) / "MeetingAssistant" / "state" / "hall-idle-reference.png"
-        return Path.home() / ".meeting-assistant" / "state" / "hall-idle-reference.png"
+            return Path(root) / "MeetingAssistant" / "state" / filename
+        return Path.home() / ".meeting-assistant" / "state" / filename
 
     def load(self) -> QImage | None:
         if not self.path.exists():
