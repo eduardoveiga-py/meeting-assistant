@@ -8,6 +8,7 @@ from meeting_assistant.services.media_automation_service import (
     MediaSignalDetector,
     MediaSignalEvent,
     capture_region_for_secondary,
+    dark_pixel_ratio,
     pixel_difference,
     sensor_candidate_score,
     set_program_scene,
@@ -65,6 +66,13 @@ def test_pixel_difference_identical_frames_is_zero() -> None:
 def test_pixel_difference_uses_pixel_threshold() -> None:
     changed = pixel_difference(bytes([0, 0, 0, 0]), bytes([0, 20, 0, 20]))
     assert changed == 50.0
+
+
+def test_dark_pixel_ratio_rejects_bright_stable_media_as_idle() -> None:
+    idle = bytes([0] * 90 + [220] * 10)
+    media = bytes([20] * 20 + [120] * 80)
+    assert dark_pixel_ratio(idle) == 90.0
+    assert dark_pixel_ratio(media) == 20.0
 
 
 def test_detector_requires_debounce_to_start_and_end() -> None:
