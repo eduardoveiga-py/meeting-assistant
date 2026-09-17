@@ -104,7 +104,6 @@ class HallOutputWindow(QWidget):
         self.setGeometry(screen.geometry())
         self.show()
         self.setGeometry(screen.geometry())
-        self.raise_()
 
     def set_idle_image(self, image: QImage) -> None:
         self._idle_image = image.copy()
