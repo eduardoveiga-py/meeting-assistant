@@ -23,7 +23,11 @@ from PySide6.QtWidgets import (
 )
 
 from meeting_assistant.core.state import AppState, OperatingMode
-from meeting_assistant.services.display_service import DisplayInfo, DisplayService
+from meeting_assistant.services.display_service import (
+    DisplayInfo,
+    DisplayService,
+    resolve_hall_display,
+)
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService, JwlWindowInfo
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
@@ -63,6 +67,7 @@ class MainWindow(QMainWindow):
         self._preview_fade_group: QSequentialAnimationGroup | None = None
 
         self.state.automation_enabled = False
+        self.state.simulation_enabled = self.settings.simulation_enabled
 
         self.setWindowIcon(self.app_icon)
         self.resize(600, 780)
@@ -393,37 +398,59 @@ class MainWindow(QMainWindow):
 
     def _on_displays_changed(self, displays: list[DisplayInfo]) -> None:
         self.display_snapshot = displays
-        self.state.second_display_available = len(displays) >= 2
+        self.state.simulation_enabled = self.settings.simulation_enabled
+        selected = resolve_hall_display(displays, self.settings.hall_display_key)
+        self.state.second_display_available = selected is not None
         self._update_window_title()
 
-        if not displays:
+        if self.settings.simulation_enabled:
+            physical = (
+                f" Monitor físico preparado: {selected.label}."
+                if selected is not None
+                else " Nenhum monitor físico de Salão está disponível."
+            )
             self._set_component_status(
                 "Tela 2",
-                "error",
-                "● Tela 2",
-                "Nenhum monitor foi detectado pelo Windows.",
+                "warning",
+                "◌ Tela 2",
+                "Modo de simulação selecionado em Ajustes." + physical,
             )
             return
 
-        if len(displays) == 1:
-            display = displays[0]
+        if selected is not None:
+            selection = "automática" if not self.settings.hall_display_key else "fixa"
+            self._set_component_status(
+                "Tela 2",
+                "ok",
+                "● Tela 2",
+                f"Saída física ({selection}): {selected.label}",
+            )
+            return
+
+        if self.settings.hall_display_key:
             self._set_component_status(
                 "Tela 2",
                 "warning",
                 "○ Tela 2",
-                f"Somente 1 monitor detectado ({display.name}, {display.resolution}). "
-                "Modo de simulação ativo.",
+                "O monitor escolhido para o Salão não está conectado. "
+                "Conecte-o novamente ou escolha outro em Ajustes.",
             )
             return
 
-        secondary = next((item for item in displays if not item.primary), displays[1])
-        self._set_component_status(
-            "Tela 2",
-            "ok",
-            "● Tela 2",
-            f"Segunda tela detectada: {secondary.name} • {secondary.resolution} • "
-            f"posição {secondary.x},{secondary.y}",
-        )
+        if not displays:
+            message = "Nenhum monitor foi detectado pelo Windows."
+        elif len(displays) == 1:
+            only = displays[0]
+            message = (
+                f"Somente o monitor principal está disponível ({only.name}, {only.resolution}). "
+                "Conecte a segunda tela ou ative o modo de simulação em Ajustes."
+            )
+        else:
+            message = (
+                "Nenhuma tela não principal pôde ser resolvida. "
+                "Escolha explicitamente o monitor do Salão em Ajustes."
+            )
+        self._set_component_status("Tela 2", "warning", "○ Tela 2", message)
 
     def _on_jwl_status(self, running: bool, message: str) -> None:
         self._set_component_status(
@@ -480,15 +507,26 @@ class MainWindow(QMainWindow):
         self.mode_label.setText(message)
 
     def _show_settings(self) -> None:
-        dialog = SettingsDialog(self.settings, self.obs_scenes, self)
+        previous_obs_config = self._obs_config()
+        dialog = SettingsDialog(
+            self.settings,
+            self.obs_scenes,
+            self.display_snapshot,
+            self,
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
         dialog.apply_to(self.settings)
         self.settings_service.save(self.settings)
-        self._startup_scene_applied = False
-        self._set_component_status("OBS", "pending", "○ OBS", "Reconectando…")
-        self.obs.reconfigure(self._obs_config())
+        self.state.simulation_enabled = self.settings.simulation_enabled
+        self._on_displays_changed(self.displays.snapshot())
+        self._refresh_mode()
+
+        new_obs_config = self._obs_config()
+        if new_obs_config != previous_obs_config:
+            self._set_component_status("OBS", "pending", "○ OBS", "Reconectando…")
+            self.obs.reconfigure(new_obs_config)
 
     def _show_diagnostics(self) -> None:
         display_lines = "\n".join(
@@ -496,6 +534,16 @@ class MainWindow(QMainWindow):
             f"{display.name} • {display.resolution} • {display.x},{display.y}"
             for display in self.display_snapshot
         ) or "• nenhum monitor detectado"
+        hall_display = resolve_hall_display(
+            self.display_snapshot,
+            self.settings.hall_display_key,
+        )
+        if self.settings.simulation_enabled:
+            output_mode = "Simulação"
+        elif hall_display is not None:
+            output_mode = f"Físico — {hall_display.label}"
+        else:
+            output_mode = "Físico — monitor do Salão indisponível"
         jwl_lines = self._format_jwl_snapshot(self.jwl_snapshot)
 
         if not self.obs_connected:
@@ -504,6 +552,7 @@ class MainWindow(QMainWindow):
                 "Verificação do sistema",
                 "OBS WebSocket não está conectado.\n\n"
                 "Abra o OBS e confira host, porta e senha em Ajustes.\n\n"
+                f"Saída do Salão: {output_mode}\n\n"
                 f"Monitores detectados:\n{display_lines}\n\n"
                 f"JW Library:\n{jwl_lines}",
             )
@@ -528,6 +577,7 @@ class MainWindow(QMainWindow):
             f"Cena Program atual: {self.current_obs_scene or 'desconhecida'}\n\n"
             f"Cenas encontradas:\n{scene_lines}\n\n"
             f"Mapeamentos ausentes:\n{missing_text}\n\n"
+            f"Saída do Salão: {output_mode}\n\n"
             f"Monitores detectados:\n{display_lines}\n\n"
             f"JW Library:\n{jwl_lines}",
         )
@@ -595,13 +645,16 @@ class MainWindow(QMainWindow):
                 self.mode_label.setText(f"Salão: {readable[actual_mode]}")
             return
 
-        self.mode_label.setText(f"Simulação: {readable[self.state.current_mode]}")
+        if self.state.simulation_enabled:
+            self.mode_label.setText(f"Simulação: {readable[self.state.current_mode]}")
+        else:
+            self.mode_label.setText("Salão: aguardando OBS")
 
     def _update_window_title(self) -> None:
-        if self.state.second_display_available:
-            self.setWindowTitle("Meeting Assistant 3.0")
-        else:
-            self.setWindowTitle("Meeting Assistant 3.0 — Modo de Simulação")
+        title = "Meeting Assistant 3.0"
+        if self.settings.simulation_enabled:
+            title += " — Modo de Simulação"
+        self.setWindowTitle(title)
 
     def _set_component_status(
         self,
