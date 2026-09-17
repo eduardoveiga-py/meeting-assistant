@@ -24,6 +24,11 @@ class DisplayInfo:
     def resolution(self) -> str:
         return f"{self.width}×{self.height}"
 
+    @property
+    def label(self) -> str:
+        role = "Principal" if self.primary else "Secundária"
+        return f"{role} — {self.name} • {self.resolution} • {self.x},{self.y}"
+
 
 def build_display_key(
     *,
@@ -40,6 +45,21 @@ def build_display_key(
     if identity:
         return identity
     return f"{name.strip()}|{x},{y}|{width}x{height}"
+
+
+def resolve_hall_display(
+    displays: list[DisplayInfo],
+    selected_key: str,
+) -> DisplayInfo | None:
+    """Resolve a tela do Salão sem trocar silenciosamente uma escolha explícita.
+
+    Sem seleção salva, a primeira tela não principal é o padrão. Quando há uma
+    chave explícita, somente aquele monitor é aceito; se ele sumir, retorna None.
+    """
+
+    if selected_key:
+        return next((display for display in displays if display.key == selected_key), None)
+    return next((display for display in displays if not display.primary), None)
 
 
 def display_info_from_screen(screen: QScreen, *, primary: bool) -> DisplayInfo:
