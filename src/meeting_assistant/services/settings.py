@@ -5,7 +5,6 @@ import os
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
-
 DISPLAY_SETTINGS_VERSION = 1
 
 
