@@ -11,8 +11,8 @@ from PySide6.QtWidgets import QApplication
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.display_service import DisplayService, resolve_hall_display
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
-from meeting_assistant.services.jwl_secondary_window import JwlSecondaryWindowService
 from meeting_assistant.services.jwl_service import JwlService
+from meeting_assistant.services.jwl_uia_secondary_window import JwlUiaSecondaryWindowService
 from meeting_assistant.services.media_automation_service import (
     MediaAutomationConfig,
     MediaAutomationService,
@@ -90,9 +90,9 @@ def main() -> int:
             settings.hall_display_key,
         )
 
-    jwl_secondary = JwlSecondaryWindowService(
+    jwl_secondary = JwlUiaSecondaryWindowService(
         display_provider=current_hall_display,
-        interval_ms=450,
+        interval_ms=650,
     )
 
     jwl_probe = JwlProbeService(
