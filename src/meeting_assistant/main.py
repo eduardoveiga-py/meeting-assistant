@@ -9,7 +9,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from meeting_assistant.core.state import AppState
-from meeting_assistant.services.display_service import DisplayService
+from meeting_assistant.services.display_service import DisplayService, resolve_hall_display
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService
 from meeting_assistant.services.media_automation_service import (
@@ -56,6 +56,16 @@ def main() -> int:
     state = AppState(simulation_enabled=settings.simulation_enabled)
     state.automation_enabled = False
 
+    obs_config = ObsConnectionConfig(
+        host=settings.obs_host,
+        port=settings.obs_port,
+        password=settings.obs_password,
+    )
+    obs_controller = ObsController(poll_interval=0.5, preview_interval=0.15)
+    display_service = DisplayService(app)
+    jwl_service = JwlService(interval_ms=2000)
+    visual_probe = ObsVisualProbeService()
+
     def current_obs_config() -> ObsConnectionConfig:
         return ObsConnectionConfig(
             host=settings.obs_host,
@@ -72,19 +82,32 @@ def main() -> int:
             for scene in (settings.scene_background, settings.scene_speaker)
             if scene
         )
+        hall_display = None
+        if not settings.simulation_enabled:
+            hall_display = resolve_hall_display(
+                display_service.snapshot(),
+                settings.hall_display_key,
+            )
+        hall_bounds = (
+            (
+                hall_display.x,
+                hall_display.y,
+                hall_display.width,
+                hall_display.height,
+            )
+            if hall_display is not None
+            else None
+        )
         return MediaAutomationConfig(
             obs=current_obs_config(),
             sensor_source=settings.scene_media,
             media_scene=settings.scene_media,
             eligible_return_scenes=eligible,
             preferred_return_scene=settings.scene_speaker,
+            hall_display_bounds=hall_bounds,
+            simulation_enabled=settings.simulation_enabled,
         )
 
-    obs_config = current_obs_config()
-    obs_controller = ObsController(poll_interval=0.5, preview_interval=0.15)
-    display_service = DisplayService(app)
-    jwl_service = JwlService(interval_ms=2000)
-    visual_probe = ObsVisualProbeService()
     jwl_probe = JwlProbeService(
         visual_probe=visual_probe,
         config_provider=current_probe_config,
