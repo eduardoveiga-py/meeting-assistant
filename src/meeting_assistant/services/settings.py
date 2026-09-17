@@ -21,6 +21,9 @@ class AppSettings:
     scene_speaker: str = "Palco"
     scene_media: str = "Mídias"
     scene_zoom: str = "Zoom"
+    zoom_join_url: str = ""
+    obs_executable: str = ""
+    zoom_executable: str = ""
 
 
 class SettingsService:
