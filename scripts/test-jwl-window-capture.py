@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import ctypes
 import sys
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QCloseEvent, QPixmap
+from PySide6.QtGui import QCloseEvent, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -18,12 +19,30 @@ from meeting_assistant.services.display_service import (
     DisplayService,
     resolve_hall_display,
 )
-from meeting_assistant.services.jwl_service import JwlService
 from meeting_assistant.services.jwl_window_capture import (
     JwlWindowCapture,
-    select_jwl_capture_target,
+    monitor_index_for_display,
 )
 from meeting_assistant.services.settings import SettingsService
+
+WDA_EXCLUDEFROMCAPTURE = 0x00000011
+
+
+def _exclude_window_from_capture(hwnd: int) -> bool:
+    if sys.platform != "win32":
+        return False
+    try:
+        user32 = ctypes.windll.user32
+        user32.SetWindowDisplayAffinity.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        user32.SetWindowDisplayAffinity.restype = ctypes.c_bool
+        return bool(
+            user32.SetWindowDisplayAffinity(
+                ctypes.c_void_p(hwnd),
+                WDA_EXCLUDEFROMCAPTURE,
+            )
+        )
+    except (AttributeError, OSError):
+        return False
 
 
 class CapturePreviewDialog(QDialog):
@@ -35,7 +54,8 @@ class CapturePreviewDialog(QDialog):
     ) -> None:
         super().__init__()
         self.capture = capture
-        self.setWindowTitle("Meeting Assistant — teste de captura direta do JW Library")
+        self._affinity_applied = False
+        self.setWindowTitle("Meeting Assistant — prova de captura da Tela do Salão")
         self.resize(1050, 690)
         self.setMinimumSize(720, 480)
 
@@ -43,7 +63,7 @@ class CapturePreviewDialog(QDialog):
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(8)
 
-        title = QLabel("CAPTURA DIRETA — JW LIBRARY")
+        title = QLabel("CAPTURA DIRETA — TELA DO SALÃO")
         title.setStyleSheet("font-size: 16px; font-weight: 700;")
         root.addWidget(title)
 
@@ -63,9 +83,11 @@ class CapturePreviewDialog(QDialog):
         root.addWidget(self.preview, 1)
 
         help_text = QLabel(
-            "Teste principal: com o vídeo/foto rodando, arraste esta janela e cubra a janela "
-            "do JW Library na Tela 2. O preview deve continuar atualizando. "
-            "Não minimize nem feche a janela-fonte neste teste."
+            "Este teste captura diretamente a Tela do Salão, sem depender de descobrir a "
+            "janela fullscreen do JW Library. Primeiro confirme imagem e vídeo fluidos. "
+            "Depois arraste esta janela de teste para cima da Tela do Salão: ela está marcada "
+            "para ser excluída da captura e, portanto, o preview deve continuar mostrando o "
+            "conteúdo do JW Library por baixo, sem efeito espelho/recursão."
         )
         help_text.setWordWrap(True)
         help_text.setStyleSheet("color: #aaa;")
@@ -81,6 +103,17 @@ class CapturePreviewDialog(QDialog):
         self.capture.frame_ready.connect(self._on_frame)
         self.capture.status_changed.connect(self._on_status)
 
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt override
+        super().showEvent(event)
+        if not self._affinity_applied:
+            self._affinity_applied = _exclude_window_from_capture(int(self.winId()))
+            suffix = (
+                " • janela de teste excluída da captura"
+                if self._affinity_applied
+                else " • aviso: exclusão da janela de teste não pôde ser ativada"
+            )
+            self.source_label.setText(self.source_label.text() + suffix)
+
     def _on_frame(self, image: object, fps: float, width: int, height: int) -> None:
         pixmap = QPixmap.fromImage(image)
         scaled = pixmap.scaled(
@@ -94,8 +127,9 @@ class CapturePreviewDialog(QDialog):
         )
 
     def _on_status(self, ok: bool, message: str) -> None:
-        self.source_label.setText(message)
-        if not ok:
+        if ok:
+            self.source_label.setText(self.source_label.text() + f"\n{message}")
+        else:
             self.preview.clear()
             self.preview.setText(message)
 
@@ -104,68 +138,43 @@ class CapturePreviewDialog(QDialog):
         super().closeEvent(event)
 
 
-def _candidate_diagnostics(windows: list[object]) -> str:
-    if not windows:
-        return "Nenhuma janela candidata do JW Library foi classificada."
-
-    lines = ["Janelas candidatas classificadas:"]
-    for window in windows[:8]:
-        monitor = (
-            "principal"
-            if window.monitor_primary is True
-            else "secundário"
-            if window.monitor_primary is False
-            else "monitor desconhecido"
-        )
-        lines.append(
-            f"• HWND {window.hwnd} • {window.size} • {monitor} • "
-            f"{window.process_name} • {window.title or '(sem título)'}"
-        )
-    return "\n".join(lines)
-
-
 def main() -> int:
     app = QApplication(sys.argv)
-    app.setApplicationName("Meeting Assistant Capture Test")
+    app.setApplicationName("Meeting Assistant Hall Capture Test")
 
     settings = SettingsService().load()
     displays = DisplayService(app).snapshot()
     hall_display = resolve_hall_display(displays, settings.hall_display_key)
 
-    jwl_service = JwlService()
-    windows = jwl_service.scan(include_hidden=False)
-    target = select_jwl_capture_target(windows, hall_display)
-
-    if target is None:
-        hall_text = hall_display.label if hall_display else "nenhuma Tela do Salão resolvida"
+    if hall_display is None:
         QMessageBox.critical(
             None,
-            "Saída do JW Library não encontrada",
-            "Não encontrei uma janela visível do JW Library na Tela do Salão.\n\n"
-            f"Tela resolvida: {hall_text}\n\n"
-            f"{_candidate_diagnostics(windows)}\n\n"
-            "Deixe a saída do JW Library aberta e envie uma captura desta mensagem.",
+            "Tela do Salão não encontrada",
+            "Não foi possível resolver a Tela do Salão configurada.\n\n"
+            "Abra Ajustes no Meeting Assistant e selecione a segunda tela física.",
         )
         return 2
 
-    window = target.window
-    hall_text = hall_display.label if hall_display else "fallback de diagnóstico"
-    selection = (
-        "posição/área da Tela 2"
-        if target.overlap_area > 0
-        else "monitor físico secundário (fallback DPI)"
-    )
+    monitor_index = monitor_index_for_display(displays, hall_display)
+    if monitor_index is None:
+        QMessageBox.critical(
+            None,
+            "Índice da Tela do Salão não encontrado",
+            f"Tela resolvida: {hall_display.label}\n\n"
+            "A tela existe, mas não foi possível mapear o índice de captura.",
+        )
+        return 3
+
     source_description = (
-        f"Alvo: HWND {window.hwnd} • {window.size} • {window.title or window.process_name}\n"
-        f"Tela do Salão: {hall_text}\n"
-        f"Seleção: {selection}"
+        f"Tela do Salão: {hall_display.label}\n"
+        f"Windows Graphics Capture: monitor {monitor_index}"
     )
 
     capture = JwlWindowCapture(ui_interval_ms=33)
     dialog = CapturePreviewDialog(capture, source_description=source_description)
     dialog.show()
 
-    if not capture.start(window.hwnd):
+    if not capture.start_monitor(monitor_index):
         return app.exec()
 
     return app.exec()
