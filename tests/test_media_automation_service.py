@@ -4,6 +4,7 @@ from meeting_assistant.services.media_automation_service import (
     MediaSignalDetector,
     MediaSignalEvent,
     active_region_signal,
+    classify_initial_signal,
     pixel_difference,
     select_trigger_hwnds,
     sensor_candidate_score,
@@ -44,6 +45,12 @@ def test_pixel_difference_identical_frames_is_zero() -> None:
 def test_pixel_difference_uses_pixel_threshold() -> None:
     changed = pixel_difference(bytes([0, 0, 0, 0]), bytes([0, 20, 0, 20]))
     assert changed == 50.0
+
+
+def test_initial_signal_distinguishes_idle_media_and_ambiguous() -> None:
+    assert classify_initial_signal(0.4) is False
+    assert classify_initial_signal(91.0) is True
+    assert classify_initial_signal(2.0) is None
 
 
 def test_detector_requires_debounce_to_start_and_end() -> None:
