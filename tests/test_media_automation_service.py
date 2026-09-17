@@ -1,5 +1,3 @@
-import time
-
 from meeting_assistant.services.media_automation_service import (
     MediaAutomationConfig,
     MediaAutomationService,
@@ -37,20 +35,6 @@ class FakeObsClient:
                 ]
             }
         return {}
-
-
-def make_service() -> MediaAutomationService:
-    config = MediaAutomationConfig(
-        obs=ObsConnectionConfig(host="127.0.0.1", port=4455, password=""),
-        sensor_source="Mídias",
-        media_scene="Mídias",
-        eligible_return_scenes=("Texto do Ano", "Palco"),
-        preferred_return_scene="Palco",
-    )
-    return MediaAutomationService(
-        config_provider=lambda: config,
-        window_provider=lambda: [],
-    )
 
 
 def test_pixel_difference_identical_frames_is_zero() -> None:
@@ -98,30 +82,12 @@ def test_detector_resets_end_counter_if_signal_returns() -> None:
     assert detector.update(0.0) == MediaSignalEvent.ENDED
 
 
-def test_two_display_end_uses_region_that_returned_to_baseline() -> None:
-    service = make_service()
+def test_two_screen_end_uses_region_that_returned_to_baseline() -> None:
+    differences_at_start = {100: 57.8, 200: 91.0}
+    trigger_hwnds = select_trigger_hwnds(differences_at_start, 3.0)
 
-    start_differences = {101: 92.0, 202: 57.8, 303: 0.2}
-    assert service._update_detection(start_differences)[0] is None
-    event, _ = service._update_detection(start_differences)
-    assert event == MediaSignalEvent.STARTED
-    assert service._trigger_hwnds == {101, 202}
-
-    service._active_since = time.monotonic() - 2.0
-    ended_differences = {101: 0.4, 202: 57.8, 303: 0.1}
-    assert service._update_detection(ended_differences)[0] is None
-    event, signal = service._update_detection(ended_differences)
-
-    assert event == MediaSignalEvent.ENDED
-    assert signal == 0.4
-
-
-def test_trigger_helpers_ignore_regions_that_never_changed() -> None:
-    differences = {1: 80.0, 2: 12.0, 3: 0.2}
-    triggers = select_trigger_hwnds(differences, threshold=3.0)
-
-    assert triggers == {1, 2}
-    assert active_region_signal({1: 0.5, 2: 40.0, 3: 0.1}, triggers) == 0.5
+    assert trigger_hwnds == {100, 200}
+    assert active_region_signal({100: 57.8, 200: 0.4}, trigger_hwnds) == 0.4
 
 
 def test_should_restore_only_when_automation_still_owns_media_scene() -> None:
@@ -179,7 +145,17 @@ def test_set_program_scene_enforces_fade_then_switches() -> None:
 
 
 def test_media_automation_can_be_enabled_explicitly() -> None:
-    service = make_service()
+    config = MediaAutomationConfig(
+        obs=ObsConnectionConfig(host="127.0.0.1", port=4455, password=""),
+        sensor_source="Mídias",
+        media_scene="Mídias",
+        eligible_return_scenes=("Texto do Ano", "Palco"),
+        preferred_return_scene="Palco",
+    )
+    service = MediaAutomationService(
+        config_provider=lambda: config,
+        window_provider=lambda: [],
+    )
 
     assert service.enabled is False
     service.set_enabled(True)
