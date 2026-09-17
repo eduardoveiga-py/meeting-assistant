@@ -96,6 +96,13 @@ def pixel_difference(reference: bytes, current: bytes) -> float:
     return (changed / len(reference)) * 100.0
 
 
+def dark_pixel_ratio(frame: bytes, *, threshold: int = 48) -> float:
+    if not frame:
+        return 0.0
+    dark = sum(1 for value in frame if value <= threshold)
+    return (dark / len(frame)) * 100.0
+
+
 def sensor_candidate_score(
     source_name: str,
     input_kind: str | None,
@@ -164,7 +171,7 @@ def capture_region_for_secondary(window: JwlSecondaryWindowInfo) -> CaptureRegio
 
 
 class MediaAutomationService(QObject):
-    """Automate Palco/Mídias from the real JW Library second-display window."""
+    """Automate Palco/Mídias from pixels actually visible on the Hall display."""
 
     status_changed = Signal(str)
     signal_changed = Signal(str, float, bool)
@@ -175,14 +182,16 @@ class MediaAutomationService(QObject):
     def __init__(
         self,
         config_provider: Callable[[], MediaAutomationConfig],
-        secondary_window_provider: Callable[[], JwlSecondaryWindowInfo | None],
+        secondary_window_provider: Callable[[], JwlSecondaryWindowInfo | None] | None = None,
         *,
+        capture_region_provider: Callable[[], CaptureRegion | None] | None = None,
         reference_store: JwlIdleReferenceStore | None = None,
         sample_interval_seconds: float = 0.18,
     ) -> None:
         super().__init__()
         self._config_provider = config_provider
         self._secondary_window_provider = secondary_window_provider
+        self._capture_region_provider = capture_region_provider
         self._reference_store = reference_store or JwlIdleReferenceStore()
         self._sample_interval = max(0.12, sample_interval_seconds)
         self._stop_event = threading.Event()
@@ -200,7 +209,7 @@ class MediaAutomationService(QObject):
         if enabled:
             self._enabled_event.set()
             self._last_signal_emit_at = 0.0
-            self._emit_status("Automação ativada; localizando a saída do JW Library…")
+            self._emit_status("Automação ativada; lendo a Tela do Salão…")
         else:
             self._enabled_event.clear()
             self._emit_status("Automação pausada; monitoramento de mídia suspenso.")
@@ -232,13 +241,13 @@ class MediaAutomationService(QObject):
         sensor: JwlScreenSensor | None = None
         active_config: MediaAutomationConfig | None = None
         reference = self._reference_store.load()
-        active_hwnd = 0
+        active_region_key: tuple[int, int, int, int] | None = None
         initial_route_pending = True
         idle_hits = 0
 
         while not self._stop_event.is_set():
             if not self._enabled_event.is_set():
-                active_hwnd = 0
+                active_region_key = None
                 initial_route_pending = True
                 idle_hits = 0
                 self._detector.reset()
@@ -255,20 +264,29 @@ class MediaAutomationService(QObject):
                 idle_hits = 0
                 self._detector.reset()
 
-            window = self._secondary_window_provider()
-            if window is None:
+            window = (
+                self._secondary_window_provider()
+                if self._secondary_window_provider is not None
+                else None
+            )
+            if window is not None and (window.minimized or not window.visible):
                 self._emit_status(
-                    "Automação aguardando a saída secundária do JW Library na Tela do Salão…"
-                )
-                active_hwnd = 0
-                self._stop_event.wait(0.35)
-                continue
-
-            if window.minimized or not window.visible:
-                self._emit_status(
-                    "Saída JWL encontrada; aguardando restauração segura na Tela do Salão…"
+                    "Saída JWL localizada; aguardando o guardião restaurá-la na Tela do Salão…"
                 )
                 self._stop_event.wait(0.25)
+                continue
+
+            region = (
+                self._capture_region_provider()
+                if self._capture_region_provider is not None
+                else None
+            )
+            if region is None and window is not None:
+                region = capture_region_for_secondary(window)
+            if region is None:
+                self._emit_status("Automação aguardando a Tela do Salão física…")
+                active_region_key = None
+                self._stop_event.wait(0.35)
                 continue
 
             if sensor is None:
@@ -279,13 +297,12 @@ class MediaAutomationService(QObject):
                     self._stop_event.wait(1.0)
                     continue
 
-            if active_hwnd != window.hwnd:
-                active_hwnd = window.hwnd
+            region_key = (region.left, region.top, region.width, region.height)
+            if active_region_key != region_key:
+                active_region_key = region_key
                 initial_route_pending = True
                 idle_hits = 0
                 self._detector.reset()
-
-            region = capture_region_for_secondary(window)
 
             if reference is None:
                 reference = self._calibrate_first_reference(sensor, region)
@@ -302,7 +319,7 @@ class MediaAutomationService(QObject):
                 self._emit_status(
                     "Referência do Texto do Ano salva; iniciando automação em Palco."
                 )
-                self.signal_changed.emit("JW Library / Tela do Salão", 0.0, False)
+                self.signal_changed.emit("Tela do Salão / pixels nativos", 0.0, False)
                 self.media_ended.emit(config.preferred_return_scene or "")
                 initial_route_pending = False
                 self._detector.reset()
@@ -312,7 +329,7 @@ class MediaAutomationService(QObject):
             frame = sensor.capture(region)
             if frame is None:
                 self._emit_status(
-                    "Saída JWL localizada, mas o frame ainda não pôde ser lido; tentando novamente…"
+                    "Tela do Salão encontrada, mas o frame ainda não pôde ser lido; tentando novamente…"
                 )
                 self._stop_event.wait(0.3)
                 continue
@@ -343,7 +360,7 @@ class MediaAutomationService(QObject):
                 elif event == MediaSignalEvent.ENDED:
                     self.media_ended.emit(config.preferred_return_scene or "")
                     self._emit_status(
-                        "Saída JWL está em repouso; mantendo/recuperando Palco."
+                        "Tela do Salão está em repouso; mantendo/recuperando Palco."
                     )
                     initial_route_pending = False
                 self._stop_event.wait(self._sample_interval)
@@ -374,7 +391,7 @@ class MediaAutomationService(QObject):
         )
         previous: bytes | None = None
         stable_hits = 0
-        deadline = time.monotonic() + 5.0
+        deadline = time.monotonic() + 6.0
 
         while (
             time.monotonic() < deadline
@@ -385,6 +402,19 @@ class MediaAutomationService(QObject):
             if frame is None:
                 self._stop_event.wait(0.18)
                 continue
+
+            # The configured idle screen is intentionally black with light year
+            # text/logo. Refuse to learn a bright stable photo as "idle" if the
+            # app is started for the first time while media is already showing.
+            if dark_pixel_ratio(frame) < 65.0:
+                stable_hits = 0
+                previous = frame
+                self._emit_status(
+                    "Aguardando o Texto do Ano para criar a referência de repouso…"
+                )
+                self._stop_event.wait(0.18)
+                continue
+
             if previous is None:
                 previous = frame
                 self._stop_event.wait(0.18)
@@ -405,7 +435,7 @@ class MediaAutomationService(QObject):
             self._stop_event.wait(0.18)
 
         self._emit_status(
-            "Não foi possível calibrar o repouso; mantenha o Texto do Ano parado e tente novamente."
+            "Não foi possível calibrar o repouso; deixe o Texto do Ano visível e tente novamente."
         )
         return None
 
@@ -437,7 +467,7 @@ class MediaAutomationService(QObject):
             return
         self._last_signal_emit_at = now
         self.signal_changed.emit(
-            "JW Library / Tela do Salão",
+            "Tela do Salão / pixels nativos",
             changed_percent,
             self._detector.active,
         )
