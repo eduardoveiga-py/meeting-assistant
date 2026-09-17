@@ -26,8 +26,10 @@ from meeting_assistant.core.state import AppState, OperatingMode
 from meeting_assistant.services.display_service import DisplayInfo, DisplayService
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService, JwlWindowInfo
+from meeting_assistant.services.meeting_launcher import LaunchSummary, MeetingLauncherService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.settings import AppSettings, SettingsService
+from meeting_assistant.services.zoom_hall_service import ZoomHallService
 from meeting_assistant.ui.settings_dialog import SettingsDialog
 
 
@@ -43,6 +45,8 @@ class MainWindow(QMainWindow):
         display_service: DisplayService,
         jwl_service: JwlService,
         jwl_probe: JwlProbeService,
+        meeting_launcher: MeetingLauncherService,
+        zoom_hall_service: ZoomHallService,
         app_icon: QIcon | None = None,
     ) -> None:
         super().__init__()
@@ -53,6 +57,8 @@ class MainWindow(QMainWindow):
         self.displays = display_service
         self.jwl = jwl_service
         self.jwl_probe = jwl_probe
+        self.launcher = meeting_launcher
+        self.zoom_hall = zoom_hall_service
         self.app_icon = app_icon or QIcon()
         self.obs_connected = False
         self.obs_scenes: list[str] = []
@@ -73,6 +79,7 @@ class MainWindow(QMainWindow):
         self._connect_obs_signals()
         self._connect_display_signals()
         self._connect_jwl_signals()
+        self._connect_launcher_signals()
         self._on_displays_changed(self.displays.snapshot())
         self._on_jwl_snapshot(self.jwl.snapshot())
         self._set_automation_ui(False)
@@ -168,6 +175,14 @@ class MainWindow(QMainWindow):
         controls.addSpacing(2)
         controls.addWidget(self._section_label("SISTEMA"))
 
+        self.start_meeting_button = QPushButton("▶️ Iniciar reunião")
+        self.start_meeting_button.setToolTip(
+            "Abre OBS, JW Library e Zoom. Se o link estiver configurado, "
+            "o Zoom entra diretamente na reunião."
+        )
+        self.start_meeting_button.clicked.connect(self._start_meeting)
+        controls.addWidget(self.start_meeting_button)
+
         system_grid = QGridLayout()
         system_grid.setHorizontalSpacing(6)
         diagnostics = QPushButton("🩺 Verificar")
@@ -217,7 +232,7 @@ class MainWindow(QMainWindow):
 
         root.addWidget(controls_card, 1)
 
-        footer = QLabel("OBS é a fonte de verdade • fluxo principal: Palco ↔ Mídias")
+        footer = QLabel("OBS é a fonte de verdade • Zoom → Salão é uma saída local independente")
         footer.setObjectName("Footer")
         footer.setAlignment(Qt.AlignCenter)
         root.addWidget(footer)
@@ -242,12 +257,25 @@ class MainWindow(QMainWindow):
         self.jwl_probe.progress_changed.connect(self._on_jwl_probe_progress)
         self.jwl_probe.finished.connect(self._on_jwl_probe_finished)
 
+    def _connect_launcher_signals(self) -> None:
+        self.launcher.progress_changed.connect(self._on_launch_progress)
+        self.launcher.finished.connect(self._on_launch_finished)
+        self.zoom_hall.status_changed.connect(self._on_zoom_hall_status)
+        self.zoom_hall.active_changed.connect(self._on_zoom_hall_active)
+
     def _section_label(self, text: str) -> QLabel:
         label = QLabel(text)
         label.setObjectName("SectionTitle")
         return label
 
     def _select_mode(self, mode: OperatingMode) -> None:
+        if mode is OperatingMode.ZOOM:
+            self.zoom_hall.toggle()
+            return
+
+        if self.zoom_hall.active:
+            self.zoom_hall.restore_jwl()
+
         if self.obs_connected:
             scene_name = self._scene_for_mode(mode)
             if self.obs_scenes and scene_name not in self.obs_scenes:
@@ -340,7 +368,7 @@ class MainWindow(QMainWindow):
     def _on_obs_scene(self, scene_name: str) -> None:
         self.current_obs_scene = scene_name
         mode = self._mode_for_scene(scene_name)
-        if mode is not None:
+        if mode is not None and not self.zoom_hall.active:
             self.state.set_mode(mode)
         self._refresh_mode()
         self._start_preview_fade()
@@ -476,6 +504,82 @@ class MainWindow(QMainWindow):
         dialog.setDetailedText(report)
         dialog.exec()
 
+    def _start_meeting(self) -> None:
+        if not self.settings.zoom_join_url.strip():
+            self.mode_label.setText(
+                "Abrindo programas; configure o link da reunião do Zoom em Ajustes."
+            )
+        self.start_meeting_button.setEnabled(False)
+        self.start_meeting_button.setText("⏳ Iniciando reunião…")
+        if not self.launcher.start_meeting():
+            self.start_meeting_button.setEnabled(True)
+            self.start_meeting_button.setText("▶️ Iniciar reunião")
+
+    def _on_launch_progress(self, message: str) -> None:
+        self.mode_label.setText(message)
+
+    def _on_launch_finished(self, payload: object) -> None:
+        self.start_meeting_button.setEnabled(True)
+        self.start_meeting_button.setText("▶️ Iniciar reunião")
+        if not isinstance(payload, LaunchSummary):
+            self.mode_label.setText("Inicialização concluída.")
+            return
+
+        if payload.zoom_running:
+            zoom_text = "● Zoom"
+            zoom_state = "ok"
+            if payload.zoom_meeting_active:
+                zoom_tooltip = "Zoom aberto e reunião detectada."
+            elif self.settings.zoom_join_url:
+                zoom_tooltip = "Zoom aberto; aguardando a janela da reunião."
+            else:
+                zoom_tooltip = "Zoom aberto; configure o link da reunião em Ajustes."
+        else:
+            zoom_text = "○ Zoom"
+            zoom_state = "error"
+            zoom_tooltip = "Zoom não foi detectado após a tentativa de inicialização."
+
+        self._set_component_status("Zoom", zoom_state, zoom_text, zoom_tooltip)
+        self.mode_label.setText(" • ".join(payload.notes[-3:]) or "Inicialização concluída.")
+
+    def _on_zoom_hall_status(self, ok: bool, message: str) -> None:
+        self._set_component_status(
+            "Zoom",
+            "ok" if ok else "warning",
+            "● Zoom" if ok else "○ Zoom",
+            message,
+        )
+        self.mode_label.setText(message)
+
+    def _on_zoom_hall_active(self, active: bool, message: str) -> None:
+        button = self.mode_buttons[OperatingMode.ZOOM]
+        if active:
+            self.state.set_mode(OperatingMode.ZOOM)
+            button.setText("⏹️ Parar Zoom → Salão")
+            button.setChecked(True)
+            if self.state.automation_enabled:
+                self.automation_status.setText(
+                    "Zoom → Salão ativo • sensor do JW Library suspenso temporariamente"
+                )
+            self.zoom_output_label.setText(
+                "Salão recebe: Zoom local • Zoom remoto continua recebendo OBS Virtual Camera"
+            )
+            self.mode_label.setText("Salão: Zoom")
+            return
+
+        button.setText("💻 Zoom → Salão")
+        self.zoom_output_label.setText(
+            "Zoom recebe: OBS Virtual Camera • transições feitas pelo OBS"
+        )
+        if self.current_obs_scene:
+            mode = self._mode_for_scene(self.current_obs_scene)
+            if mode is not None:
+                self.state.set_mode(mode)
+        self._refresh_mode()
+        if self.state.automation_enabled:
+            self.automation_status.setText("Automação retomando leitura da Tela do Salão…")
+        self.mode_label.setText(message)
+
     def _on_obs_error(self, message: str) -> None:
         self.mode_label.setText(message)
 
@@ -513,7 +617,6 @@ class MainWindow(QMainWindow):
             "Fundo": self.settings.scene_background,
             "Palco": self.settings.scene_speaker,
             "Mídia": self.settings.scene_media,
-            "Zoom → Salão": self.settings.scene_zoom,
         }
         missing = [
             f"{label}: {scene}"
@@ -559,7 +662,7 @@ class MainWindow(QMainWindow):
             OperatingMode.BACKGROUND: self.settings.scene_background,
             OperatingMode.SPEAKER: self.settings.scene_speaker,
             OperatingMode.MEDIA: self.settings.scene_media,
-            OperatingMode.ZOOM: self.settings.scene_zoom,
+            OperatingMode.ZOOM: self.settings.scene_speaker,
         }[mode]
 
     def _mode_for_scene(self, scene_name: str) -> OperatingMode | None:
@@ -567,11 +670,16 @@ class MainWindow(QMainWindow):
             self.settings.scene_background: OperatingMode.BACKGROUND,
             self.settings.scene_speaker: OperatingMode.SPEAKER,
             self.settings.scene_media: OperatingMode.MEDIA,
-            self.settings.scene_zoom: OperatingMode.ZOOM,
         }
         return mappings.get(scene_name)
 
     def _refresh_mode(self) -> None:
+        if self.zoom_hall.active:
+            for mode, button in self.mode_buttons.items():
+                button.setChecked(mode is OperatingMode.ZOOM)
+            self.mode_label.setText("Salão: Zoom")
+            return
+
         actual_mode = None
         if self.obs_connected and self.current_obs_scene:
             actual_mode = self._mode_for_scene(self.current_obs_scene)
@@ -585,7 +693,7 @@ class MainWindow(QMainWindow):
             OperatingMode.BACKGROUND: "Fundo",
             OperatingMode.SPEAKER: "Palco",
             OperatingMode.MEDIA: "Mídia",
-            OperatingMode.ZOOM: "Zoom remoto",
+            OperatingMode.ZOOM: "Zoom → Salão",
         }
 
         if self.obs_connected and self.current_obs_scene:
