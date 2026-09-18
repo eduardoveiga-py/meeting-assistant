@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import logging
 import queue
 import threading
 import time
@@ -9,7 +10,34 @@ from dataclasses import dataclass
 from typing import Any
 
 import obsws_python as obs
+from obsws_python.error import OBSSDKRequestError
 from PySide6.QtCore import QObject, Signal
+from websocket import WebSocketTimeoutException
+
+
+def is_obs_not_ready(exc: BaseException | None) -> bool:
+    return isinstance(exc, OBSSDKRequestError) and exc.code == 207
+
+
+class _TransientObsLogFilter(logging.Filter):
+    """The controller reports these expected lifecycle errors through its UI.
+
+    Keep all other SDK errors and tracebacks, including authentication failures.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        exc = record.exc_info[1] if record.exc_info else None
+        return not (
+            is_obs_not_ready(exc)
+            or isinstance(exc, (TimeoutError, ConnectionRefusedError, WebSocketTimeoutException))
+        )
+
+
+def _install_transient_log_filter() -> None:
+    for name in ("obsws_python.reqs.ReqClient", "obsws_python.baseclient.ObsClient"):
+        logger = logging.getLogger(name)
+        if not any(isinstance(item, _TransientObsLogFilter) for item in logger.filters):
+            logger.addFilter(_TransientObsLogFilter())
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +128,7 @@ class ObsController(QObject):
 
     def __init__(self, poll_interval: float = 0.5, preview_interval: float = 0.15) -> None:
         super().__init__()
+        _install_transient_log_filter()
         self._poll_interval = max(0.25, poll_interval)
         self._preview_interval = max(0.12, preview_interval)
         self._commands: queue.Queue[tuple[str, object | None]] = queue.Queue()
@@ -108,6 +137,7 @@ class ObsController(QObject):
         self._config: ObsConnectionConfig | None = None
         self._client: obs.ReqClient | None = None
         self._last_connected: bool | None = None
+        self._last_connection_status: tuple[bool, str] | None = None
         self._last_scenes: list[str] = []
         self._last_scene: str | None = None
         self._last_preview_error: str | None = None
@@ -180,14 +210,19 @@ class ObsController(QObject):
                     next_poll = 0.0
                     next_preview = 0.0
                 else:
-                    next_reconnect = now + 2.0
+                    # Count the retry delay after a potentially blocking timeout.
+                    next_reconnect = time.monotonic() + 2.0
 
             if self._client is not None and now >= next_poll:
                 self._poll()
+                if self._client is None:
+                    next_reconnect = time.monotonic() + 2.0
                 next_poll = now + self._poll_interval
 
             if self._client is not None and now >= next_preview:
                 self._refresh_preview()
+                if self._client is None:
+                    next_reconnect = time.monotonic() + 2.0
                 next_preview = now + self._preview_interval
 
         self._disconnect()
@@ -203,16 +238,16 @@ class ObsController(QObject):
                 password=self._config.password,
                 timeout=2,
             )
+            self._client = client
             version = client.send("GetVersion", raw=True)
             obs_version = version.get("obsVersion", "versão desconhecida")
-            ensure_fade_transition(client)
-            self._client = client
-            self._set_connected(True, f"OBS {obs_version} conectado")
             self._refresh_scene_list()
             self._refresh_current_scene()
+            ensure_fade_transition(client)
+            self._set_connected(True, f"OBS {obs_version} conectado")
             return True
         except Exception as exc:
-            self._client = None
+            self._disconnect()
             self._set_connected(False, self._friendly_connection_error(exc))
             return False
 
@@ -266,6 +301,10 @@ class ObsController(QObject):
             self._last_preview_error = None
             self.preview_changed.emit(decoded)
         except Exception as exc:
+            if is_obs_not_ready(exc):
+                self._set_connected(False, self._friendly_connection_error(exc))
+                self._disconnect()
+                return
             self._emit_preview_error(f"Preview indisponível: {exc}")
 
     def _handle_set_scene(self, scene_name: str) -> None:
@@ -290,8 +329,10 @@ class ObsController(QObject):
         self.preview_error.emit(message)
 
     def _set_connected(self, connected: bool, message: str) -> None:
-        if self._last_connected == connected and connected:
+        status = (connected, message)
+        if self._last_connection_status == status:
             return
+        self._last_connection_status = status
         self._last_connected = connected
         self.connected_changed.emit(connected, message)
 
@@ -313,6 +354,8 @@ class ObsController(QObject):
 
     @staticmethod
     def _friendly_connection_error(exc: Exception) -> str:
+        if is_obs_not_ready(exc):
+            return "OBS está iniciando ou encerrando; aguardando ficar disponível."
         text = str(exc).strip()
         lowered = text.lower()
         if "authentication" in lowered or "identify" in lowered or "4009" in lowered:

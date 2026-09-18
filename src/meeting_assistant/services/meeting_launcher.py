@@ -31,6 +31,7 @@ class LaunchSummary:
     zoom_running: bool
     zoom_meeting_active: bool
     notes: tuple[str, ...]
+    jwl_exited_during_startup: bool = False
 
 
 def zoom_join_uri(value: str) -> str:
@@ -111,6 +112,7 @@ class MeetingLauncherService(QObject):
         notes: list[str] = []
 
         snapshot = self._process_snapshot()
+        jwl_requested = False
 
         if not any(looks_like_obs_process(name) for name in snapshot.values()):
             self.progress_changed.emit("Abrindo OBS…")
@@ -124,6 +126,7 @@ class MeetingLauncherService(QObject):
         if not any(looks_like_jwl_process(name) for name in snapshot.values()):
             self.progress_changed.emit("Abrindo JW Library…")
             if self._launch_jwl():
+                jwl_requested = True
                 notes.append("JW Library solicitado")
             else:
                 notes.append("JW Library não pôde ser iniciado")
@@ -152,7 +155,15 @@ class MeetingLauncherService(QObject):
         else:
             notes.append("Zoom já está em uma reunião")
 
-        deadline = time.monotonic() + 14.0
+        # A process appearing once is not a completed startup. In the reported
+        # session JWL disappeared 28 seconds after the old success summary.
+        # Observe only launches requested here; never reopen an app automatically
+        # because its disappearance may also be an intentional user action.
+        deadline = time.monotonic() + (45.0 if jwl_requested else 14.0)
+        jwl_seen = False
+        jwl_exited = False
+        if jwl_requested:
+            self.progress_changed.emit("Verificando se o JW Library permanece aberto (até 45 s)…")
         obs_running = False
         jwl_running = False
         zoom_running = False
@@ -161,19 +172,42 @@ class MeetingLauncherService(QObject):
             obs_running = any(looks_like_obs_process(name) for name in snapshot.values())
             jwl_running = any(looks_like_jwl_process(name) for name in snapshot.values())
             zoom_running = any(looks_like_zoom_process(name) for name in snapshot.values())
-            if obs_running and jwl_running and zoom_running:
+            if jwl_requested and jwl_seen and not jwl_running:
+                jwl_exited = True
+                break
+            jwl_seen = jwl_seen or jwl_running
+            if not jwl_requested and obs_running and jwl_running and zoom_running:
                 break
             time.sleep(0.45)
 
         zoom_meeting = self._zoom_meeting_active()
+        if jwl_exited:
+            notes.append("JW Library abriu e fechou durante a inicialização; tente abri-lo novamente")
+        elif not jwl_running:
+            notes.append("JW Library não foi detectado ao terminar a verificação")
+        elif jwl_requested:
+            notes.append(
+                "JW Library permaneceu aberto durante a verificação; confirme o carregamento na tela"
+            )
+        if not obs_running:
+            notes.append("OBS não foi detectado ao terminar a verificação")
+        if not zoom_running:
+            notes.append("Zoom não foi detectado ao terminar a verificação")
+        elif not zoom_meeting:
+            notes.append("Zoom aberto; entrada na reunião ainda não confirmada")
         summary = LaunchSummary(
             obs_running=obs_running,
             jwl_running=jwl_running,
             zoom_running=zoom_running,
             zoom_meeting_active=zoom_meeting,
             notes=tuple(notes),
+            jwl_exited_during_startup=jwl_exited,
         )
-        self.progress_changed.emit("Inicialização concluída.")
+        self.progress_changed.emit(
+            "Verificação concluída; há pendências na abertura dos programas."
+            if jwl_exited or not all((obs_running, jwl_running, zoom_running))
+            else "Programas detectados; confira o OBS conectado e a entrada no Zoom."
+        )
         self.finished.emit(summary)
 
     @staticmethod
