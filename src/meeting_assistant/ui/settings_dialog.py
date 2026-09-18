@@ -119,6 +119,34 @@ class SettingsDialog(QDialog):
         startup_form.addRow("", startup_hint)
         root.addWidget(startup_group)
 
+        telemetry_group = QGroupBox("Diagnóstico automático")
+        telemetry_form = QFormLayout(telemetry_group)
+
+        self.telemetry_check = QCheckBox("Enviar telemetria técnica automaticamente")
+        self.telemetry_check.setChecked(settings.telemetry_enabled)
+        self.telemetry_screenshots_check = QCheckBox(
+            "Incluir screenshots em eventos importantes"
+        )
+        self.telemetry_screenshots_check.setChecked(settings.telemetry_screenshots)
+        self.telemetry_repo_edit = QLineEdit(settings.telemetry_repo_url)
+        self.telemetry_repo_edit.setPlaceholderText(
+            "https://github.com/.../meeting-assistant-diagnostics.git"
+        )
+
+        telemetry_form.addRow("", self.telemetry_check)
+        telemetry_form.addRow("", self.telemetry_screenshots_check)
+        telemetry_form.addRow("Repositório privado", self.telemetry_repo_edit)
+
+        telemetry_hint = QLabel(
+            "A telemetria é gravada primeiro em %LOCALAPPDATA% e sincronizada em "
+            "segundo plano. Falhas de Git/rede não afetam a reunião. "
+            "Senhas, tokens e o parâmetro pwd do Zoom são removidos antes do envio. "
+            "Alterações desta seção valem no próximo reinício."
+        )
+        telemetry_hint.setWordWrap(True)
+        telemetry_form.addRow("", telemetry_hint)
+        root.addWidget(telemetry_group)
+
         connection_group = QGroupBox("OBS WebSocket")
         connection_form = QFormLayout(connection_group)
 
@@ -176,3 +204,6 @@ class SettingsDialog(QDialog):
         settings.zoom_join_url = self.zoom_join_edit.text().strip()
         settings.obs_executable = self.obs_executable_edit.text().strip()
         settings.zoom_executable = self.zoom_executable_edit.text().strip()
+        settings.telemetry_enabled = self.telemetry_check.isChecked()
+        settings.telemetry_screenshots = self.telemetry_screenshots_check.isChecked()
+        settings.telemetry_repo_url = self.telemetry_repo_edit.text().strip()
