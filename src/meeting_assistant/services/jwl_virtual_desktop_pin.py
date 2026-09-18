@@ -30,7 +30,7 @@ class _Guid(ctypes.Structure):
     ]
 
     @classmethod
-    def from_text(cls, value: str) -> "_Guid":
+    def from_text(cls, value: str) -> _Guid:
         item = UUID(value.strip("{}"))
         node = item.node.to_bytes(6, "big")
         data4 = (ctypes.c_ubyte * 8)(
