@@ -166,18 +166,12 @@ def main() -> int:
     # Startup routing belongs to the media automation now. Preserving the OBS
     # scene here is essential when Meeting Assistant is reopened mid-video.
     window._startup_scene_applied = True
+    window.set_telemetry_session(telemetry.session_id)
     window.set_telemetry_status(
         False,
         "Telemetria aguardando a primeira sincronização em segundo plano.",
-        telemetry.session_id,
     )
-    telemetry.sync_status_changed.connect(
-        lambda ok, message: window.set_telemetry_status(
-            ok,
-            message,
-            telemetry.session_id,
-        )
-    )
+    telemetry.sync_status_changed.connect(window.set_telemetry_status)
 
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
