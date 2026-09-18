@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ctypes
+import sys
 from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -28,11 +30,12 @@ def window_needs_recovery(
     visible: bool,
     current_rect: WindowRect,
     target_rect: WindowRect,
+    cloaked: bool = False,
     tolerance: int = 8,
 ) -> bool:
     """Return whether a known Hall-output HWND needs immediate repair."""
 
-    if minimized or not visible:
+    if minimized or not visible or cloaked:
         return True
     return bool(
         abs(current_rect.left - target_rect.left) > tolerance
@@ -66,6 +69,7 @@ class JwlFastWindowGuard(QObject):
         self._enabled = False
         self._cached: JwlSecondaryWindowInfo | None = None
         self._recovering = False
+        self._last_recovery_reason = ""
         self._timer = QTimer(self)
         self._timer.setInterval(max(120, interval_ms))
         self._timer.timeout.connect(self._tick)
@@ -81,6 +85,10 @@ class JwlFastWindowGuard(QObject):
     @property
     def cached_hwnd(self) -> int:
         return self._cached.hwnd if self._cached is not None else 0
+
+    @property
+    def last_recovery_reason(self) -> str:
+        return self._last_recovery_reason
 
     def start(self) -> None:
         self._timer.start()
@@ -125,10 +133,12 @@ class JwlFastWindowGuard(QObject):
         target_rect = self._native_target_rect(target)
         minimized = self._is_minimized(item.hwnd)
         visible = self._is_visible(item.hwnd)
+        cloaked = self._is_cloaked(item.hwnd)
 
         needs_recovery = window_needs_recovery(
             minimized=minimized,
             visible=visible,
+            cloaked=cloaked,
             current_rect=current_rect,
             target_rect=target_rect,
         )
@@ -136,17 +146,40 @@ class JwlFastWindowGuard(QObject):
             self._set_recovering(False)
             return
 
+        if cloaked:
+            self._last_recovery_reason = "dwm_cloaked"
+        elif minimized:
+            self._last_recovery_reason = "minimized"
+        elif not visible:
+            self._last_recovery_reason = "hidden"
+        else:
+            self._last_recovery_reason = "geometry"
+
         self._set_recovering(True)
-        self._restore_without_activation(item.hwnd, target_rect)
+        self._restore_without_activation(item.hwnd, target_rect, cloaked=cloaked)
 
         # A successful ShowWindow/SetWindowPos is normally visible immediately.
         # Confirm on the next 120–180 ms tick instead of blocking the UI thread.
 
-    def _restore_without_activation(self, hwnd: int, target_rect: WindowRect) -> None:
+    def _restore_without_activation(
+        self,
+        hwnd: int,
+        target_rect: WindowRect,
+        *,
+        cloaked: bool = False,
+    ) -> None:
         if win32gui is None or win32con is None:
             return
         try:
-            if win32gui.IsIconic(hwnd) or not win32gui.IsWindowVisible(hwnd):
+            if (
+                win32gui.IsIconic(hwnd)
+                or not win32gui.IsWindowVisible(hwnd)
+                or cloaked
+            ):
+                # Show Desktop can make a top-level window disappear without
+                # changing IsIconic/IsWindowVisible. Calling ShowWindow again
+                # followed by SetWindowPos makes Explorer/DWM surface it again
+                # without activating the operator's main JW Library window.
                 win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
 
             flags = (
@@ -185,6 +218,22 @@ class JwlFastWindowGuard(QObject):
             return bool(win32gui.IsWindowVisible(hwnd))
         except (OSError, RuntimeError):
             return True
+
+    @staticmethod
+    def _is_cloaked(hwnd: int) -> bool:
+        if hwnd <= 0 or sys.platform != "win32":
+            return False
+        try:
+            cloaked = ctypes.c_int(0)
+            result = ctypes.windll.dwmapi.DwmGetWindowAttribute(
+                ctypes.c_void_p(hwnd),
+                ctypes.c_uint(14),  # DWMWA_CLOAKED
+                ctypes.byref(cloaked),
+                ctypes.sizeof(cloaked),
+            )
+            return result == 0 and bool(cloaked.value)
+        except (AttributeError, OSError):
+            return False
 
     @staticmethod
     def _is_minimized(hwnd: int) -> bool:
