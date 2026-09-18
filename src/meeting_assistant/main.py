@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes
 import sys
+import time
 from importlib.resources import as_file, files
 
 from PySide6.QtCore import QLoggingCategory, Qt
@@ -22,6 +23,7 @@ from meeting_assistant.services.media_automation_service import (
 from meeting_assistant.services.meeting_launcher import MeetingLauncherService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.settings import SettingsService
+from meeting_assistant.services.telemetry_service import TelemetryService
 from meeting_assistant.services.zoom_hall_service import ZoomHallService
 from meeting_assistant.ui.main_window import MainWindow
 
@@ -60,6 +62,21 @@ def main() -> int:
 
     settings_service = SettingsService()
     settings = settings_service.load()
+    telemetry = TelemetryService(
+        enabled=settings.telemetry_enabled,
+        repo_url=settings.telemetry_repo_url,
+        screenshots_enabled=settings.telemetry_screenshots,
+    )
+    telemetry.start()
+    telemetry.event(
+        "settings_loaded",
+        simulation_enabled=settings.simulation_enabled,
+        hall_display_configured=bool(settings.hall_display_key),
+        zoom_link_configured=bool(settings.zoom_join_url),
+        screenshots_enabled=settings.telemetry_screenshots,
+    )
+    telemetry.request_sync()
+
     state = AppState(simulation_enabled=settings.simulation_enabled)
     state.automation_enabled = False
 
@@ -94,6 +111,7 @@ def main() -> int:
     def update_display_cache(displays) -> None:
         nonlocal display_cache
         display_cache = list(displays)
+        telemetry.event("displays_changed", displays=display_cache)
 
     display_service.displays_changed.connect(update_display_cache)
 
@@ -157,8 +175,132 @@ def main() -> int:
     media_automation.media_started.connect(obs_controller.set_program_scene)
     media_automation.media_ended.connect(obs_controller.set_program_scene)
     media_automation.error.connect(window.set_automation_status)
+
+    media_automation.status_changed.connect(
+        lambda message: telemetry.event("media_automation_status", message=message)
+    )
+    media_automation.media_started.connect(
+        lambda scene: (
+            telemetry.event("media_started", requested_scene=scene),
+            telemetry.capture_screenshot("media-started"),
+        )
+    )
+    media_automation.media_ended.connect(
+        lambda scene: (
+            telemetry.event("media_ended", requested_scene=scene),
+            telemetry.capture_screenshot("media-ended"),
+        )
+    )
+    media_automation.error.connect(
+        lambda message: (
+            telemetry.event("media_automation_error", severity="error", message=message),
+            telemetry.request_sync(),
+        )
+    )
+
+    last_sensor_telemetry_at = 0.0
+    last_sensor_active: bool | None = None
+
+    def record_sensor_signal(source: str, changed_percent: float, active: bool) -> None:
+        nonlocal last_sensor_telemetry_at, last_sensor_active
+        now = time.monotonic()
+        if active == last_sensor_active and now - last_sensor_telemetry_at < 2.0:
+            return
+        last_sensor_telemetry_at = now
+        last_sensor_active = active
+        telemetry.event(
+            "hall_sensor_sample",
+            source=source,
+            changed_percent=round(changed_percent, 2),
+            media_active=active,
+        )
+
+    media_automation.signal_changed.connect(record_sensor_signal)
+
+    obs_controller.connected_changed.connect(
+        lambda connected, message: telemetry.event(
+            "obs_connection",
+            connected=connected,
+            message=message,
+        )
+    )
+    obs_controller.scene_changed.connect(
+        lambda scene: telemetry.event("obs_program_scene", scene=scene)
+    )
+    obs_controller.error.connect(
+        lambda message: (
+            telemetry.event("obs_error", severity="error", message=message),
+            telemetry.request_sync(),
+        )
+    )
+    jwl_service.status_changed.connect(
+        lambda running, message: telemetry.event(
+            "jwl_status",
+            running=running,
+            message=message,
+        )
+    )
+    jwl_secondary.status_changed.connect(
+        lambda ok, message: telemetry.event(
+            "jwl_secondary_status",
+            ok=ok,
+            message=message,
+            hwnd=jwl_secondary.current.hwnd if jwl_secondary.current else 0,
+        )
+    )
+
+    recovery_started_at: float | None = None
+
+    def record_jwl_recovery(recovering: bool) -> None:
+        nonlocal recovery_started_at
+        now = time.monotonic()
+        if recovering:
+            recovery_started_at = now
+            telemetry.event(
+                "jwl_recovery_started",
+                hwnd=jwl_fast_guard.cached_hwnd,
+            )
+            return
+        if recovery_started_at is None:
+            return
+        elapsed_ms = round((now - recovery_started_at) * 1000)
+        telemetry.event(
+            "jwl_recovery_finished",
+            hwnd=jwl_fast_guard.cached_hwnd,
+            elapsed_ms=elapsed_ms,
+        )
+        recovery_started_at = None
+
+    jwl_fast_guard.recovery_changed.connect(record_jwl_recovery)
+
+    meeting_launcher.progress_changed.connect(
+        lambda message: telemetry.event("meeting_launcher_progress", message=message)
+    )
+    meeting_launcher.finished.connect(
+        lambda summary: (
+            telemetry.event("meeting_launcher_finished", summary=summary),
+            telemetry.request_sync(),
+        )
+    )
+    zoom_hall.status_changed.connect(
+        lambda ok, message: telemetry.event("zoom_hall_status", ok=ok, message=message)
+    )
+    zoom_hall.active_changed.connect(
+        lambda active, message: (
+            telemetry.event("zoom_hall_active", active=active, message=message),
+            telemetry.capture_screenshot("zoom-hall-on" if active else "zoom-hall-off"),
+            telemetry.request_sync(),
+        )
+    )
+
     def apply_automation_runtime(enabled: bool) -> None:
         effective = bool(enabled and not zoom_hall.active)
+        telemetry.event(
+            "automation_runtime",
+            requested=enabled,
+            effective=effective,
+            zoom_hall_active=zoom_hall.active,
+        )
         media_automation.set_enabled(effective)
         jwl_secondary.set_guard_enabled(effective)
         jwl_fast_guard.set_enabled(effective)
@@ -185,8 +327,11 @@ def main() -> int:
     app.aboutToQuit.connect(obs_controller.stop)
     app.aboutToQuit.connect(jwl_probe.stop)
     app.aboutToQuit.connect(jwl_service.stop)
+    app.aboutToQuit.connect(lambda: telemetry.event("qt_about_to_quit"))
+    app.aboutToQuit.connect(telemetry.stop)
 
     window.show()
+    telemetry.event("ui_shown", session_id=telemetry.session_id)
     display_service.start()
     jwl_service.start()
     jwl_secondary.start()
