@@ -279,6 +279,13 @@ def main() -> int:
         recovery_started_at = None
 
     jwl_fast_guard.recovery_changed.connect(record_jwl_recovery)
+    jwl_fast_guard.candidate_changed.connect(
+        lambda hwnd, source: telemetry.event(
+            "jwl_fast_guard_candidate",
+            hwnd=hwnd,
+            source=source,
+        )
+    )
 
     meeting_launcher.progress_changed.connect(
         lambda message: telemetry.event("meeting_launcher_progress", message=message)
