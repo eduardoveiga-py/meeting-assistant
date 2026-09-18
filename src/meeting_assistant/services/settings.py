@@ -24,6 +24,9 @@ class AppSettings:
     zoom_join_url: str = ""
     obs_executable: str = ""
     zoom_executable: str = ""
+    telemetry_enabled: bool = True
+    telemetry_screenshots: bool = False
+    telemetry_repo_url: str = "https://github.com/eduardoveiga-py/meeting-assistant-diagnostics.git"
 
 
 class SettingsService:
