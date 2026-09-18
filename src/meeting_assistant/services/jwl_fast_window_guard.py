@@ -85,6 +85,7 @@ class JwlFastWindowGuard(QObject):
         self._last_fallback_probe_at = 0.0
         self._recovery_started_at = 0.0
         self._recovery_attempts = 0
+        self._last_recovery_detail_at = 0.0
         self._timer = QTimer(self)
         self._timer.setInterval(max(120, interval_ms))
         self._timer.timeout.connect(self._tick)
@@ -196,7 +197,7 @@ class JwlFastWindowGuard(QObject):
 
         shell_cloaked = bool(cloak_state & 0x2)
         if shell_cloaked:
-            self._restore_shell_cloaked(item.hwnd, target_rect, cloak_state)
+            self._wait_for_shell_uncloak(item.hwnd, target_rect, cloak_state)
         else:
             self._restore_without_activation(item.hwnd, target_rect, cloaked=cloaked)
 
@@ -238,7 +239,7 @@ class JwlFastWindowGuard(QObject):
                 target_rect.height,
                 flags,
             )
-        except (OSError, RuntimeError):
+        except Exception:  # noqa: BLE001 - best-effort Win32 recovery
             # The slower UIA service remains responsible for rediscovery if the
             # cached HWND became invalid between checks.
             return
@@ -381,92 +382,36 @@ class JwlFastWindowGuard(QObject):
             return False
         return found
 
-    def _restore_shell_cloaked(
+    def _wait_for_shell_uncloak(
         self,
         hwnd: int,
         target_rect: WindowRect,
         cloak_state: int,
     ) -> None:
-        """Recover a UWP/JWL frame suppressed by Windows Show Desktop.
+        """Keep geometry ready while the virtual-desktop pin worker repairs cloak.
 
-        A shell-cloaked window is not equivalent to a minimized window.
-        First request removal of any app-level DWM cloak, then mimic selecting
-        the window again so Explorer makes that individual surface presentable.
-        The previous foreground window is restored immediately afterwards.
+        DWMWA_CLOAKED_SHELL is owned by the Windows shell. Forcing foreground
+        from another process is intentionally avoided: Windows may reject it,
+        and repeated attempts can flood the Qt timer with pywintypes errors.
+        The dedicated pin service makes the Hall view visible on every virtual
+        desktop; once the shell removes its cloak, the normal fast guard takes
+        over again.
         """
 
-        if win32gui is None or win32con is None:
+        self._restore_without_activation(hwnd, target_rect, cloaked=False)
+
+        now = time.monotonic()
+        if now - self._last_recovery_detail_at < 1.0:
             return
-
-        previous_foreground = 0
-        try:
-            previous_foreground = int(win32gui.GetForegroundWindow() or 0)
-        except (OSError, RuntimeError):
-            previous_foreground = 0
-
-        dwm_hr = self._request_dwm_uncloak(hwnd)
-        foreground_result = False
-
-        try:
-            show_async = getattr(win32gui, "ShowWindowAsync", None)
-            if callable(show_async):
-                show_async(hwnd, win32con.SW_RESTORE)
-            else:
-                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-
-            flags = (
-                win32con.SWP_SHOWWINDOW
-                | win32con.SWP_ASYNCWINDOWPOS
-                | win32con.SWP_FRAMECHANGED
-            )
-            win32gui.SetWindowPos(
-                hwnd,
-                win32con.HWND_TOPMOST,
-                target_rect.left,
-                target_rect.top,
-                target_rect.width,
-                target_rect.height,
-                flags,
-            )
-
-            # Shell-cloaked UWP windows often remain suppressed until Windows
-            # treats them as selected again. This mirrors the taskbar-click
-            # recovery that works reliably on the operator's machine.
-            foreground_result = bool(win32gui.SetForegroundWindow(hwnd))
-
-            if (
-                previous_foreground > 0
-                and previous_foreground != hwnd
-                and win32gui.IsWindow(previous_foreground)
-            ):
-                win32gui.SetForegroundWindow(previous_foreground)
-
-            # Leave the Hall surface topmost without keeping keyboard focus.
-            win32gui.SetWindowPos(
-                hwnd,
-                win32con.HWND_TOPMOST,
-                target_rect.left,
-                target_rect.top,
-                target_rect.width,
-                target_rect.height,
-                win32con.SWP_NOACTIVATE
-                | win32con.SWP_SHOWWINDOW
-                | win32con.SWP_ASYNCWINDOWPOS,
-            )
-        except (OSError, RuntimeError):
-            pass
-
+        self._last_recovery_detail_at = now
         self.recovery_detail.emit(
             {
                 "hwnd": hwnd,
-                "reason": "dwm_cloaked_shell",
-                "cloak_state_before": cloak_state,
-                "cloak_state_after": self._cloak_state(hwnd),
-                "dwm_uncloak_hresult": dwm_hr,
-                "foreground_result": foreground_result,
+                "reason": "dwm_cloaked_shell_waiting_pin",
+                "cloak_state": cloak_state,
                 "attempt": self._recovery_attempts,
                 "elapsed_ms": round(
-                    max(0.0, time.monotonic() - self._recovery_started_at) * 1000
+                    max(0.0, now - self._recovery_started_at) * 1000
                 ),
             }
         )
@@ -532,23 +477,6 @@ class JwlFastWindowGuard(QObject):
     @staticmethod
     def _is_cloaked(hwnd: int) -> bool:
         return JwlFastWindowGuard._cloak_state(hwnd) != 0
-
-    @staticmethod
-    def _request_dwm_uncloak(hwnd: int) -> int:
-        if hwnd <= 0 or sys.platform != "win32":
-            return -1
-        try:
-            uncloaked = ctypes.c_int(0)
-            return int(
-                ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                    ctypes.c_void_p(hwnd),
-                    ctypes.c_uint(13),  # DWMWA_CLOAK
-                    ctypes.byref(uncloaked),
-                    ctypes.sizeof(uncloaked),
-                )
-            )
-        except (AttributeError, OSError):
-            return -1
 
     @staticmethod
     def _is_minimized(hwnd: int) -> bool:
