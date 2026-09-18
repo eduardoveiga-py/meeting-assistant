@@ -347,11 +347,12 @@ def main() -> int:
             effective=effective,
             zoom_hall_active=zoom_hall.active,
         )
-        media_automation.set_enabled(effective)
         jwl_secondary.set_guard_enabled(effective)
         jwl_fast_guard.set_enabled(effective)
+        media_automation.set_enabled(effective and not jwl_fast_guard.recovering)
 
     window.automation_enabled_changed.connect(apply_automation_runtime)
+    window.idle_reference_requested.connect(media_automation.reset_idle_reference)
     zoom_hall.about_to_show.connect(lambda: apply_automation_runtime(False))
     zoom_hall.active_changed.connect(
         lambda active, _message: (

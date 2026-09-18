@@ -38,6 +38,7 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 
 class MainWindow(QMainWindow):
     automation_enabled_changed = Signal(bool)
+    idle_reference_requested = Signal()
 
     def __init__(
         self,
@@ -75,7 +76,7 @@ class MainWindow(QMainWindow):
         self.state.automation_enabled = False
 
         self.setWindowIcon(self.app_icon)
-        self.resize(600, 780)
+        self.resize(520, 780)
         self.setMinimumSize(360, 280)
 
         self._build_ui()
@@ -200,12 +201,18 @@ class MainWindow(QMainWindow):
         system_grid.addWidget(settings_button, 0, 2)
         controls.addLayout(system_grid)
 
-        self.jwl_probe_button = QPushButton("🧪 Observar mídia no JW Library (20 s)")
+        self.jwl_probe_button = QPushButton("🧪 Observar mídia (20 s)")
         self.jwl_probe_button.setToolTip(
             "Diagnóstico opcional da saída de mídia do JW Library."
         )
         self.jwl_probe_button.clicked.connect(self._start_jwl_probe)
-        controls.addWidget(self.jwl_probe_button)
+        reference_row = QHBoxLayout()
+        reference_row.addWidget(self.jwl_probe_button, 1)
+        calibrate = QPushButton("Calibrar Texto do Ano")
+        calibrate.setToolTip("Atualiza a referência visual usada para reconhecer o repouso do JWL.")
+        calibrate.clicked.connect(self._calibrate_idle_reference)
+        reference_row.addWidget(calibrate, 1)
+        controls.addLayout(reference_row)
 
         controls.addSpacing(2)
         controls.addWidget(self._section_label("RETORNO — SALÃO"))
@@ -314,6 +321,26 @@ class MainWindow(QMainWindow):
         self.state.automation_enabled = enabled
         self._set_automation_ui(enabled)
         self.automation_enabled_changed.emit(enabled)
+
+    def _calibrate_idle_reference(self) -> None:
+        if self.zoom_hall.active:
+            QMessageBox.information(self, "Texto do Ano", "Primeiro pare Zoom → Salão.")
+            return
+        answer = QMessageBox.question(
+            self,
+            "Calibrar Texto do Ano",
+            "Deixe somente o Texto do Ano do JW Library na Tela do Salão, "
+            "sem foto ou vídeo em reprodução.\n\n"
+            "Confirmar essa tela como referência e ativar a automação?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        self.idle_reference_requested.emit()
+        self.state.automation_enabled = True
+        self._set_automation_ui(True)
+        self.automation_enabled_changed.emit(True)
 
     def _activate_safe_scene(self, checked: bool = False) -> None:
         del checked

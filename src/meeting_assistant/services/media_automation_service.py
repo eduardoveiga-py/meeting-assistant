@@ -196,6 +196,7 @@ class MediaAutomationService(QObject):
         self._sample_interval = max(0.12, sample_interval_seconds)
         self._stop_event = threading.Event()
         self._enabled_event = threading.Event()
+        self._recalibrate_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._detector = MediaSignalDetector()
         self._last_status: str | None = None
@@ -215,9 +216,11 @@ class MediaAutomationService(QObject):
             self._emit_status("Automação pausada; monitoramento de mídia suspenso.")
 
     def reset_idle_reference(self) -> None:
-        self._reference_store.clear()
+        # The capture worker owns its cached reference and all reference I/O.
+        # Keep the last good file until a replacement has actually been saved.
+        self._recalibrate_event.set()
         self._emit_status(
-            "Referência de repouso apagada; a próxima ativação fará nova calibração."
+            "Nova calibração solicitada; mantenha apenas o Texto do Ano visível."
         )
 
     def start(self) -> None:
@@ -246,6 +249,12 @@ class MediaAutomationService(QObject):
         idle_hits = 0
 
         while not self._stop_event.is_set():
+            if self._recalibrate_event.is_set():
+                self._recalibrate_event.clear()
+                reference = None
+                initial_route_pending = True
+                idle_hits = 0
+                self._detector.reset()
             if not self._enabled_event.is_set():
                 active_region_key = None
                 initial_route_pending = True
@@ -327,6 +336,8 @@ class MediaAutomationService(QObject):
                 continue
 
             frame = sensor.capture(region)
+            if self._recalibrate_event.is_set() or not self.enabled:
+                continue
             if frame is None:
                 self._emit_status(
                     "Tela do Salão encontrada, mas o frame ainda não pôde ser lido; tentando novamente…"
