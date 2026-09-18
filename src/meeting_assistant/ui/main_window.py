@@ -331,6 +331,7 @@ class MainWindow(QMainWindow):
             "Calibrar Texto do Ano",
             "Deixe somente o Texto do Ano do JW Library na Tela do Salão, "
             "sem foto ou vídeo em reprodução.\n\n"
+            "A aparência atual será adicionada às referências já salvas.\n\n"
             "Confirmar essa tela como referência e ativar a automação?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,

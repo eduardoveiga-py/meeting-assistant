@@ -52,7 +52,8 @@ def test_recalibration_replaces_reference_already_loaded_by_worker(tmp_path, mon
     service.media_ended.connect(finished)
     service._run()
     assert events == ["Palco"]
-    assert store.load() == replacement
+    assert store.load().pixels == replacement.pixels
+    assert store.load().alternate_pixels == (bytes(100),)
     sensor.close.assert_called_once()
 
 
