@@ -38,7 +38,8 @@ def test_settings_buttons_stay_visible_and_content_scrolls(app, area):
         dialog.close()
 
 
-def test_main_window_fits_small_work_area_and_footer_is_reachable(app):
+@pytest.mark.parametrize("height", [560, 680])
+def test_main_window_shows_all_controls_without_scrolling(app, height):
     services = [MagicMock() for _ in range(7)]
     services[2].snapshot.return_value = []
     services[3].snapshot.return_value = []
@@ -46,15 +47,15 @@ def test_main_window_fits_small_work_area_and_footer_is_reachable(app):
     window = MainWindow(AppState(), AppSettings(), *services)
     window.show()
     app.processEvents()
-    area = QRect(0, 0, 800, 560)
+    window.set_telemetry_session("MA-20260918-001933-25DE")
+    area = QRect(0, 0, 800, height)
     fit_window(window, area)
     app.processEvents()
     try:
         assert area.contains(window.frameGeometry())
         scroll = window.centralWidget()
-        assert scroll.verticalScrollBar().maximum() > 0
-        scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
-        app.processEvents()
+        assert scroll.verticalScrollBar().maximum() == 0
+        assert scroll.horizontalScrollBar().maximum() == 0
         assert scroll.viewport().rect().contains(
             window.footer.mapTo(scroll.viewport(), window.footer.rect().center())
         )

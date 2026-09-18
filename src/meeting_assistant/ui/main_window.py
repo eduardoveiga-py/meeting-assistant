@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -93,7 +94,7 @@ class MainWindow(QMainWindow):
         central = QWidget()
         root = QVBoxLayout(central)
         root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(8)
+        root.setSpacing(5)
 
         header = QHBoxLayout()
         header.setSpacing(10)
@@ -133,14 +134,14 @@ class MainWindow(QMainWindow):
             label.setProperty("state", "pending")
             label.setToolTip(f"{name}: aguardando verificação")
             self.status_labels[name] = label
-            status_grid.addWidget(label, index // 2, index % 2)
+            status_grid.addWidget(label, 0, index)
         root.addLayout(status_grid)
 
         controls_card = QFrame()
         controls_card.setObjectName("Card")
         controls = QVBoxLayout(controls_card)
         controls.setContentsMargins(10, 9, 10, 10)
-        controls.setSpacing(6)
+        controls.setSpacing(4)
 
         controls.addWidget(self._section_label("SAÍDA DO SALÃO"))
 
@@ -164,7 +165,9 @@ class MainWindow(QMainWindow):
 
         self.auto_button = QPushButton("🚥 Ativar automação")
         self.auto_button.clicked.connect(self._toggle_automation)
-        controls.addWidget(self.auto_button)
+        automation_row = QHBoxLayout()
+        automation_row.addWidget(self.auto_button, 1)
+        controls.addLayout(automation_row)
 
         self.automation_status = QLabel("Automação pausada")
         self.automation_status.setObjectName("AutomationStatus")
@@ -174,7 +177,7 @@ class MainWindow(QMainWindow):
         panic = QPushButton("🛟 Cena segura → Palco")
         panic.setObjectName("DangerButton")
         panic.clicked.connect(self._activate_safe_scene)
-        controls.addWidget(panic)
+        automation_row.addWidget(panic, 1)
 
         controls.addSpacing(2)
         controls.addWidget(self._section_label("SISTEMA"))
@@ -185,7 +188,6 @@ class MainWindow(QMainWindow):
             "o Zoom entra diretamente na reunião."
         )
         self.start_meeting_button.clicked.connect(self._start_meeting)
-        controls.addWidget(self.start_meeting_button)
 
         system_grid = QGridLayout()
         system_grid.setHorizontalSpacing(6)
@@ -193,8 +195,9 @@ class MainWindow(QMainWindow):
         diagnostics.clicked.connect(self._show_diagnostics)
         settings_button = QPushButton("⚙️ Ajustes")
         settings_button.clicked.connect(self._show_settings)
-        system_grid.addWidget(diagnostics, 0, 0)
-        system_grid.addWidget(settings_button, 0, 1)
+        system_grid.addWidget(self.start_meeting_button, 0, 0)
+        system_grid.addWidget(diagnostics, 0, 1)
+        system_grid.addWidget(settings_button, 0, 2)
         controls.addLayout(system_grid)
 
         self.jwl_probe_button = QPushButton("🧪 Observar mídia no JW Library (20 s)")
@@ -208,19 +211,18 @@ class MainWindow(QMainWindow):
         controls.addWidget(self._section_label("RETORNO — SALÃO"))
 
         preview_row = QHBoxLayout()
-        preview_row.addStretch()
         self.preview = QLabel("Conectando ao OBS…\n16:9")
         self.preview.setObjectName("Preview")
         self.preview.setAlignment(Qt.AlignCenter)
-        self.preview.setMinimumSize(420, 236)
+        self.preview.setMinimumSize(160, 54)
         self.preview.setMaximumSize(480, 270)
+        self.preview.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.preview.setScaledContents(False)
         self.preview_opacity = QGraphicsOpacityEffect(self.preview)
         self.preview_opacity.setOpacity(1.0)
         self.preview.setGraphicsEffect(self.preview_opacity)
-        preview_row.addWidget(self.preview)
-        preview_row.addStretch()
-        controls.addLayout(preview_row)
+        preview_row.addWidget(self.preview, 1)
+        controls.addLayout(preview_row, 1)
 
         self.zoom_output_label = QLabel(
             "Zoom recebe: OBS Virtual Camera • transições feitas pelo OBS"
@@ -846,7 +848,7 @@ class MainWindow(QMainWindow):
                 background: #252c36;
                 border: 1px solid #343e4c;
                 border-radius: 7px;
-                padding: 8px 9px;
+                padding: 6px 9px;
                 font-size: 11px;
                 font-weight: 600;
                 text-align: left;
