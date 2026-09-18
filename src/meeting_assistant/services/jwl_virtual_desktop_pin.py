@@ -19,6 +19,7 @@ class VirtualDesktopPinResult:
     action: str
     hresult: int | None = None
     error: str = ""
+    details: dict[str, int | bool | str] | None = None
 
 
 class _Guid(ctypes.Structure):
@@ -236,6 +237,72 @@ class _VirtualDesktopPinSession:
         finally:
             self._release(view)
 
+    def recover_shell_cloak(
+        self,
+        hwnd: int,
+        return_hwnd: int = 0,
+    ) -> VirtualDesktopPinResult:
+        view = self._view_for_hwnd(hwnd)
+        if not view.value:
+            return VirtualDesktopPinResult(
+                hwnd=hwnd,
+                ok=False,
+                already_pinned=False,
+                action="recover",
+                error="ApplicationView not found for HWND",
+            )
+
+        set_cloak_hr: int | None = None
+        switch_hr: int | None = None
+        return_hr: int | None = None
+        try:
+            set_cloak = self._com_method(
+                view,
+                12,  # IApplicationView::SetCloak
+                ctypes.c_long,
+                ctypes.c_int,
+                ctypes.c_uint,
+            )
+            set_cloak_hr = int(set_cloak(view, 0, 0))  # AVCT_NONE
+
+            switch_to = self._com_method(
+                view,
+                7,  # IApplicationView::SwitchTo
+                ctypes.c_long,
+            )
+            switch_hr = int(switch_to(view))
+
+            if return_hwnd > 0 and return_hwnd != hwnd:
+                return_view = self._view_for_hwnd(return_hwnd)
+                if return_view.value:
+                    try:
+                        return_switch = self._com_method(
+                            return_view,
+                            7,
+                            ctypes.c_long,
+                        )
+                        return_hr = int(return_switch(return_view))
+                    finally:
+                        self._release(return_view)
+
+            ok = not _failed(set_cloak_hr) or not _failed(switch_hr)
+            return VirtualDesktopPinResult(
+                hwnd=hwnd,
+                ok=ok,
+                already_pinned=False,
+                action="recover",
+                hresult=switch_hr if switch_hr is not None else set_cloak_hr,
+                error="" if ok else "SetCloak/SwitchTo failed",
+                details={
+                    "set_cloak_hresult": int(set_cloak_hr or 0),
+                    "switch_hresult": int(switch_hr or 0),
+                    "return_hresult": int(return_hr or 0),
+                    "return_hwnd": int(return_hwnd),
+                },
+            )
+        finally:
+            self._release(view)
+
     def _view_for_hwnd(self, hwnd: int) -> ctypes.c_void_p:
         view = ctypes.c_void_p()
         method = self._com_method(
@@ -317,7 +384,7 @@ class JwlVirtualDesktopPinService(QObject):
 
     def __init__(self) -> None:
         super().__init__()
-        self._queue: queue.Queue[tuple[str, int]] = queue.Queue()
+        self._queue: queue.Queue[tuple[str, int, int]] = queue.Queue()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._pinned_hwnds: set[int] = set()
@@ -338,8 +405,8 @@ class JwlVirtualDesktopPinService(QObject):
         if not self._thread:
             return
         for hwnd in tuple(self._pinned_hwnds):
-            self._queue.put(("unpin", hwnd))
-        self._queue.put(("stop", 0))
+            self._queue.put(("unpin", hwnd, 0))
+        self._queue.put(("stop", 0, 0))
         self._stop.set()
         if self._thread.is_alive():
             self._thread.join(timeout=3.0)
@@ -349,7 +416,14 @@ class JwlVirtualDesktopPinService(QObject):
         if hwnd <= 0 or hwnd == self._requested_hwnd:
             return
         self._requested_hwnd = hwnd
-        self._queue.put(("pin", hwnd))
+        self._queue.put(("pin", hwnd, 0))
+
+    def recover_shell_cloak(self, hwnd: int, return_hwnd: int = 0) -> None:
+        hwnd = int(hwnd)
+        return_hwnd = int(return_hwnd)
+        if hwnd <= 0:
+            return
+        self._queue.put(("recover", hwnd, return_hwnd))
 
     def _run(self) -> None:
         if sys.platform != "win32":
@@ -395,7 +469,7 @@ class JwlVirtualDesktopPinService(QObject):
 
             while True:
                 try:
-                    action, hwnd = self._queue.get(timeout=0.5)
+                    action, hwnd, extra_hwnd = self._queue.get(timeout=0.5)
                 except queue.Empty:
                     if self._stop.is_set():
                         break
@@ -416,6 +490,9 @@ class JwlVirtualDesktopPinService(QObject):
                         item = session.unpin(hwnd)
                         if item.ok:
                             self._pinned_hwnds.discard(hwnd)
+                        self.result.emit(item)
+                    elif action == "recover":
+                        item = session.recover_shell_cloak(hwnd, extra_hwnd)
                         self.result.emit(item)
                 except Exception as exc:  # noqa: BLE001 - best-effort integration
                     if action == "pin":
