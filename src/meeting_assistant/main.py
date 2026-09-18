@@ -16,6 +16,10 @@ from meeting_assistant.services.jwl_fast_window_guard import JwlFastWindowGuard
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService
 from meeting_assistant.services.jwl_uia_secondary_window import JwlUiaSecondaryWindowService
+from meeting_assistant.services.jwl_virtual_desktop_pin import (
+    JwlVirtualDesktopPinService,
+    pin_result_to_dict,
+)
 from meeting_assistant.services.media_automation_service import (
     MediaAutomationConfig,
     MediaAutomationService,
@@ -132,6 +136,7 @@ def main() -> int:
         display_provider=current_hall_display,
         interval_ms=180,
     )
+    jwl_virtual_desktop = JwlVirtualDesktopPinService()
     hall_capture_region = HallMonitorSensorRegionProvider(current_hall_display)
 
     jwl_probe = JwlProbeService(
@@ -262,28 +267,46 @@ def main() -> int:
         now = time.monotonic()
         if recovering:
             recovery_started_at = now
+            # Never let the exposed Windows desktop be classified as media
+            # while the Hall output is being repaired.
+            media_automation.set_enabled(False)
             telemetry.event(
                 "jwl_recovery_started",
                 hwnd=jwl_fast_guard.cached_hwnd,
                 reason=jwl_fast_guard.last_recovery_reason,
             )
             return
-        if recovery_started_at is None:
-            return
-        elapsed_ms = round((now - recovery_started_at) * 1000)
-        telemetry.event(
-            "jwl_recovery_finished",
-            hwnd=jwl_fast_guard.cached_hwnd,
-            elapsed_ms=elapsed_ms,
-        )
-        recovery_started_at = None
 
-    jwl_fast_guard.recovery_changed.connect(record_jwl_recovery)
-    jwl_fast_guard.candidate_changed.connect(
-        lambda hwnd, source: telemetry.event(
+        if recovery_started_at is not None:
+            elapsed_ms = round((now - recovery_started_at) * 1000)
+            telemetry.event(
+                "jwl_recovery_finished",
+                hwnd=jwl_fast_guard.cached_hwnd,
+                elapsed_ms=elapsed_ms,
+            )
+            recovery_started_at = None
+
+        if state.automation_enabled and not zoom_hall.active:
+            media_automation.set_enabled(True)
+
+    def record_jwl_candidate(hwnd: int, source: str) -> None:
+        telemetry.event(
             "jwl_fast_guard_candidate",
             hwnd=hwnd,
             source=source,
+        )
+        if hwnd > 0:
+            jwl_virtual_desktop.ensure_pinned(hwnd)
+
+    jwl_fast_guard.recovery_changed.connect(record_jwl_recovery)
+    jwl_fast_guard.candidate_changed.connect(record_jwl_candidate)
+    jwl_virtual_desktop.result.connect(
+        lambda result: (
+            telemetry.event(
+                "jwl_virtual_desktop_pin",
+                result=pin_result_to_dict(result),
+            ),
+            telemetry.request_sync(),
         )
     )
     jwl_fast_guard.recovery_detail.connect(
@@ -343,6 +366,7 @@ def main() -> int:
     app.aboutToQuit.connect(media_automation.stop)
     app.aboutToQuit.connect(lambda: zoom_hall.restore_jwl() if zoom_hall.active else None)
     app.aboutToQuit.connect(jwl_fast_guard.stop)
+    app.aboutToQuit.connect(jwl_virtual_desktop.stop)
     app.aboutToQuit.connect(jwl_secondary.stop)
     app.aboutToQuit.connect(obs_controller.stop)
     app.aboutToQuit.connect(jwl_probe.stop)
@@ -355,6 +379,7 @@ def main() -> int:
     display_service.start()
     jwl_service.start()
     jwl_secondary.start()
+    jwl_virtual_desktop.start()
     jwl_fast_guard.start()
     obs_controller.start(obs_config)
     media_automation.start()
