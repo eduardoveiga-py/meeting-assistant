@@ -339,7 +339,9 @@ class TelemetryService(QObject):
                 }
             )
             return
-        safe_reason = re.sub(r"[^A-Za-z0-9_-]+", "-", reason).strip("-")[:50] or "event"
+        safe_reason = (
+            re.sub(r"[^A-Za-z0-9_-]+", "-", reason).strip("-")[:50] or "event"
+        )
         filename = f"{datetime.now().strftime('%H%M%S-%f')[:-3]}-{safe_reason}.png"
         target = self.screenshots_path / filename
         try:
@@ -389,20 +391,21 @@ class TelemetryService(QObject):
 
     def _ensure_repo(self, git: Path) -> None:
         git_dir = self.repo_path / ".git"
-        if git_dir.exists():
-            return
+        if not git_dir.exists():
+            if self.repo_path.exists():
+                shutil.rmtree(self.repo_path, ignore_errors=True)
+            self.repo_path.parent.mkdir(parents=True, exist_ok=True)
 
-        if self.repo_path.exists():
-            shutil.rmtree(self.repo_path, ignore_errors=True)
-        self.repo_path.parent.mkdir(parents=True, exist_ok=True)
+            self._run_git(
+                git,
+                ["clone", self.repo_url, str(self.repo_path)],
+                cwd=self.repo_path.parent,
+                timeout=25,
+            )
+            self._run_git(git, ["checkout", "-B", "main"], cwd=self.repo_path)
 
-        self._run_git(
-            git,
-            ["clone", self.repo_url, str(self.repo_path)],
-            cwd=self.repo_path.parent,
-            timeout=25,
-        )
-        self._run_git(git, ["checkout", "-B", "main"], cwd=self.repo_path)
+        # Keep identity/configuration local to the diagnostics clone. Re-applying
+        # these values is cheap and also repairs a partially initialized clone.
         self._run_git(
             git,
             ["config", "user.name", "Meeting Assistant Diagnostics"],
@@ -424,17 +427,44 @@ class TelemetryService(QObject):
                 encoding="utf-8",
             )
 
+        schema = self.repo_path / "SCHEMA.md"
+        if not schema.exists():
+            schema.write_text(
+                "# Telemetry schema\n\n"
+                "- latest.json: ponteiro para a sessao mais recente.\n"
+                "- sessions/<id>/summary.json: estado e contadores da sessao.\n"
+                "- sessions/<id>/system.json: ambiente sanitizado.\n"
+                "- sessions/<id>/events.jsonl: eventos estruturados em ordem temporal.\n"
+                "- sessions/<id>/screenshots/: opcional e desativado por padrao.\n",
+                encoding="utf-8",
+            )
+
     def _copy_session_to_repo(self) -> None:
         target = self.repo_path / "sessions" / self.session_id
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
             shutil.rmtree(target)
         shutil.copytree(self.session_path, target)
+        self._write_json(
+            self.repo_path / "latest.json",
+            {
+                "schema_version": 1,
+                "session_id": self.session_id,
+                "updated_at_utc": utc_now(),
+                "path": f"sessions/{self.session_id}",
+            },
+        )
 
     def _git_commit_and_push(self, git: Path) -> None:
         self._run_git(
             git,
-            ["add", "README.md", f"sessions/{self.session_id}"],
+            [
+                "add",
+                "README.md",
+                "SCHEMA.md",
+                "latest.json",
+                f"sessions/{self.session_id}",
+            ],
             cwd=self.repo_path,
         )
         status = self._run_git(
@@ -488,6 +518,9 @@ class TelemetryService(QObject):
         check: bool = True,
     ) -> str:
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        env = os.environ.copy()
+        env["GIT_TERMINAL_PROMPT"] = "0"
+        env["GCM_INTERACTIVE"] = "Never"
         completed = subprocess.run(
             [str(git), *args],
             cwd=str(cwd),
@@ -496,6 +529,7 @@ class TelemetryService(QObject):
             timeout=timeout,
             creationflags=creationflags,
             check=False,
+            env=env,
         )
         output = (completed.stdout or "") + (completed.stderr or "")
         if check and completed.returncode != 0:
