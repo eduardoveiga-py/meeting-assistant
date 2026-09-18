@@ -221,7 +221,7 @@ class MainWindow(QMainWindow):
         self.preview = QLabel("Conectando ao OBS…\n16:9")
         self.preview.setObjectName("Preview")
         self.preview.setAlignment(Qt.AlignCenter)
-        self.preview.setMinimumSize(160, 54)
+        self.preview.setMinimumSize(160, 40)
         self.preview.setMaximumSize(480, 270)
         self.preview.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.preview.setScaledContents(False)
