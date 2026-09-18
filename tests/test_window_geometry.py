@@ -5,6 +5,7 @@ from PySide6.QtCore import QRect
 from PySide6.QtWidgets import QApplication, QDialogButtonBox, QScrollArea
 
 from meeting_assistant.core.state import AppState
+from meeting_assistant.services.meeting_launcher import LaunchSummary
 from meeting_assistant.services.settings import AppSettings
 from meeting_assistant.ui.main_window import MainWindow
 from meeting_assistant.ui.settings_dialog import SettingsDialog
@@ -58,6 +59,40 @@ def test_main_window_shows_all_controls_without_scrolling(app, height):
         assert scroll.horizontalScrollBar().maximum() == 0
         assert scroll.viewport().rect().contains(
             window.footer.mapTo(scroll.viewport(), window.footer.rect().center())
+        )
+    finally:
+        window.close()
+
+
+@pytest.mark.parametrize("height", [560, 680])
+def test_launch_summary_does_not_expand_main_window_horizontally(app, height):
+    services = [MagicMock() for _ in range(7)]
+    services[2].snapshot.return_value = []
+    services[3].snapshot.return_value = []
+    services[6].active = False
+    window = MainWindow(AppState(), AppSettings(), *services)
+    window.show()
+    app.processEvents()
+    fit_window(window, QRect(0, 0, 800, height))
+    app.processEvents()
+    width = window.width()
+    try:
+        window._on_launch_finished(LaunchSummary(
+            obs_running=True, jwl_running=True, zoom_running=True, zoom_meeting_active=False,
+            notes=(
+                "JW Library já estava aberto",
+                "Entrada na reunião do Zoom solicitada",
+                "Zoom aberto; entrada na reunião ainda não confirmada",
+            ),
+        ))
+        for _ in range(5):
+            app.processEvents()
+        scroll = window.centralWidget()
+        assert window.width() == width
+        assert scroll.horizontalScrollBar().maximum() == 0
+        assert scroll.verticalScrollBar().maximum() == 0
+        assert scroll.viewport().rect().contains(
+            window.mode_label.mapTo(scroll.viewport(), window.mode_label.rect().bottomRight())
         )
     finally:
         window.close()

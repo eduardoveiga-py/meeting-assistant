@@ -241,6 +241,9 @@ class MainWindow(QMainWindow):
 
         self.mode_label = QLabel()
         self.mode_label.setObjectName("ModeLabel")
+        self.mode_label.setWordWrap(True)
+        self.mode_label.setMinimumWidth(0)
+        self.mode_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         controls.addWidget(self.mode_label)
 
         root.addWidget(controls_card, 1)
