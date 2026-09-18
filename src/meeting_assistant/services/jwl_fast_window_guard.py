@@ -67,6 +67,7 @@ class JwlFastWindowGuard(QObject):
     recovery_changed = Signal(bool)
     recovery_detail = Signal(object)
     candidate_changed = Signal(int, str)
+    shell_recovery_requested = Signal(int, int)
 
     def __init__(
         self,
@@ -86,6 +87,9 @@ class JwlFastWindowGuard(QObject):
         self._recovery_started_at = 0.0
         self._recovery_attempts = 0
         self._last_recovery_detail_at = 0.0
+        self._last_shell_recovery_request_at = 0.0
+        self._last_foreground_hwnd = 0
+        self._normalized_hwnd = 0
         self._timer = QTimer(self)
         self._timer.setInterval(max(120, interval_ms))
         self._timer.timeout.connect(self._tick)
@@ -153,10 +157,22 @@ class JwlFastWindowGuard(QObject):
             self._set_recovering(False)
             return
 
+        self._remember_foreground(item.hwnd)
+
+        target_rect = self._native_target_rect(target)
+        if self._normalized_hwnd != item.hwnd:
+            if self._normalize_maximized_without_activation(item.hwnd, target_rect):
+                self._normalized_hwnd = item.hwnd
+                self.recovery_detail.emit(
+                    {
+                        "hwnd": item.hwnd,
+                        "reason": "normalized_maximized",
+                    }
+                )
+
         current_rect = self._window_rect(item.hwnd)
         if current_rect is None:
             return
-        target_rect = self._native_target_rect(target)
         minimized = self._is_minimized(item.hwnd)
         visible = self._is_visible(item.hwnd)
         cloak_state = self._cloak_state(item.hwnd)
@@ -197,6 +213,13 @@ class JwlFastWindowGuard(QObject):
 
         shell_cloaked = bool(cloak_state & 0x2)
         if shell_cloaked:
+            now = time.monotonic()
+            if now - self._last_shell_recovery_request_at >= 0.75:
+                self._last_shell_recovery_request_at = now
+                self.shell_recovery_requested.emit(
+                    item.hwnd,
+                    self._last_foreground_hwnd,
+                )
             self._wait_for_shell_uncloak(item.hwnd, target_rect, cloak_state)
         else:
             self._restore_without_activation(item.hwnd, target_rect, cloaked=cloaked)
@@ -254,6 +277,7 @@ class JwlFastWindowGuard(QObject):
         if self._cached is None:
             return
         self._cached = None
+        self._normalized_hwnd = 0
         self.candidate_changed.emit(0, source)
 
     def _fallback_candidate_at_hall_center(
@@ -415,6 +439,60 @@ class JwlFastWindowGuard(QObject):
                 ),
             }
         )
+
+    def _remember_foreground(self, hall_hwnd: int) -> None:
+        if win32gui is None:
+            return
+        try:
+            hwnd = int(win32gui.GetForegroundWindow() or 0)
+            if hwnd <= 0 or not win32gui.IsWindow(hwnd):
+                return
+            root = self._root_hwnd(hwnd)
+            if root <= 0 or root == self._root_hwnd(hall_hwnd):
+                return
+            class_name = win32gui.GetClassName(root)
+            if class_name in {"Progman", "WorkerW", "Shell_TrayWnd"}:
+                return
+            self._last_foreground_hwnd = root
+        except (OSError, RuntimeError):
+            return
+
+    @staticmethod
+    def _normalize_maximized_without_activation(
+        hwnd: int,
+        target_rect: WindowRect,
+    ) -> bool:
+        if win32gui is None or win32con is None:
+            return False
+        try:
+            placement = win32gui.GetWindowPlacement(hwnd)
+            if not placement or len(placement) < 5:
+                return False
+            flags, _show_cmd, min_pos, max_pos, normal_rect = placement
+            win32gui.SetWindowPlacement(
+                hwnd,
+                (
+                    flags,
+                    win32con.SW_SHOWMAXIMIZED,
+                    min_pos,
+                    max_pos,
+                    normal_rect,
+                ),
+            )
+            win32gui.SetWindowPos(
+                hwnd,
+                win32con.HWND_TOPMOST,
+                target_rect.left,
+                target_rect.top,
+                target_rect.width,
+                target_rect.height,
+                win32con.SWP_NOACTIVATE
+                | win32con.SWP_SHOWWINDOW
+                | win32con.SWP_ASYNCWINDOWPOS,
+            )
+            return True
+        except Exception:  # noqa: BLE001 - best-effort shell normalization
+            return False
 
     @staticmethod
     def _is_valid_hwnd(hwnd: int) -> bool:
