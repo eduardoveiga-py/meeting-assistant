@@ -7,11 +7,14 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QLabel,
     QLineEdit,
+    QScrollArea,
     QSpinBox,
     QVBoxLayout,
+    QWidget,
 )
 
 from meeting_assistant.services.display_service import (
@@ -19,6 +22,7 @@ from meeting_assistant.services.display_service import (
     display_info_from_screen,
 )
 from meeting_assistant.services.settings import AppSettings
+from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
 class SettingsDialog(QDialog):
@@ -32,7 +36,8 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Ajustes do Meeting Assistant")
         self.setModal(True)
-        self.setMinimumWidth(520)
+        self.setMinimumSize(360, 240)
+        self.resize(580, 680)
 
         if available_displays is None:
             app = QGuiApplication.instance()
@@ -46,7 +51,15 @@ class SettingsDialog(QDialog):
                 else []
             )
 
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        scroll = QScrollArea()
+        scroll.setObjectName("SettingsContentScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        content = QWidget()
+        root = QVBoxLayout(content)
+        scroll.setWidget(content)
+        outer.addWidget(scroll, 1)
 
         output_group = QGroupBox("Saída do Salão")
         output_form = QFormLayout(output_group)
@@ -180,7 +193,8 @@ class SettingsDialog(QDialog):
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        root.addWidget(buttons)
+        outer.addWidget(buttons)
+        self._screen_fit = ScreenFitController(self)
 
     @staticmethod
     def _scene_combo(current: str, available_scenes: list[str]) -> QComboBox:

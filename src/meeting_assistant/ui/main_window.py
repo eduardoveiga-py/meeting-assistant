@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -31,6 +32,7 @@ from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsCo
 from meeting_assistant.services.settings import AppSettings, SettingsService
 from meeting_assistant.services.zoom_hall_service import ZoomHallService
 from meeting_assistant.ui.settings_dialog import SettingsDialog
+from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
 class MainWindow(QMainWindow):
@@ -73,7 +75,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowIcon(self.app_icon)
         self.resize(600, 780)
-        self.setMinimumSize(520, 700)
+        self.setMinimumSize(360, 280)
 
         self._build_ui()
         self._apply_style()
@@ -85,6 +87,7 @@ class MainWindow(QMainWindow):
         self._on_jwl_snapshot(self.jwl.snapshot())
         self._set_automation_ui(False)
         self._refresh_mode()
+        self._screen_fit = ScreenFitController(self)
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -236,9 +239,15 @@ class MainWindow(QMainWindow):
         self.footer = QLabel("OBS é a fonte de verdade • Zoom → Salão é uma saída local independente")
         self.footer.setObjectName("Footer")
         self.footer.setAlignment(Qt.AlignCenter)
+        self.footer.setWordWrap(True)
         root.addWidget(self.footer)
 
-        self.setCentralWidget(central)
+        scroll = QScrollArea()
+        scroll.setObjectName("MainContentScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(central)
+        self.setCentralWidget(scroll)
 
     def _connect_obs_signals(self) -> None:
         self.obs.connected_changed.connect(self._on_obs_connected)
