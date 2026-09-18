@@ -232,10 +232,10 @@ class MainWindow(QMainWindow):
 
         root.addWidget(controls_card, 1)
 
-        footer = QLabel("OBS é a fonte de verdade • Zoom → Salão é uma saída local independente")
-        footer.setObjectName("Footer")
-        footer.setAlignment(Qt.AlignCenter)
-        root.addWidget(footer)
+        self.footer = QLabel("OBS é a fonte de verdade • Zoom → Salão é uma saída local independente")
+        self.footer.setObjectName("Footer")
+        self.footer.setAlignment(Qt.AlignCenter)
+        root.addWidget(self.footer)
 
         self.setCentralWidget(central)
 
@@ -328,6 +328,14 @@ class MainWindow(QMainWindow):
         self.automation_status.setText(message)
         self.automation_badge.setToolTip(message)
         self.auto_button.setToolTip(message)
+
+    def set_telemetry_status(self, ok: bool, message: str, session_id: str) -> None:
+        state = "sincronizada" if ok else "local"
+        self.footer.setText(
+            "OBS é a fonte de verdade • Zoom → Salão é local • "
+            f"Telemetria {state}: {session_id}"
+        )
+        self.footer.setToolTip(message)
 
     def set_automation_signal(
         self,
