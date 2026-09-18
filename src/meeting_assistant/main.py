@@ -265,6 +265,7 @@ def main() -> int:
             telemetry.event(
                 "jwl_recovery_started",
                 hwnd=jwl_fast_guard.cached_hwnd,
+                reason=jwl_fast_guard.last_recovery_reason,
             )
             return
         if recovery_started_at is None:
