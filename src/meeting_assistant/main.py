@@ -286,6 +286,12 @@ def main() -> int:
             source=source,
         )
     )
+    jwl_fast_guard.recovery_detail.connect(
+        lambda detail: telemetry.event(
+            "jwl_recovery_attempt",
+            detail=detail,
+        )
+    )
 
     meeting_launcher.progress_changed.connect(
         lambda message: telemetry.event("meeting_launcher_progress", message=message)
