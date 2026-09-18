@@ -300,6 +300,9 @@ def main() -> int:
 
     jwl_fast_guard.recovery_changed.connect(record_jwl_recovery)
     jwl_fast_guard.candidate_changed.connect(record_jwl_candidate)
+    jwl_fast_guard.shell_recovery_requested.connect(
+        jwl_virtual_desktop.recover_shell_cloak
+    )
     jwl_virtual_desktop.result.connect(
         lambda result: (
             telemetry.event(
