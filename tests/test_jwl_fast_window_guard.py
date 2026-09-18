@@ -42,3 +42,15 @@ def test_healthy_window_does_not_need_recovery() -> None:
         current_rect=WindowRect(-1918, -1079, -1, -1),
         target_rect=target,
     )
+
+
+def test_dwm_cloaked_window_needs_recovery() -> None:
+    target = WindowRect(-1920, -1080, 0, 0)
+
+    assert window_needs_recovery(
+        minimized=False,
+        visible=True,
+        cloaked=True,
+        current_rect=target,
+        target_rect=target,
+    )
