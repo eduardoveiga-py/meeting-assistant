@@ -31,11 +31,12 @@ def window_needs_recovery(
     current_rect: WindowRect,
     target_rect: WindowRect,
     cloaked: bool = False,
+    covered: bool = False,
     tolerance: int = 8,
 ) -> bool:
     """Return whether a known Hall-output HWND needs immediate repair."""
 
-    if minimized or not visible or cloaked:
+    if minimized or not visible or cloaked or covered:
         return True
     return bool(
         abs(current_rect.left - target_rect.left) > tolerance
@@ -134,11 +135,13 @@ class JwlFastWindowGuard(QObject):
         minimized = self._is_minimized(item.hwnd)
         visible = self._is_visible(item.hwnd)
         cloaked = self._is_cloaked(item.hwnd)
+        covered = not self._is_exposed_at_center(item.hwnd, target_rect)
 
         needs_recovery = window_needs_recovery(
             minimized=minimized,
             visible=visible,
             cloaked=cloaked,
+            covered=covered,
             current_rect=current_rect,
             target_rect=target_rect,
         )
@@ -148,6 +151,8 @@ class JwlFastWindowGuard(QObject):
 
         if cloaked:
             self._last_recovery_reason = "dwm_cloaked"
+        elif covered:
+            self._last_recovery_reason = "covered_or_show_desktop"
         elif minimized:
             self._last_recovery_reason = "minimized"
         elif not visible:
@@ -218,6 +223,30 @@ class JwlFastWindowGuard(QObject):
             return bool(win32gui.IsWindowVisible(hwnd))
         except (OSError, RuntimeError):
             return True
+
+    @staticmethod
+    def _root_hwnd(hwnd: int) -> int:
+        if hwnd <= 0 or win32gui is None or win32con is None:
+            return hwnd
+        try:
+            root = win32gui.GetAncestor(hwnd, win32con.GA_ROOT)
+            return int(root or hwnd)
+        except (AttributeError, OSError, RuntimeError):
+            return hwnd
+
+    @classmethod
+    def _is_exposed_at_center(cls, hwnd: int, target_rect: WindowRect) -> bool:
+        if win32gui is None:
+            return True
+        center_x = target_rect.left + max(1, target_rect.width // 2)
+        center_y = target_rect.top + max(1, target_rect.height // 2)
+        try:
+            visible_hwnd = int(win32gui.WindowFromPoint((center_x, center_y)) or 0)
+        except (OSError, RuntimeError):
+            return True
+        if visible_hwnd <= 0:
+            return False
+        return cls._root_hwnd(visible_hwnd) == cls._root_hwnd(hwnd)
 
     @staticmethod
     def _is_cloaked(hwnd: int) -> bool:
