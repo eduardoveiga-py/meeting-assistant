@@ -409,6 +409,8 @@ class JwlVirtualDesktopPinService(QObject):
                         item = session.pin(hwnd)
                         if item.ok:
                             self._pinned_hwnds.add(hwnd)
+                        else:
+                            self._requested_hwnd = 0
                         self.result.emit(item)
                     elif action == "unpin":
                         item = session.unpin(hwnd)
@@ -416,6 +418,8 @@ class JwlVirtualDesktopPinService(QObject):
                             self._pinned_hwnds.discard(hwnd)
                         self.result.emit(item)
                 except Exception as exc:  # noqa: BLE001 - best-effort integration
+                    if action == "pin":
+                        self._requested_hwnd = 0
                     self.result.emit(
                         VirtualDesktopPinResult(
                             hwnd=hwnd,
