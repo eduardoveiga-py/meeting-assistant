@@ -65,6 +65,7 @@ class JwlFastWindowGuard(QObject):
     """
 
     recovery_changed = Signal(bool)
+    recovery_detail = Signal(object)
     candidate_changed = Signal(int, str)
 
     def __init__(
@@ -82,6 +83,8 @@ class JwlFastWindowGuard(QObject):
         self._recovering = False
         self._last_recovery_reason = ""
         self._last_fallback_probe_at = 0.0
+        self._recovery_started_at = 0.0
+        self._recovery_attempts = 0
         self._timer = QTimer(self)
         self._timer.setInterval(max(120, interval_ms))
         self._timer.timeout.connect(self._tick)
@@ -155,7 +158,8 @@ class JwlFastWindowGuard(QObject):
         target_rect = self._native_target_rect(target)
         minimized = self._is_minimized(item.hwnd)
         visible = self._is_visible(item.hwnd)
-        cloaked = self._is_cloaked(item.hwnd)
+        cloak_state = self._cloak_state(item.hwnd)
+        cloaked = cloak_state != 0
         covered = not self._is_exposed_at_center(item.hwnd, target_rect)
 
         needs_recovery = window_needs_recovery(
@@ -170,7 +174,9 @@ class JwlFastWindowGuard(QObject):
             self._set_recovering(False)
             return
 
-        if cloaked:
+        if cloak_state & 0x2:
+            self._last_recovery_reason = "dwm_cloaked_shell"
+        elif cloaked:
             self._last_recovery_reason = "dwm_cloaked"
         elif covered:
             self._last_recovery_reason = "covered_or_show_desktop"
@@ -181,8 +187,18 @@ class JwlFastWindowGuard(QObject):
         else:
             self._last_recovery_reason = "geometry"
 
+        was_recovering = self._recovering
         self._set_recovering(True)
-        self._restore_without_activation(item.hwnd, target_rect, cloaked=cloaked)
+        if not was_recovering:
+            self._recovery_started_at = time.monotonic()
+            self._recovery_attempts = 0
+        self._recovery_attempts += 1
+
+        shell_cloaked = bool(cloak_state & 0x2)
+        if shell_cloaked:
+            self._restore_shell_cloaked(item.hwnd, target_rect, cloak_state)
+        else:
+            self._restore_without_activation(item.hwnd, target_rect, cloaked=cloaked)
 
         # A successful ShowWindow/SetWindowPos is normally visible immediately.
         # Confirm on the next 120–180 ms tick instead of blocking the UI thread.
@@ -365,6 +381,96 @@ class JwlFastWindowGuard(QObject):
             return False
         return found
 
+    def _restore_shell_cloaked(
+        self,
+        hwnd: int,
+        target_rect: WindowRect,
+        cloak_state: int,
+    ) -> None:
+        """Recover a UWP/JWL frame suppressed by Windows Show Desktop.
+
+        A shell-cloaked window is not equivalent to a minimized window.
+        First request removal of any app-level DWM cloak, then mimic selecting
+        the window again so Explorer makes that individual surface presentable.
+        The previous foreground window is restored immediately afterwards.
+        """
+
+        if win32gui is None or win32con is None:
+            return
+
+        previous_foreground = 0
+        try:
+            previous_foreground = int(win32gui.GetForegroundWindow() or 0)
+        except (OSError, RuntimeError):
+            previous_foreground = 0
+
+        dwm_hr = self._request_dwm_uncloak(hwnd)
+        foreground_result = False
+
+        try:
+            show_async = getattr(win32gui, "ShowWindowAsync", None)
+            if callable(show_async):
+                show_async(hwnd, win32con.SW_RESTORE)
+            else:
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+
+            flags = (
+                win32con.SWP_SHOWWINDOW
+                | win32con.SWP_ASYNCWINDOWPOS
+                | win32con.SWP_FRAMECHANGED
+            )
+            win32gui.SetWindowPos(
+                hwnd,
+                win32con.HWND_TOPMOST,
+                target_rect.left,
+                target_rect.top,
+                target_rect.width,
+                target_rect.height,
+                flags,
+            )
+
+            # Shell-cloaked UWP windows often remain suppressed until Windows
+            # treats them as selected again. This mirrors the taskbar-click
+            # recovery that works reliably on the operator's machine.
+            foreground_result = bool(win32gui.SetForegroundWindow(hwnd))
+
+            if (
+                previous_foreground > 0
+                and previous_foreground != hwnd
+                and win32gui.IsWindow(previous_foreground)
+            ):
+                win32gui.SetForegroundWindow(previous_foreground)
+
+            # Leave the Hall surface topmost without keeping keyboard focus.
+            win32gui.SetWindowPos(
+                hwnd,
+                win32con.HWND_TOPMOST,
+                target_rect.left,
+                target_rect.top,
+                target_rect.width,
+                target_rect.height,
+                win32con.SWP_NOACTIVATE
+                | win32con.SWP_SHOWWINDOW
+                | win32con.SWP_ASYNCWINDOWPOS,
+            )
+        except (OSError, RuntimeError):
+            pass
+
+        self.recovery_detail.emit(
+            {
+                "hwnd": hwnd,
+                "reason": "dwm_cloaked_shell",
+                "cloak_state_before": cloak_state,
+                "cloak_state_after": self._cloak_state(hwnd),
+                "dwm_uncloak_hresult": dwm_hr,
+                "foreground_result": foreground_result,
+                "attempt": self._recovery_attempts,
+                "elapsed_ms": round(
+                    max(0.0, time.monotonic() - self._recovery_started_at) * 1000
+                ),
+            }
+        )
+
     @staticmethod
     def _is_valid_hwnd(hwnd: int) -> bool:
         if hwnd <= 0 or win32gui is None:
@@ -408,9 +514,9 @@ class JwlFastWindowGuard(QObject):
         return cls._root_hwnd(visible_hwnd) == cls._root_hwnd(hwnd)
 
     @staticmethod
-    def _is_cloaked(hwnd: int) -> bool:
+    def _cloak_state(hwnd: int) -> int:
         if hwnd <= 0 or sys.platform != "win32":
-            return False
+            return 0
         try:
             cloaked = ctypes.c_int(0)
             result = ctypes.windll.dwmapi.DwmGetWindowAttribute(
@@ -419,9 +525,30 @@ class JwlFastWindowGuard(QObject):
                 ctypes.byref(cloaked),
                 ctypes.sizeof(cloaked),
             )
-            return result == 0 and bool(cloaked.value)
+            return int(cloaked.value) if result == 0 else 0
         except (AttributeError, OSError):
-            return False
+            return 0
+
+    @staticmethod
+    def _is_cloaked(hwnd: int) -> bool:
+        return JwlFastWindowGuard._cloak_state(hwnd) != 0
+
+    @staticmethod
+    def _request_dwm_uncloak(hwnd: int) -> int:
+        if hwnd <= 0 or sys.platform != "win32":
+            return -1
+        try:
+            uncloaked = ctypes.c_int(0)
+            return int(
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    ctypes.c_void_p(hwnd),
+                    ctypes.c_uint(13),  # DWMWA_CLOAK
+                    ctypes.byref(uncloaked),
+                    ctypes.sizeof(uncloaked),
+                )
+            )
+        except (AttributeError, OSError):
+            return -1
 
     @staticmethod
     def _is_minimized(hwnd: int) -> bool:
@@ -472,4 +599,7 @@ class JwlFastWindowGuard(QObject):
         if recovering == self._recovering:
             return
         self._recovering = recovering
+        if not recovering:
+            self._recovery_started_at = 0.0
+            self._recovery_attempts = 0
         self.recovery_changed.emit(recovering)
