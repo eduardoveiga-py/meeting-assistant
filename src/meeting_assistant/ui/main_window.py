@@ -67,6 +67,7 @@ class MainWindow(QMainWindow):
         self.jwl_snapshot: list[JwlWindowInfo] = []
         self._startup_scene_applied = False
         self._preview_fade_group: QSequentialAnimationGroup | None = None
+        self.telemetry_session_id = ""
 
         self.state.automation_enabled = False
 
@@ -329,8 +330,16 @@ class MainWindow(QMainWindow):
         self.automation_badge.setToolTip(message)
         self.auto_button.setToolTip(message)
 
-    def set_telemetry_status(self, ok: bool, message: str, session_id: str) -> None:
+    def set_telemetry_session(self, session_id: str) -> None:
+        self.telemetry_session_id = session_id
+        self.footer.setText(
+            "OBS é a fonte de verdade • Zoom → Salão é local • "
+            f"Telemetria: {session_id}"
+        )
+
+    def set_telemetry_status(self, ok: bool, message: str) -> None:
         state = "sincronizada" if ok else "local"
+        session_id = self.telemetry_session_id or "sessão atual"
         self.footer.setText(
             "OBS é a fonte de verdade • Zoom → Salão é local • "
             f"Telemetria {state}: {session_id}"
