@@ -83,7 +83,7 @@ def test_position_failure_restores_jwl_and_releases_automation_pause(monkeypatch
     service, _ = setup_windows(monkeypatch, {1: {"controls": True}, 2: {}})
     monkeypatch.setattr(module.sys, "platform", "win32")
     monkeypatch.setattr(module, "win32con", SimpleNamespace(
-        SW_RESTORE=1, SW_SHOW=2, SW_HIDE=0, SWP_NOACTIVATE=16,
+        SW_RESTORE=1, SW_SHOW=2, SW_SHOWNOACTIVATE=4, SW_HIDE=0, SWP_NOACTIVATE=16,
         SWP_SHOWWINDOW=64, SWP_FRAMECHANGED=32, HWND_TOPMOST=-1,
     ))
     module.win32gui.ShowWindow = lambda *args: None
@@ -93,6 +93,7 @@ def test_position_failure_restores_jwl_and_releases_automation_pause(monkeypatch
         raise OSError("window disappeared")
 
     module.win32gui.SetWindowPos = fail_position
+    service._jwl_window_provider = lambda: jwl_info()
     service._display_provider = lambda: object()
     monkeypatch.setattr(service, "_native_target_rect", lambda _: module.WindowRect(0, 0, 1280, 720))
     changes = []
@@ -101,3 +102,62 @@ def test_position_failure_restores_jwl_and_releases_automation_pause(monkeypatch
     assert not service.show_on_hall()
     assert not service.active
     assert changes == ["paused", False]
+
+
+def jwl_info():
+    return module.JwlSecondaryWindowInfo(
+        hwnd=1, pid=1, process_name="JWLibrary.exe", title="", class_name="",
+        rect=module.WindowRect(0, 0, 1280, 720), visible=True, minimized=False,
+        topmost=True, title_bar_visible=False, has_jwl_core_window=True,
+        monitor_primary=False, score=100,
+    )
+
+
+@pytest.mark.parametrize("valid_jwl", [True, False])
+def test_return_restores_cached_jwl_before_hiding_zoom(monkeypatch, valid_jwl):
+    service, _ = setup_windows(monkeypatch, {1: {}, 2: {}})
+    monkeypatch.setattr(module.sys, "platform", "win32")
+    monkeypatch.setattr(module, "win32con", SimpleNamespace(
+        SW_RESTORE=1, SW_SHOWNOACTIVATE=4, SW_HIDE=0, SWP_NOACTIVATE=16,
+        SWP_SHOWWINDOW=64, SWP_FRAMECHANGED=32, HWND_TOPMOST=-1,
+    ))
+    calls = []
+    module.win32gui.IsWindow = lambda hwnd: hwnd == 2 or (hwnd == 1 and valid_jwl)
+    module.win32gui.IsIconic = lambda hwnd: False
+    module.win32gui.ShowWindow = lambda hwnd, mode: calls.append(("show", hwnd, mode))
+    module.win32gui.SetWindowPos = lambda *args: calls.append(("position", args[0]))
+    service._display_provider = lambda: object()
+    monkeypatch.setattr(service, "_native_target_rect", lambda _: module.WindowRect(0, 0, 1280, 720))
+    service._jwl_hwnd = 1
+    service._zoom_hwnd = 2
+    service._active = True
+    statuses = []
+    service.status_changed.connect(lambda ok, _: statuses.append(ok))
+    assert service.restore_jwl() is valid_jwl
+    assert service.active is not valid_jwl
+    assert statuses[-1] is valid_jwl
+    if valid_jwl:
+        assert calls.index(("position", 1)) < calls.index(("show", 2, 0))
+        assert ("show", 1, 1) in calls
+    else:
+        assert ("show", 2, 0) not in calls
+
+
+def test_enter_zoom_keeps_jwl_visible_and_saves_return_handle(monkeypatch):
+    service, _ = setup_windows(monkeypatch, {1: {"controls": True}, 2: {}})
+    monkeypatch.setattr(module.sys, "platform", "win32")
+    monkeypatch.setattr(module, "win32con", SimpleNamespace(
+        SW_RESTORE=1, SW_SHOW=2, SWP_NOACTIVATE=16,
+        SWP_SHOWWINDOW=64, SWP_FRAMECHANGED=32, HWND_TOPMOST=-1,
+    ))
+    calls = []
+    module.win32gui.IsWindow = lambda hwnd: hwnd in {1, 2}
+    module.win32gui.ShowWindow = lambda hwnd, mode: calls.append((hwnd, mode))
+    module.win32gui.SetWindowPos = lambda *args: None
+    service._jwl_window_provider = lambda: jwl_info()
+    service._display_provider = lambda: object()
+    monkeypatch.setattr(service, "_native_target_rect", lambda _: module.WindowRect(0, 0, 1280, 720))
+    assert service.show_on_hall()
+    assert service.active
+    assert service._jwl_hwnd == 1
+    assert all(hwnd != 1 for hwnd, _ in calls)

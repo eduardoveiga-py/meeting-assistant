@@ -153,7 +153,7 @@ def main() -> int:
     meeting_launcher = MeetingLauncherService(lambda: settings)
     zoom_hall = ZoomHallService(
         display_provider=current_hall_display,
-        jwl_window_provider=lambda: jwl_secondary.current,
+        jwl_window_provider=lambda: jwl_secondary.current or jwl_fast_guard.cached_candidate,
     )
 
     window = MainWindow(
@@ -342,21 +342,24 @@ def main() -> int:
         )
     )
 
-    def apply_automation_runtime(enabled: bool) -> None:
-        effective = bool(enabled and not zoom_hall.active)
+    def apply_automation_runtime(enabled: bool, *, switching_to_zoom: bool = False) -> None:
+        protect_jwl = not (zoom_hall.active or switching_to_zoom)
+        effective = bool(enabled and protect_jwl)
         telemetry.event(
             "automation_runtime",
             requested=enabled,
             effective=effective,
             zoom_hall_active=zoom_hall.active,
         )
-        jwl_secondary.set_guard_enabled(effective)
-        jwl_fast_guard.set_enabled(effective)
+        jwl_secondary.set_guard_enabled(protect_jwl)
+        jwl_fast_guard.set_enabled(protect_jwl)
         media_automation.set_enabled(effective and not jwl_fast_guard.recovering)
 
     window.automation_enabled_changed.connect(apply_automation_runtime)
     window.idle_reference_requested.connect(media_automation.reset_idle_reference)
-    zoom_hall.about_to_show.connect(lambda: apply_automation_runtime(False))
+    zoom_hall.about_to_show.connect(
+        lambda: apply_automation_runtime(False, switching_to_zoom=True)
+    )
     zoom_hall.active_changed.connect(
         lambda active, _message: (
             apply_automation_runtime(state.automation_enabled) if not active else None
@@ -390,7 +393,7 @@ def main() -> int:
     jwl_fast_guard.start()
     obs_controller.start(obs_config)
     media_automation.start()
-    media_automation.set_enabled(False)
+    apply_automation_runtime(False)
 
     return app.exec()
 

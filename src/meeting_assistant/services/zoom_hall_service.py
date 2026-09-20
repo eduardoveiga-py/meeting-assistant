@@ -102,15 +102,13 @@ class ZoomHallService(QObject):
             )
             return False
 
-        self.about_to_show.emit()
-
         jwl = self._jwl_window_provider()
-        if isinstance(jwl, JwlSecondaryWindowInfo) and self._is_window(jwl.hwnd):
-            self._jwl_hwnd = jwl.hwnd
-            try:
-                win32gui.ShowWindow(jwl.hwnd, win32con.SW_MINIMIZE)
-            except (OSError, RuntimeError):
-                pass
+        if not isinstance(jwl, JwlSecondaryWindowInfo) or not self._is_window(jwl.hwnd):
+            self.status_changed.emit(False, "Saída do JW Library não encontrada para o retorno.")
+            return False
+        self._jwl_hwnd = jwl.hwnd
+        # Keep JWL rendering underneath Zoom and save its handle before suspending guards.
+        self.about_to_show.emit()
 
         target_rect = self._native_target_rect(target)
         try:
@@ -133,6 +131,7 @@ class ZoomHallService(QObject):
         except (OSError, RuntimeError):
             self._zoom_hwnd = zoom.hwnd
             self.restore_jwl()
+            self.active_changed.emit(False, "Exibição do Zoom cancelada.")
             self.status_changed.emit(False, "Não foi possível posicionar o Zoom na Tela do Salão.")
             return False
 
@@ -152,14 +151,6 @@ class ZoomHallService(QObject):
 
         target = self._display_provider()
 
-        if self._is_window(self._zoom_hwnd):
-            try:
-                # Hiding the secondary Zoom window is more predictable than
-                # minimizing it and preserves its full-screen state for next use.
-                win32gui.ShowWindow(self._zoom_hwnd, win32con.SW_HIDE)
-            except (OSError, RuntimeError):
-                pass
-
         restored = False
         jwl = self._jwl_window_provider()
         jwl_hwnd = (
@@ -170,6 +161,7 @@ class ZoomHallService(QObject):
         if target is not None and self._is_window(jwl_hwnd):
             rect = self._native_target_rect(target)
             try:
+                win32gui.ShowWindow(jwl_hwnd, win32con.SW_RESTORE)
                 win32gui.ShowWindow(jwl_hwnd, win32con.SW_SHOWNOACTIVATE)
                 flags = (
                     win32con.SWP_NOACTIVATE
@@ -185,16 +177,33 @@ class ZoomHallService(QObject):
                     rect.height,
                     flags,
                 )
-                restored = True
+                actual = self._window_rect(jwl_hwnd)
+                restored = (
+                    bool(win32gui.IsWindowVisible(jwl_hwnd))
+                    and not win32gui.IsIconic(jwl_hwnd)
+                    and all(abs(a - b) <= 8 for a, b in zip(
+                        (actual.left, actual.top, actual.width, actual.height),
+                        (rect.left, rect.top, rect.width, rect.height), strict=True,
+                    ))
+                )
             except (OSError, RuntimeError):
                 restored = False
 
+        if not restored:
+            self.status_changed.emit(
+                False, "Não foi possível restaurar o JW Library na Tela do Salão. Tente novamente."
+            )
+            return False
+
+        if self._is_window(self._zoom_hwnd):
+            try:
+                win32gui.ShowWindow(self._zoom_hwnd, win32con.SW_HIDE)
+            except (OSError, RuntimeError):
+                self.status_changed.emit(False, "JW Library restaurado, mas não foi possível ocultar o Zoom.")
+                return False
+
         self._active = False
-        message = (
-            "Zoom removido da Tela do Salão; saída do JW Library restaurada."
-            if restored
-            else "Zoom removido da Tela do Salão; aguardando o guardião restaurar o JW Library."
-        )
+        message = "Zoom removido da Tela do Salão; saída do JW Library restaurada."
         self.status_changed.emit(True, message)
         self.active_changed.emit(False, message)
         return True

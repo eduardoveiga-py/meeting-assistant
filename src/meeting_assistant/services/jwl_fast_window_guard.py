@@ -103,6 +103,10 @@ class JwlFastWindowGuard(QObject):
         return self._recovering
 
     @property
+    def cached_candidate(self) -> JwlSecondaryWindowInfo | None:
+        return self._cached
+
+    @property
     def cached_hwnd(self) -> int:
         return self._cached.hwnd if self._cached is not None else 0
 
@@ -609,3 +613,4 @@ class JwlFastWindowGuard(QObject):
             self._recovery_started_at = 0.0
             self._recovery_attempts = 0
         self.recovery_changed.emit(recovering)
+
