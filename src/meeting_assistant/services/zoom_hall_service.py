@@ -23,7 +23,6 @@ except ImportError:  # pragma: no cover - Windows-only
 
 
 _ZOOM_WINDOW_CLASS = "ConfMultiTabContentWndClass"
-_ZOOM_MEETING_TITLE = "Zoom Meeting"
 _ZOOM_CONTROL_PANEL_CLASS = "ZPControlPanelClass"
 
 
@@ -56,18 +55,14 @@ def has_descendant_class(hwnd: int, class_name: str, max_depth: int = 3) -> bool
         except (OSError, RuntimeError):
             continue
 
-    if max_depth == 0:
-        return False
-
-    return any(
-        has_descendant_class(child, class_name, max_depth - 1)
-        for child in direct_children
-    )
+    # EnumChildWindows already enumerates descendants recursively.
+    return False
 
 
 class ZoomHallService(QObject):
     """Switch only the local Hall display between JWL and Zoom dual-monitor output."""
 
+    discovery_changed = Signal(object)
     about_to_show = Signal()
     active_changed = Signal(bool, str)
     status_changed = Signal(bool, str)
@@ -102,8 +97,8 @@ class ZoomHallService(QObject):
         if zoom is None:
             self.status_changed.emit(
                 False,
-                "Janela secundária do Zoom não encontrada. "
-                "Ative 'Usar dois monitores' no Zoom antes de entrar na reunião.",
+                "Não foi possível identificar com segurança a janela secundária do Zoom. "
+                "Mantenha as duas janelas abertas; o diagnóstico foi registrado.",
             )
             return False
 
@@ -136,6 +131,8 @@ class ZoomHallService(QObject):
                 flags,
             )
         except (OSError, RuntimeError):
+            self._zoom_hwnd = zoom.hwnd
+            self.restore_jwl()
             self.status_changed.emit(False, "Não foi possível posicionar o Zoom na Tela do Salão.")
             return False
 
@@ -209,42 +206,36 @@ class ZoomHallService(QObject):
         if win32gui is None or win32process is None:
             return None
 
-        if self._is_window(self._zoom_hwnd):
-            try:
-                rect = self._window_rect(self._zoom_hwnd)
-                _, pid = win32process.GetWindowThreadProcessId(self._zoom_hwnd)
-                return ZoomHallWindow(self._zoom_hwnd, int(pid), rect)
-            except (OSError, RuntimeError):
-                self._zoom_hwnd = 0
-
-        candidates: list[tuple[int, ZoomHallWindow]] = []
+        candidates: list[ZoomHallWindow] = []
+        inventory: list[dict] = []
 
         def callback(hwnd: int, _: object) -> bool:
             try:
-                if win32gui.GetClassName(hwnd) != _ZOOM_WINDOW_CLASS:
-                    return True
-                if win32gui.GetWindowText(hwnd).strip() != _ZOOM_MEETING_TITLE:
-                    return True
-
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
                 try:
                     process_name = psutil.Process(pid).name().casefold()
                 except (psutil.Error, OSError):
-                    process_name = ""
-                if process_name and process_name != "zoom.exe":
+                    return True
+                if process_name != "zoom.exe":
                     return True
 
-                # Zoom dual-monitor secondary window has no meeting control panel.
-                if has_descendant_class(hwnd, _ZOOM_CONTROL_PANEL_CLASS, 3):
-                    return True
-
+                class_name = win32gui.GetClassName(hwnd)
+                visible = bool(win32gui.IsWindowVisible(hwnd))
                 rect = self._window_rect(hwnd)
+                controls = has_descendant_class(hwnd, _ZOOM_CONTROL_PANEL_CLASS)
+                # Do not log window titles: they can contain meeting/participant names.
+                inventory.append({
+                    "hwnd": int(hwnd), "pid": int(pid), "class_name": class_name,
+                    "visible": visible, "width": rect.width, "height": rect.height,
+                    "has_controls": controls,
+                })
+                if class_name != _ZOOM_WINDOW_CLASS or controls:
+                    return True
+                if not visible and hwnd != self._zoom_hwnd:
+                    return True
                 if rect.width < 300 or rect.height < 180:
                     return True
-                score = rect.width * rect.height
-                if win32gui.IsWindowVisible(hwnd):
-                    score += 10_000_000
-                candidates.append((score, ZoomHallWindow(int(hwnd), int(pid), rect)))
+                candidates.append(ZoomHallWindow(int(hwnd), int(pid), rect))
             except (OSError, RuntimeError):
                 pass
             return True
@@ -252,12 +243,17 @@ class ZoomHallService(QObject):
         try:
             win32gui.EnumWindows(callback, None)
         except (OSError, RuntimeError):
+            self.discovery_changed.emit({"windows": inventory, "result": "enumeration_failed"})
             return None
 
-        if not candidates:
-            return None
-        candidates.sort(key=lambda item: item[0], reverse=True)
-        return candidates[0][1]
+        # Ambiguous candidates must never be resolved by moving the largest window.
+        selected = candidates[0] if len(candidates) == 1 else None
+        self.discovery_changed.emit({
+            "windows": inventory,
+            "result": "selected" if selected else "ambiguous" if candidates else "not_found",
+            "selected_hwnd": selected.hwnd if selected else 0,
+        })
+        return selected
 
     def _native_target_rect(self, target: DisplayInfo) -> WindowRect:
         if win32api is None:
@@ -296,3 +292,4 @@ class ZoomHallService(QObject):
             return bool(win32gui.IsWindow(hwnd))
         except (OSError, RuntimeError):
             return False
+

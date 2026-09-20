@@ -328,6 +328,9 @@ def main() -> int:
             telemetry.request_sync(),
         )
     )
+    zoom_hall.discovery_changed.connect(
+        lambda details: (telemetry.event("zoom_window_discovery", **details), telemetry.request_sync())
+    )
     zoom_hall.status_changed.connect(
         lambda ok, message: telemetry.event("zoom_hall_status", ok=ok, message=message)
     )

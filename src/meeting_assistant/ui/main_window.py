@@ -292,7 +292,8 @@ class MainWindow(QMainWindow):
 
     def _select_mode(self, mode: OperatingMode) -> None:
         if mode is OperatingMode.ZOOM:
-            self.zoom_hall.toggle()
+            if not self.zoom_hall.toggle():
+                self.mode_buttons[OperatingMode.ZOOM].setChecked(self.zoom_hall.active)
             return
 
         if self.zoom_hall.active:
