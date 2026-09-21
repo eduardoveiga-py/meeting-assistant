@@ -62,8 +62,8 @@ def test_ambiguous_windows_are_reported_not_guessed(monkeypatch):
 
 def test_hidden_secondary_can_be_reused_after_returning_to_jwl(monkeypatch):
     service, _ = setup_windows(monkeypatch, {1: {"controls": True}, 2: {"visible": False}})
-    assert service._find_secondary_zoom_window() is None
-    service._zoom_hwnd = 2
+    # A fresh app instance must recover the window hidden by the previous one.
+    assert service._zoom_hwnd == 0
     assert service._find_secondary_zoom_window().hwnd == 2
 
 
@@ -84,7 +84,8 @@ def test_position_failure_restores_jwl_and_releases_automation_pause(monkeypatch
     monkeypatch.setattr(module.sys, "platform", "win32")
     monkeypatch.setattr(module, "win32con", SimpleNamespace(
         SW_RESTORE=1, SW_SHOW=2, SW_SHOWNOACTIVATE=4, SW_HIDE=0, SWP_NOACTIVATE=16,
-        SWP_SHOWWINDOW=64, SWP_ASYNCWINDOWPOS=32, HWND_TOPMOST=-1,
+        SWP_SHOWWINDOW=64, SWP_ASYNCWINDOWPOS=32, HWND_TOPMOST=-1, HWND_NOTOPMOST=-2,
+        SWP_NOMOVE=2, SWP_NOSIZE=1,
     ))
     monkeypatch.setattr(module, "show_window_async", lambda *args: None)
     module.win32gui.IsWindow = lambda hwnd: hwnd in {1, 2}
@@ -114,12 +115,13 @@ def jwl_info():
     )
 
 
-def test_enter_zoom_keeps_jwl_visible_and_saves_return_handle(monkeypatch):
-    service, _ = setup_windows(monkeypatch, {1: {"controls": True}, 2: {}})
+def test_enter_zoom_recovers_hidden_window_after_restart_and_keeps_jwl_visible(monkeypatch):
+    service, _ = setup_windows(monkeypatch, {1: {"controls": True}, 2: {"visible": False}})
     monkeypatch.setattr(module.sys, "platform", "win32")
     monkeypatch.setattr(module, "win32con", SimpleNamespace(
         SW_RESTORE=1, SW_SHOW=2, SWP_NOACTIVATE=16,
-        SWP_SHOWWINDOW=64, SWP_ASYNCWINDOWPOS=32, HWND_TOPMOST=-1,
+        SWP_SHOWWINDOW=64, SWP_ASYNCWINDOWPOS=32, HWND_TOPMOST=-1, HWND_NOTOPMOST=-2,
+        SWP_NOMOVE=2, SWP_NOSIZE=1,
     ))
     calls = []
     module.win32gui.IsWindow = lambda hwnd: hwnd in {1, 2}
@@ -139,7 +141,8 @@ def setup_return(monkeypatch):
     monkeypatch.setattr(module.sys, "platform", "win32")
     monkeypatch.setattr(module, "win32con", SimpleNamespace(
         SW_SHOWNOACTIVATE=4, SW_HIDE=0, SWP_NOACTIVATE=16,
-        SWP_SHOWWINDOW=64, SWP_ASYNCWINDOWPOS=32, HWND_TOPMOST=-1,
+        SWP_SHOWWINDOW=64, SWP_ASYNCWINDOWPOS=32, HWND_TOPMOST=-1, HWND_NOTOPMOST=-2,
+        SWP_NOMOVE=2, SWP_NOSIZE=1,
     ))
     state = {"cloaked": 0, "exposed": True, "zoom_visible": True, "valid": True}
     calls, events = [], []
@@ -164,10 +167,8 @@ def test_return_waits_for_native_confirmation_before_resuming(monkeypatch):
     assert service.returning and service.active
     assert ("show", 2, 0) not in calls
     service._poll_return()
-    assert ("show", 2, 0) in calls
-    assert service.active
-    state["zoom_visible"] = False
-    service._poll_return()
+    assert ("show", 2, 0) not in calls
+    assert state["zoom_visible"]
     assert not service.returning and not service.active
     assert events[-1]["phase"] == "return_confirmed"
     assert all(flags & 32 for kind, _, flags in calls if kind == "position")
@@ -198,8 +199,7 @@ def test_return_timeout_keeps_zoom_and_can_be_retried(monkeypatch):
     state["cloaked"] = 0
     service.restore_jwl()
     service._poll_return()
-    state["zoom_visible"] = False
-    service._poll_return()
+    assert state["zoom_visible"]
     assert not service.active
 
 
@@ -228,3 +228,27 @@ def test_guard_and_media_policy_through_entire_zoom_cycle(enabled):
     assert module.hall_runtime_flags(enabled, True, False) == (False, False)
     assert module.hall_runtime_flags(enabled, True, True) == (True, False)
     assert module.hall_runtime_flags(enabled, False, False) == (True, enabled)
+
+
+def test_multiple_hidden_secondaries_are_not_guessed(monkeypatch):
+    service, records = setup_windows(monkeypatch, {1: {"visible": False}, 2: {"visible": False}})
+    assert service._find_secondary_zoom_window() is None
+    assert records[-1]["result"] == "ambiguous"
+
+
+def test_repeated_zoom_cycles_never_hide_secondary(monkeypatch):
+    service, state, calls, _ = setup_return(monkeypatch)
+    module.win32con.SW_RESTORE = 9
+    module.win32con.SW_SHOW = 5
+    service._jwl_window_provider = jwl_info
+    monkeypatch.setattr(service, "_find_secondary_zoom_window", lambda: module.ZoomHallWindow(
+        2, 2, module.WindowRect(0, 0, 1280, 720),
+    ))
+    for _ in range(3):
+        assert service.restore_jwl()
+        service._poll_return()
+        assert not service.active
+        assert state["zoom_visible"]
+        assert service.show_on_hall()
+        assert service.active
+    assert ("show", 2, 0) not in calls

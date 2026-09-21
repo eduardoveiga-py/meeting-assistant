@@ -198,6 +198,14 @@ class ZoomHallService(QObject):
     def _request_return(self) -> None:
         rect = self._return_rect
         try:
+            if self._is_window(self._zoom_hwnd):
+                # Keep Zoom alive and discoverable underneath JWL. SW_HIDE
+                # outlives this app's HWND cache and strands it after a restart.
+                win32gui.SetWindowPos(
+                    self._zoom_hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
+                    win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE
+                    | win32con.SWP_NOSIZE | win32con.SWP_ASYNCWINDOWPOS,
+                )
             show_window_async(self._jwl_hwnd, win32con.SW_SHOWNOACTIVATE)
             win32gui.SetWindowPos(
                 self._jwl_hwnd, win32con.HWND_TOPMOST,
@@ -234,12 +242,9 @@ class ZoomHallService(QObject):
         try:
             snapshot = self._return_snapshot()
             if snapshot["ready"]:
-                if self._is_window(self._zoom_hwnd) and win32gui.IsWindowVisible(self._zoom_hwnd):
-                    show_window_async(self._zoom_hwnd, win32con.SW_HIDE)
-                    # The asynchronous hide is not confirmation. Check next tick.
-                else:
-                    self._finish_return(True, elapsed, snapshot)
-                    return
+                # Exposure confirms JWL is above Zoom; Zoom stays open below it.
+                self._finish_return(True, elapsed, snapshot)
+                return
             else:
                 self._request_return()
         except (OSError, RuntimeError) as exc:
@@ -263,6 +268,11 @@ class ZoomHallService(QObject):
             try:
                 if self._is_window(self._zoom_hwnd):
                     show_window_async(self._zoom_hwnd, win32con.SW_SHOWNOACTIVATE)
+                    win32gui.SetWindowPos(
+                        self._zoom_hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
+                        win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE
+                        | win32con.SWP_NOSIZE | win32con.SWP_ASYNCWINDOWPOS,
+                    )
             except (OSError, RuntimeError):
                 pass
             self.status_changed.emit(
@@ -305,8 +315,8 @@ class ZoomHallService(QObject):
                 })
                 if class_name != _ZOOM_WINDOW_CLASS or controls:
                     return True
-                if not visible and hwnd != self._zoom_hwnd:
-                    return True
+                # A previous app instance may have hidden this window. Its
+                # process/class/controls identify it even without our HWND cache.
                 if rect.width < 300 or rect.height < 180:
                     return True
                 candidates.append(ZoomHallWindow(int(hwnd), int(pid), rect))
