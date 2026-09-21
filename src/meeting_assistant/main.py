@@ -5,7 +5,7 @@ import sys
 import time
 from importlib.resources import as_file, files
 
-from PySide6.QtCore import QLoggingCategory, Qt
+from PySide6.QtCore import QLoggingCategory, Qt, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
@@ -412,6 +412,11 @@ def main() -> int:
     obs_controller.start(obs_config)
     media_automation.start()
     apply_automation_runtime(False)
+
+    from meeting_assistant.services.setup_assistant import needs_setup
+
+    if needs_setup(settings):
+        QTimer.singleShot(1200, window._open_setup_assistant)
 
     return app.exec()
 

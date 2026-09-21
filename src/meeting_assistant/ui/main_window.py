@@ -76,6 +76,7 @@ class MainWindow(QMainWindow):
         self._hall_display_provider = hall_display_provider or (lambda: None)
         self.yeartext_store = YeartextStore(settings_service.path.parent / "yeartext")
         self._latest_media_active = False
+        self._setup_assistant = None
         self.obs_connected = False
         self.obs_scenes: list[str] = []
         self.current_obs_scene: str | None = None
@@ -678,6 +679,9 @@ class MainWindow(QMainWindow):
     def _show_settings(self) -> None:
         dialog = SettingsDialog(self.settings, self.obs_scenes, self)
         dialog.hall_setup_requested.connect(lambda: self._open_hall_setup(dialog))
+        dialog.setup_assistant_requested.connect(
+            lambda: (dialog.reject(), QTimer.singleShot(0, self._open_setup_assistant))
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
@@ -715,7 +719,43 @@ class MainWindow(QMainWindow):
              self.settings.scene_media) = STANDARD_SCENES
             self.settings.obs_standard_scenes = True
             self.settings_service.save(self.settings)
-        QMessageBox.information(self, "Preparação OBS", message)
+        if self._setup_assistant is None:
+            QMessageBox.information(self, "Preparação OBS", message)
+
+    def _apply_assistant_settings(self, pending):
+        from dataclasses import fields
+
+        if self.state.automation_enabled or self.zoom_hall.active or self.zoom_hall.returning:
+            raise ValueError("Pause a automação e retorne ao JWL antes de configurar o ambiente.")
+        if pending.obs_start_at_logon != self.settings.obs_start_at_logon or (
+            pending.obs_start_at_logon and pending.obs_executable != self.settings.obs_executable
+        ):
+            configure_obs_logon(pending.obs_start_at_logon, pending.obs_executable)
+        previous_obs_config = self._obs_config()
+        self.settings_service.save(pending)
+        for field in fields(pending):
+            setattr(self.settings, field.name, getattr(pending, field.name))
+        self._startup_scene_applied = True
+        if previous_obs_config != self._obs_config():
+            self.obs.reconfigure(self._obs_config())
+
+    def _open_setup_assistant(self):
+        if self._setup_assistant is not None:
+            self._setup_assistant.raise_()
+            return
+        if self.state.automation_enabled or self.zoom_hall.active or self.zoom_hall.returning:
+            QMessageBox.information(
+                self, "Configuração", "Pause a automação e retorne ao JWL antes de configurar."
+            )
+            return
+        from meeting_assistant.ui.setup_assistant_dialog import SetupAssistantDialog
+
+        dialog = SetupAssistantDialog(self)
+        self._setup_assistant = dialog
+        dialog.exec()
+        self._setup_assistant = None
+        dialog.deleteLater()
+        self._refresh_yeartext_notice()
 
     def _hall_capture_target(self):
         if self.state.automation_enabled and self._latest_media_active:

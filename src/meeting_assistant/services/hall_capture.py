@@ -86,13 +86,9 @@ def verified_hall_target(candidate, display, blocked: bool, diagnostic=None) -> 
         )
     ):
         raise ValueError("O JWL ainda não ocupa a Tela do Salão selecionada.")
-    for x in (target.left + 1, target.center[0], target.right - 2):
-        for y in (target.top + 1, target.center[1], target.bottom - 2):
-            covering = win32gui.WindowFromPoint(
-                (x, y)
-            )
-            if win32gui.GetAncestor(covering, 2) != hwnd:
-                raise ValueError("Outra janela está sobre o JWL. Libere a Tela do Salão antes de capturar.")
+    from meeting_assistant.services.window_exposure import verify_visual_exposure
+
+    verify_visual_exposure(hwnd, monitor_rect, diagnostic)
     related = [hwnd]
     win32gui.EnumChildWindows(hwnd, lambda child, _: related.append(child), None)
     selectors = []

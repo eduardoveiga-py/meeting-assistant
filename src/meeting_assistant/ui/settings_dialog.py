@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -31,6 +31,7 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 
 class SettingsDialog(QDialog):
     hall_setup_requested = Signal()
+    setup_assistant_requested = Signal()
 
     def __init__(
         self,
@@ -38,6 +39,7 @@ class SettingsDialog(QDialog):
         available_scenes: list[str],
         parent=None,
         available_displays: list[DisplayInfo] | None = None,
+        embedded: bool = False,
     ) -> None:
         super().__init__(parent)
         self.prepare_obs_requested = False
@@ -166,6 +168,7 @@ class SettingsDialog(QDialog):
         prepare_button = QPushButton("Salvar e preparar cenas / câmera no OBS")
         prepare_button.clicked.connect(self._prepare_obs)
         camera_form.addRow(prepare_button)
+        prepare_button.setVisible(not embedded)
         root.addWidget(camera_group)
 
         telemetry_group = QGroupBox("Diagnóstico automático")
@@ -229,6 +232,11 @@ class SettingsDialog(QDialog):
         hall_setup = QPushButton("Texto do Ano, captura JWL e câmera virtual…")
         hall_setup.clicked.connect(self.hall_setup_requested.emit)
         root.addWidget(hall_setup)
+        hall_setup.setVisible(not embedded)
+        assistant = QPushButton("Assistente de instalação e configuração…")
+        assistant.clicked.connect(self.setup_assistant_requested.emit)
+        root.addWidget(assistant)
+        assistant.setVisible(not embedded)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
@@ -236,7 +244,12 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         outer.addWidget(buttons)
-        self._screen_fit = ScreenFitController(self)
+        if embedded:
+            self.setWindowFlags(Qt.Widget)
+            buttons.hide()
+            self.setMinimumSize(0, 0)
+        else:
+            self._screen_fit = ScreenFitController(self)
 
     def _prepare_obs(self) -> None:
         try:

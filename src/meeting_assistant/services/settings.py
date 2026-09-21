@@ -10,6 +10,7 @@ DISPLAY_SETTINGS_VERSION = 1
 
 @dataclass(slots=True)
 class AppSettings:
+    setup_review_version: str = ""
     always_on_top: bool = True
     display_settings_version: int = DISPLAY_SETTINGS_VERSION
     simulation_enabled: bool = False

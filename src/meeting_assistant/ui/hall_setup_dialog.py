@@ -23,7 +23,7 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
 class HallSetupDialog(QDialog):
-    def __init__(self, store, target_provider, obs, settings, parent=None):
+    def __init__(self, store, target_provider, obs, settings, parent=None, embedded=False):
         super().__init__(parent)
         self.store, self.target_provider, self.obs, self.settings = store, target_provider, obs, settings
         self.pending_png = None
@@ -98,7 +98,12 @@ class HallSetupDialog(QDialog):
         outer.addWidget(buttons)
         self.obs.hall_task_finished.connect(self._finished)
         self._refresh_photo()
-        self._fit = ScreenFitController(self)
+        if embedded:
+            self.setWindowFlags(Qt.Widget)
+            buttons.hide()
+            self.setMinimumSize(0, 0)
+        else:
+            self._fit = ScreenFitController(self)
 
     def _local_obs(self) -> bool:
         if self.settings.obs_host.lower() not in {"localhost", "127.0.0.1", "::1"}:

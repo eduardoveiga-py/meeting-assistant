@@ -110,3 +110,80 @@ Modelo de notas: [template de Release](release-template.md). Histórico em [CHAN
 - Métodos não alteram Program, guardiões, detector nem calibração. Conteúdo real da imagem e isolamento no Zoom ainda devem ser testados com o operador.
 - Identidade ambígua no OBS impede aplicação. Esse resultado requer diagnóstico da lista de janelas; não enfraquecer a proteção para forçar sucesso.
 
+
+## Repriorização e requisitos de 21/09 — segunda tela primeiro
+
+1. **Agora, com monitor:** corrigir falsa sobreposição na captura, salvar/atualizar a foto,
+   verificar ausência de faixa superior e preparar a fonte Mídias. Repetir Zoom → JWL,
+   Windows+D e mídia → Palco; não atualizar o checkpoint sem confirmação do operador.
+2. **Ainda com monitor:** validar seleção do monitor, imagem na assistência e isolamento do
+   vídeo que volta para o Zoom. Capturar imagens reais para o tutorial.
+3. **Depois, apenas notebook:** assistente de configuração, testes de instalação/atualização,
+   atalhos e documentação; áudio exige dispositivos reais, mas não exige segunda tela.
+4. **Release candidata:** ensaio do instalador Windows limpo e de atualização, configuração
+   inteira pelo assistente, recuperação de falhas e teste final no Salão.
+
+### Atalhos F1–F10 — pendente de implementação
+
+Proposta inicial: F1 ajuda, F2 Texto do Ano, F3 Palco, F4 Mídias, F5 Zoom → Salão,
+F6 ativar/pausar automação, F7 cena segura, F8 iniciar reunião, F9 verificar, F10 ajustes.
+Mapeamento configurável, rótulos visíveis e nenhuma ação duplicada em tecla mantida pressionada.
+
+- Primeiro escopo: somente com foco no app; suspender ações de operação enquanto houver
+  edição de ajustes, diálogos ou instalação em andamento.
+- Modo global opcional: registrar e liberar teclas com RegisterHotKey/UnregisterHotKey,
+  detectar conflitos e oferecer remapeamento, sem desativar atalhos do Windows em geral.
+- F1/F5/F10 têm comportamentos contextuais em outros programas; não são todos atalhos
+  reservados do sistema. Não capturar combinações Alt/Ctrl/Win por consequência.
+- Teclas Fn/volume/brilho podem ser tratadas pelo firmware e não equivalem a F1–F10.
+- Testar com JWL, Zoom e OBS em foco, repetição, suspensão, fechamento e conflito.
+  F12 fica fora do plano por ser reservada para depuração no Windows.
+
+### Assistente na primeira instalação e após atualização — implementado, ensaio futuro
+
+Disponível em Ajustes → Assistente de instalação e configuração. Uma única janela contém
+formulário de ajustes, diagnóstico/preparação e foto/fontes. Executável empacotado oferece
+revisão por versão; execução de desenvolvimento não abre o assistente automaticamente.
+
+- Detecta OBS, Zoom, pacote JWL, link, conexão WebSocket, cenas, câmera virtual, monitor e foto.
+- Salva ajustes sem fechar; instala OBS/Zoom via WinGet com consentimento na própria tela;
+  WinGet verifica os pacotes. Não usa bypass de hash ou execução de URLs arbitrárias.
+- JWL usa a instalação oficial; Microsoft Store/UAC/instaladores externos podem exigir
+  janelas do Windows. O assistente permanece aberto e permite verificar novamente.
+- Prepara WebSocket autenticado no OBS padrão fechado, com backup e escrita atômica;
+  OBS portátil exige configuração pelo próprio OBS. Não fecha OBS à força.
+- Cria cenas padrão sem apagar cenas existentes, configura câmera mediante ação explícita,
+  reutiliza captura/foto/fontes e confirmação da câmera virtual.
+- Revisão registrada não certifica áudio, vídeo, fonte IP nem comportamento físico; ensaios
+  manuais permanecem identificados como pendentes. Arquivo de ajustes é preservado ao atualizar.
+- Não realizado agora: instalação real, câmera IP, release, empacotamento e ensaio em Windows limpo.
+- Antes da Release: garantir detecção de instalações não convencionais, tratamento de reinício,
+  configuração de microfone/câmera/permissões Windows e Zoom e teste com/sem internet.
+
+### Áudio — requisito esclarecido e arquitetura escolhida
+
+A mesa já chega à entrada de microfone do notebook e o Zoom a usa diretamente. A falta atual
+é o áudio dos aplicativos de mídia, pois a câmera virtual só entrega vídeo. Vamos manter a
+ligação física e mudar a seleção de microfone do Zoom quando o novo caminho for validado.
+
+- OBS mistura **entrada da mesa + captura por aplicativo** (JWL, VLC, Chrome/Edge escolhidos).
+- Mix enviado por monitoramento ao **CABLE Input**, do VB-CABLE. No Zoom, microfone será
+  **CABLE Output**. Alto-falante do Zoom continua na saída física que atende o Salão.
+- Não capturar Zoom nem o Desktop Audio inteiro. Não reenviar o retorno remoto para o cabo.
+- Criar barramento de áudio persistente nas três cenas para evitar corte quando o detector
+  mudar de cena; volume/mute independentes da escolha de vídeo. Não capturar novamente o
+  áudio da fonte de vídeo JWL se já houver captura dedicada do aplicativo.
+- Conferir mesa: a saída ligada ao notebook deve excluir o retorno Zoom (mix-minus). Se
+  já incluir a mídia do computador, impedir a segunda cópia no OBS ou separar o envio da mesa.
+- Não monitorar a mesa de volta às caixas pelo OBS; a mesa já faz a sonorização local.
+  As mídias continuam tocando localmente pela saída atual, além da cópia destinada ao Zoom.
+- Validar voz sozinha, mídia sozinha, voz+mídia, comentário remoto sem retorno, troca de
+  cena, navegador com título variável, reinício e reconexão. Teste remoto deve usar fones.
+- Captura por aplicativo tem limitações de compatibilidade; quando falhar, estudar saída
+  dedicada de mídia por segundo cabo/roteador virtual. Não recorrer ao áudio total do PC.
+- Implementação e teste do roteamento ainda pendentes; não foi alterado o áudio atual.
+
+Referências: [captura por aplicativo OBS](https://obsproject.com/kb/application-audio-capture-guide),
+[VB-CABLE](https://vb-audio.com/Cable/),
+[RegisterHotKey](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey),
+[WinGet install](https://learn.microsoft.com/en-us/windows/package-manager/winget/install).
