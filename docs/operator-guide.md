@@ -1,6 +1,6 @@
 # Guia do operador — versão de desenvolvimento
 
-Este guia descreve o que existe hoje. O tutorial ilustrado completo será produzido após estabilizar a interface, com imagens reais e passos numerados de instalação, configuração, uso, testes e solução de problemas. Foto anual, assistente OBS e instalador ainda estão no [roteiro](roadmap-after-hall-validation.md).
+Este guia descreve o que existe hoje. O tutorial ilustrado completo será produzido após estabilizar a interface, com imagens reais e passos numerados de instalação, configuração, uso, testes e solução de problemas. Foto anual, assistente OBS completo e instalador ainda estão no [roteiro](roadmap-after-hall-validation.md).
 
 ## Instalar e abrir
 
@@ -15,7 +15,7 @@ Configurações do app ficam em `%APPDATA%\MeetingAssistant\settings.json`. Fech
 3. No OBS, habilite o servidor WebSocket e use os mesmos dados em Ajustes.
 4. Configure as cenas e fontes do ambiente: **Texto do Ano** com a foto, **Palco** com a câmera e **Mídias** com a captura adequada do JWL. Mapeie os nomes reais no app.
 5. Habilite dois monitores no Zoom antes de entrar na reunião. As duas janelas precisam existir para Zoom → Salão.
-6. Inicie a câmera virtual no OBS e selecione OBS Virtual Camera no Zoom. A câmera virtual ainda não é iniciada automaticamente pelo app.
+6. Se o Meeting Assistant abrir o OBS, solicitará a câmera virtual pelos parâmetros de inicialização. Se o OBS já estiver aberto, inicie-a manualmente se necessário; selecione OBS Virtual Camera no Zoom. A confirmação automática do estado ainda está pendente.
 7. Configure o áudio separadamente. O retorno dos participantes não deve compor o áudio enviado de volta ao Zoom; a solução integrada ainda está pendente.
 
 ## Operar
@@ -61,3 +61,8 @@ Capturas reais da instalação limpa e primeiro uso; seleção de monitor; fonte
 ## Encerrar e atualizar
 
 O encerramento assistido está planejado. Por enquanto, confirme o fim da reunião e encerre os aplicativos conforme a rotina do operador. Para atualizar o app, feche apenas ele e siga o README. Não modifique o núcleo protegido para acomodar outras funções.
+
+## Configuração da câmera IP
+
+A nova configuração em Ajustes, os nomes padrão das cenas e o início do OBS na bandeja estão descritos em [Câmera IP e OBS](obs-ip-camera.md). Implementação entregue; teste físico ainda pendente. Salvar os campos não acessa a câmera; aplicar a preparação pode iniciar a recepção no OBS.
+

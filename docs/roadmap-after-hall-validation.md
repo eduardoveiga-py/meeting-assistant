@@ -16,7 +16,7 @@ Requisitos ampliados pelo operador. O núcleo JWL ↔ Zoom continua congelado co
 | 8 | Executável e instalador Windows | Funcionar sem Python/Git/bibliotecas instalados; detectar dependências externas e preservar dados | Windows limpo; monitor no teste físico |
 | 9 | Ensaio completo e publicação | Reunião simulada, recuperação, guia, licenças e Release; tornar público quando o responsável decidir | Sim no ensaio final |
 
-As etapas novas são requisitos planejados, não funcionalidades entregues.
+Entrega parcial em 21/09/2026: campos da câmera IP, criação/padronização de cenas e fonte Palco, parâmetros de abertura do OBS na bandeja/câmera virtual e opção de atalho no login. Sem teste físico da câmera; fontes de Texto do Ano/Mídias e confirmação da câmera virtual em OBS já aberto continuam pendentes. Demais etapas seguem planejadas.
 
 ## Foto do Texto do Ano
 
@@ -82,3 +82,4 @@ Antes de devolver o monitor: três ciclos pausado e três ativo; reproduzir/para
 ## Opcionais posteriores
 
 Cronômetro, atalhos, controle remoto, lembretes e preparação de mídias. Veja a [pesquisa de reaproveitamento](reuse-assessment.md).
+

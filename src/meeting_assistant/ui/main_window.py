@@ -30,6 +30,7 @@ from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService, JwlWindowInfo
 from meeting_assistant.services.meeting_launcher import LaunchSummary, MeetingLauncherService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
+from meeting_assistant.services.obs_setup import STANDARD_SCENES, configure_obs_logon
 from meeting_assistant.services.settings import AppSettings, SettingsService
 from meeting_assistant.services.zoom_hall_service import ZoomHallService
 from meeting_assistant.ui.settings_dialog import SettingsDialog
@@ -268,6 +269,7 @@ class MainWindow(QMainWindow):
         self.obs.preview_changed.connect(self._on_obs_preview)
         self.obs.preview_error.connect(self._on_obs_preview_error)
         self.obs.error.connect(self._on_obs_error)
+        self.obs.setup_finished.connect(self._on_obs_setup_finished)
 
     def _connect_display_signals(self) -> None:
         self.displays.displays_changed.connect(self._on_displays_changed)
@@ -648,11 +650,41 @@ class MainWindow(QMainWindow):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
+        from dataclasses import replace
+
+        pending = replace(self.settings)
+        dialog.apply_to(pending)
+        if pending.obs_start_at_logon != self.settings.obs_start_at_logon or (
+            pending.obs_start_at_logon and pending.obs_executable != self.settings.obs_executable
+        ):
+            try:
+                configure_obs_logon(pending.obs_start_at_logon, pending.obs_executable)
+            except ValueError as exc:
+                QMessageBox.warning(self, "Inicialização OBS", str(exc))
+                return
+            except Exception:
+                QMessageBox.warning(
+                    self, "Inicialização OBS",
+                    "Não foi possível configurar o atalho do OBS. Confira o executável e as permissões. "
+                    "Os ajustes não foram salvos.",
+                )
+                return
         dialog.apply_to(self.settings)
         self.settings_service.save(self.settings)
-        self._startup_scene_applied = False
+        # Provisioning must not trigger the reconnect callback's Program change.
+        self._startup_scene_applied = dialog.prepare_obs_requested
         self._set_component_status("OBS", "pending", "○ OBS", "Reconectando…")
         self.obs.reconfigure(self._obs_config())
+        if dialog.prepare_obs_requested:
+            self.obs.prepare_stage(self.settings)
+
+    def _on_obs_setup_finished(self, ok: bool, message: str) -> None:
+        if ok:
+            (self.settings.scene_background, self.settings.scene_speaker,
+             self.settings.scene_media) = STANDARD_SCENES
+            self.settings.obs_standard_scenes = True
+            self.settings_service.save(self.settings)
+        QMessageBox.information(self, "Preparação OBS", message)
 
     def _show_diagnostics(self) -> None:
         display_lines = "\n".join(

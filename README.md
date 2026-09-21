@@ -56,9 +56,17 @@ OBS Studio, Zoom e JW Library são aplicativos externos. Instale-os pelas fontes
 4. No Zoom, habilite dois monitores antes de entrar na reunião. Selecione **OBS Virtual Camera** como câmera e inicie a câmera virtual no OBS.
 5. Clique em **Verificar** e teste a alternância antes da reunião.
 
+## Câmera IP e preparação do OBS — implementado, validação física pendente
+
+Em **Ajustes → Câmera IP — Palco**, informe IP, usuário e senha. O perfil inicial usa IP 10.0.0.40, RTSP 554, canal 1/fluxo principal. Usuário e senha começam vazios. **Salvar** apenas armazena os dados; **Salvar e preparar cenas / câmera no OBS** aplica a configuração com confirmação.
+
+A preparação padroniza **Texto do Ano**, **Palco** e **Mídias**. Cenas mapeadas com nomes antigos são renomeadas quando não há conflito; fontes existentes são preservadas. A câmera recebe fonte de mídia própria e áudio silenciado. Isso não configura automaticamente as fontes de Texto do Ano e Mídias nem comprova recepção da câmera.
+
+Quando aberto pelo Meeting Assistant, o OBS recebe os parâmetros para iniciar na bandeja com câmera virtual. Em Ajustes, há uma opção para criar o atalho de inicialização no login do Windows. OBS já aberto não é reiniciado. [Detalhes e limites](docs/obs-ip-camera.md).
+
 ## Em preparação
 
-- Assistente OBS: verificar/criar cenas e fontes sem duplicar as existentes; iniciar e confirmar a câmera virtual.
+- Completar o assistente OBS: verificar as fontes de Texto do Ano/Mídias e confirmar câmera virtual também quando o OBS já estiver aberto.
 - Capturar/atualizar a foto do texto do ano, salvar e avisar quando faltar ou mudar o ano.
 - Áudio de mídia e microfones para o Zoom sem reenviar o retorno remoto.
 - Ferramentas avançadas em Ajustes, guia ilustrado e instalador independente de Python instalado.
@@ -79,3 +87,4 @@ O CI executa Ruff e Pytest no Windows. `core/` guarda estado, `services/` integr
 A publicação do código e do instalador ocorrerá quando o responsável autorizar tornar o projeto público. Antes disso: testes em Windows sem Python, revisão das licenças das dependências, remoção de dados locais/segredos e Releases com versão, notas e checksum. Links privados de reunião, senhas, imagens locais e telemetria não devem integrar o pacote público.
 
 Projeto independente, não oficial de JW Library, Zoom ou OBS.
+

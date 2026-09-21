@@ -254,7 +254,7 @@ class MeetingLauncherService(QObject):
             return False
         try:
             subprocess.Popen(
-                [str(executable)],
+                [str(executable), "--minimize-to-tray", "--startvirtualcam"],
                 cwd=str(executable.parent),
                 close_fds=True,
             )
@@ -361,3 +361,4 @@ class MeetingLauncherService(QObject):
         except (OSError, RuntimeError):
             return False
         return active
+

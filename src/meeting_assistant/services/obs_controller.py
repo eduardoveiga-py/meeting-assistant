@@ -14,6 +14,8 @@ from obsws_python.error import OBSSDKRequestError
 from PySide6.QtCore import QObject, Signal
 from websocket import WebSocketTimeoutException
 
+from meeting_assistant.services.obs_setup import prepare_obs
+
 
 def is_obs_not_ready(exc: BaseException | None) -> bool:
     return isinstance(exc, OBSSDKRequestError) and exc.code == 207
@@ -125,6 +127,7 @@ class ObsController(QObject):
     preview_changed = Signal(bytes)
     preview_error = Signal(str)
     error = Signal(str)
+    setup_finished = Signal(bool, str)
 
     def __init__(self, poll_interval: float = 0.5, preview_interval: float = 0.15) -> None:
         super().__init__()
@@ -165,6 +168,11 @@ class ObsController(QObject):
             return
         self._commands.put(("set_scene", scene_name))
 
+    def prepare_stage(self, settings) -> None:
+        from dataclasses import replace
+
+        self._commands.put(("prepare_stage", replace(settings)))
+
     def refresh(self) -> None:
         self._commands.put(("refresh", None))
 
@@ -197,6 +205,8 @@ class ObsController(QObject):
                 elif command == "set_scene" and isinstance(payload, str):
                     self._handle_set_scene(payload)
                     next_preview = 0.0
+                elif command == "prepare_stage":
+                    self._handle_prepare_stage(payload)
                 elif command == "refresh":
                     next_poll = 0.0
                 elif command == "preview":
@@ -322,6 +332,25 @@ class ObsController(QObject):
         except Exception as exc:
             self.error.emit(f"Falha ao trocar para '{scene_name}': {exc}")
 
+    def _handle_prepare_stage(self, settings) -> None:
+        if self._client is None:
+            self.setup_finished.emit(False, "OBS desconectado. Conecte e solicite a preparação novamente.")
+            return
+        try:
+            prepare_obs(self._client, settings)
+            self._refresh_scene_list()
+            self.setup_finished.emit(
+                True, "Cenas padronizadas e fonte IP configurada. A imagem da câmera ainda não foi validada. "
+                "Confira fontes de Texto do Ano/Mídias e possíveis fontes antigas em Palco."
+            )
+        except ValueError as exc:
+            self.setup_finished.emit(False, str(exc))
+        except Exception:
+            # SDK exceptions may contain the request, including credentials.
+            self.setup_finished.emit(
+                False, "Preparação incompleta no OBS. Revise as cenas/fontes antes de tentar novamente."
+            )
+
     def _emit_preview_error(self, message: str) -> None:
         if message == self._last_preview_error:
             return
@@ -365,3 +394,4 @@ class ObsController(QObject):
         if "timed out" in lowered or "timeout" in lowered:
             return "Tempo esgotado ao conectar ao OBS WebSocket."
         return f"OBS WebSocket desconectado: {text or type(exc).__name__}"
+

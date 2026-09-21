@@ -22,6 +22,12 @@ class AppSettings:
     scene_media: str = "Mídias"
     scene_zoom: str = "Zoom"
     zoom_join_url: str = ""
+    camera_ip: str = "10.0.0.40"
+    camera_rtsp_port: int = 554
+    camera_username: str = ""
+    camera_password: str = ""
+    obs_start_at_logon: bool = False
+    obs_standard_scenes: bool = False
     obs_executable: str = ""
     zoom_executable: str = ""
     telemetry_enabled: bool = True
@@ -69,3 +75,4 @@ class SettingsService:
             encoding="utf-8",
         )
         temp_path.replace(self.path)
+
