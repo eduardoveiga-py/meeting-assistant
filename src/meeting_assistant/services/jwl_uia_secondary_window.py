@@ -566,7 +566,9 @@ class JwlUiaSecondaryWindowService(QObject):
         item: JwlSecondaryWindowInfo,
         target: DisplayInfo,
     ) -> JwlSecondaryWindowInfo:
-        if win32gui is None or win32con is None:
+        # A scan may have begun before Zoom took ownership of the Hall.
+        # Recheck the live flag instead of the worker's pre-scan snapshot.
+        if not self._guard_enabled or win32gui is None or win32con is None:
             return item
         try:
             if not win32gui.IsWindow(item.hwnd):
@@ -744,3 +746,4 @@ class JwlUiaSecondaryWindowService(QObject):
             return
         self._last_status = current
         self.status_changed.emit(ok, message)
+

@@ -100,9 +100,14 @@ def test_position_failure_restores_jwl_and_releases_automation_pause(monkeypatch
     changes = []
     service.about_to_show.connect(lambda: changes.append("paused"))
     service.active_changed.connect(lambda active, _: changes.append(active))
-    assert not service.show_on_hall()
-    assert not service.active
-    assert changes == ["paused", False]
+    monkeypatch.setattr(service, "_window_snapshot", lambda *_: {"ready": False})
+    assert service.show_on_hall()
+    assert changes == ["paused"]
+    service._show_started -= 6
+    service._poll_show()
+    assert service.returning
+    assert not service._show_timer.isActive()
+    assert changes == ["paused"]
     service._return_timer.stop()
 
 
@@ -119,7 +124,7 @@ def test_enter_zoom_recovers_hidden_window_after_restart_and_keeps_jwl_visible(m
     service, _ = setup_windows(monkeypatch, {1: {"controls": True}, 2: {"visible": False}})
     monkeypatch.setattr(module.sys, "platform", "win32")
     monkeypatch.setattr(module, "win32con", SimpleNamespace(
-        SW_RESTORE=1, SW_SHOW=2, SWP_NOACTIVATE=16,
+        SW_RESTORE=1, SW_SHOW=2, SW_SHOWNOACTIVATE=4, SWP_NOACTIVATE=16,
         SWP_SHOWWINDOW=64, SWP_ASYNCWINDOWPOS=32, HWND_TOPMOST=-1, HWND_NOTOPMOST=-2,
         SWP_NOMOVE=2, SWP_NOSIZE=1,
     ))
@@ -134,6 +139,7 @@ def test_enter_zoom_recovers_hidden_window_after_restart_and_keeps_jwl_visible(m
     assert service.active
     assert service._jwl_hwnd == 1
     assert all(hwnd != 1 for hwnd, _ in calls)
+    service._show_timer.stop()
 
 
 def setup_return(monkeypatch):
@@ -252,3 +258,53 @@ def test_repeated_zoom_cycles_never_hide_secondary(monkeypatch):
         assert service.show_on_hall()
         assert service.active
     assert ("show", 2, 0) not in calls
+
+
+def test_zoom_is_demoted_and_promoted_symmetrically_and_confirmed(monkeypatch):
+    service, state, _, events = setup_return(monkeypatch)
+    positions = []
+    module.win32gui.SetWindowPos = lambda hwnd, order, *args: positions.append((hwnd, order))
+    service._active = False
+    service._jwl_window_provider = jwl_info
+    monkeypatch.setattr(service, "_find_secondary_zoom_window", lambda: module.ZoomHallWindow(
+        2, 2, module.WindowRect(0, 0, 1280, 720),
+    ))
+    changes = []
+    service.active_changed.connect(lambda active, _: changes.append(active))
+    state["exposed"] = False
+    assert service.show_on_hall()
+    assert positions[:2] == [(1, -2), (2, -1)]
+    service._poll_show()
+    assert not changes
+    assert not any(e["phase"] == "show_confirmed" for e in events)
+    state["exposed"] = True
+    service._poll_show()
+    assert changes == [True]
+    assert events[-1]["phase"] == "show_confirmed"
+    assert service.restore_jwl()
+    assert not service._show_timer.isActive()
+    assert positions[-2:] == [(2, -2), (1, -1)]
+    service._poll_return()
+    assert changes == [True, False]
+
+
+def test_zoom_guard_recovers_late_jwl_reordering(monkeypatch):
+    service, state, calls, _ = setup_return(monkeypatch)
+    service._show_rect = module.WindowRect(0, 0, 1280, 720)
+    service._show_started = module.time.monotonic()
+    service._show_confirmed = True
+    state["exposed"] = False
+    service._poll_show()
+    assert ("position", 1, 51) in calls
+    assert ("position", 2, 112) in calls
+
+
+def test_stale_uia_cycle_cannot_raise_jwl_after_guard_disabled(monkeypatch):
+    from meeting_assistant.services import jwl_uia_secondary_window as uia
+    service = uia.JwlUiaSecondaryWindowService(display_provider=lambda: None)
+    monkeypatch.setattr(uia, "win32gui", SimpleNamespace(
+        IsWindow=lambda _: pytest.fail("Disabled guard must not mutate a window"),
+    ))
+    monkeypatch.setattr(uia, "win32con", object())
+    item = jwl_info()
+    assert service._ensure_window(item, object()) is item

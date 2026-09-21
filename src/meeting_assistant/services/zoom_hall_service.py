@@ -91,6 +91,12 @@ class ZoomHallService(QObject):
         self._active = False
         self._zoom_hwnd = 0
         self._jwl_hwnd = 0
+        self._show_started = 0.0
+        self._show_rect = None
+        self._show_confirmed = False
+        self._show_timer = QTimer(self)
+        self._show_timer.setInterval(100)
+        self._show_timer.timeout.connect(self._poll_show)
         self._returning = False
         self._return_started = 0.0
         self._return_rect = None
@@ -134,40 +140,63 @@ class ZoomHallService(QObject):
         # Keep JWL rendering underneath Zoom and save its handle before suspending guards.
         self.about_to_show.emit()
 
-        target_rect = self._native_target_rect(target)
-        try:
-            show_window_async(zoom.hwnd, win32con.SW_RESTORE)
-            show_window_async(zoom.hwnd, win32con.SW_SHOW)
-            flags = (
-                win32con.SWP_NOACTIVATE
-                | win32con.SWP_SHOWWINDOW
-                | win32con.SWP_ASYNCWINDOWPOS
-            )
-            win32gui.SetWindowPos(
-                zoom.hwnd,
-                win32con.HWND_TOPMOST,
-                target_rect.left,
-                target_rect.top,
-                target_rect.width,
-                target_rect.height,
-                flags,
-            )
-        except (OSError, RuntimeError):
-            self._zoom_hwnd = zoom.hwnd
-            self.restore_jwl()
-            self.active_changed.emit(False, "Exibição do Zoom cancelada.")
-            self.status_changed.emit(False, "Não foi possível posicionar o Zoom na Tela do Salão.")
-            return False
-
         self._zoom_hwnd = zoom.hwnd
+        self._show_rect = self._native_target_rect(target)
+        self._show_started = time.monotonic()
+        self._show_confirmed = False
         self._active = True
-        message = (
-            "Zoom exibido somente no Salão. "
-            "Os participantes remotos continuam recebendo a câmera virtual do OBS."
-        )
-        self.status_changed.emit(True, message)
-        self.active_changed.emit(True, message)
+        self.transition_diagnostic.emit({
+            "phase": "show_requested", "hwnd": zoom.hwnd, "jwl_hwnd": self._jwl_hwnd,
+        })
+        self.status_changed.emit(True, "Preparando Zoom na Tela do Salão…")
+        self._request_show()
+        self._show_timer.start()
         return True
+
+    def _request_show(self) -> None:
+        rect = self._show_rect
+        try:
+            if self._is_window(self._jwl_hwnd):
+                win32gui.SetWindowPos(
+                    self._jwl_hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
+                    win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE
+                    | win32con.SWP_NOSIZE | win32con.SWP_ASYNCWINDOWPOS,
+                )
+            show_window_async(self._zoom_hwnd, win32con.SW_SHOWNOACTIVATE)
+            win32gui.SetWindowPos(
+                self._zoom_hwnd, win32con.HWND_TOPMOST,
+                rect.left, rect.top, rect.width, rect.height,
+                win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW | win32con.SWP_ASYNCWINDOWPOS,
+            )
+        except (OSError, RuntimeError) as exc:
+            self.transition_diagnostic.emit({"phase": "show_command_error", "error": type(exc).__name__})
+
+    def _poll_show(self) -> None:
+        if not self._active or self._returning:
+            self._show_timer.stop()
+            return
+        elapsed = round((time.monotonic() - self._show_started) * 1000)
+        try:
+            snapshot = self._window_snapshot(self._zoom_hwnd, self._show_rect)
+            if snapshot["ready"]:
+                self._show_started = time.monotonic()
+                if not self._show_confirmed:
+                    self._show_confirmed = True
+                    self.transition_diagnostic.emit({
+                        "phase": "show_confirmed", "elapsed_ms": elapsed, **snapshot,
+                    })
+                    message = "Zoom confirmado visível no Salão; Zoom remoto continua recebendo OBS."
+                    self.active_changed.emit(True, message)
+                    self.status_changed.emit(True, message)
+                return
+            self._request_show()
+        except (OSError, RuntimeError) as exc:
+            snapshot = {"ready": False, "error": type(exc).__name__}
+        if elapsed >= 5000:
+            self._show_timer.stop()
+            self.transition_diagnostic.emit({"phase": "show_timeout", "elapsed_ms": elapsed, **snapshot})
+            self.restore_jwl()
+            self.status_changed.emit(False, "Zoom não confirmou exibição; restaurando o JW Library.")
 
     def restore_jwl(self) -> bool:
         """Accept a return request; only a verified later tick completes it."""
@@ -183,6 +212,7 @@ class ZoomHallService(QObject):
             self.status_changed.emit(False, "Saída do JW Library não encontrada; Zoom mantido no Salão.")
             return False
 
+        self._show_timer.stop()
         self._return_rect = self._native_target_rect(target)
         self._return_started = time.monotonic()
         self._returning = True
@@ -216,7 +246,9 @@ class ZoomHallService(QObject):
             self.transition_diagnostic.emit({"phase": "return_command_error", "error": type(exc).__name__})
 
     def _return_snapshot(self) -> dict:
-        hwnd, rect = self._jwl_hwnd, self._return_rect
+        return self._window_snapshot(self._jwl_hwnd, self._return_rect)
+
+    def _window_snapshot(self, hwnd: int, rect: WindowRect) -> dict:
         valid = self._is_window(hwnd)
         if not valid:
             return {"ready": False, "valid": False}
@@ -263,6 +295,9 @@ class ZoomHallService(QObject):
             self._active = False
         self.returning_changed.emit(False)
         if not ok:
+            if self._show_rect is not None:
+                self._show_started = time.monotonic()
+                self._show_timer.start()
             # Keep the Zoom state and allow a new explicit attempt. Never resume
             # media classification on an unverified desktop/Zoom image.
             try:
