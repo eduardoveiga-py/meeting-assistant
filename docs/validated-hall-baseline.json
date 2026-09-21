@@ -1,0 +1,18 @@
+{
+  "validated_commit": "48b159b5b819b174011aab143e5772ff6bcbc8b1",
+  "checkpoint_branch": "checkpoint/zoom-jwl-validated-20260921",
+  "normalization": "UTF-8, LF newlines, one final newline",
+  "sha256": {
+    "src/meeting_assistant/services/zoom_hall_service.py": "2a23eb270080b92d4841491b06e2119b93913c1bf28d22e64ccf61ece99419d5",
+    "src/meeting_assistant/services/native_window.py": "31714d099bffacf6bcd94d21ba861b59a9a639e2f308b9215542782a5fc73045",
+    "src/meeting_assistant/services/jwl_fast_window_guard.py": "e2af94c4dd8986c5f3a5f38558a18d574017e5e1cafa0d7b12342bd4efe094d2",
+    "src/meeting_assistant/services/jwl_uia_secondary_window.py": "76a78d08ed0563f9d57f4663bb547fcb985ed8e9fd0d9dce837ceb330a17ac67",
+    "src/meeting_assistant/services/jwl_virtual_desktop_pin.py": "6f91dfd3fa074dda86d3f355b4d439c35569381495ff4ee5649a70e85745126f",
+    "src/meeting_assistant/services/jwl_secondary_window.py": "4c719a37b910fa0e409c5a8f3f3470fe8c367d175cf06c7f875ca29d501ee0bd",
+    "src/meeting_assistant/services/media_automation_service.py": "b388d03e9d28dd65ceee9808d888b9d39999665cfa6c0f00d4709e9ad4d47c3a",
+    "src/meeting_assistant/services/jwl_idle_reference.py": "e841a9dc0f96e924606d069a375f27089ac45a7b23c1d7a8c882481146d7af75",
+    "src/meeting_assistant/services/hall_monitor_sensor.py": "ddeb9363866c071ec1cd989d4e063a8d4cbaffe895be6fd853fda19dac25a2d4",
+    "src/meeting_assistant/services/jwl_screen_sensor.py": "1cf32cd9dd3a6a0a63cf64e14fca998d85d1611c7e32403e44034ada026fcb80",
+    "tests/test_zoom_hall_discovery.py": "386d9be68d0e9015fb4f881c4da7002a211f5f924ef17114ca50423ef1beece9"
+  }
+}
