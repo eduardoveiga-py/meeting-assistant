@@ -64,14 +64,22 @@ A preparação padroniza **Texto do Ano**, **Palco** e **Mídias**. Cenas mapead
 
 Quando aberto pelo Meeting Assistant, o OBS recebe os parâmetros para iniciar na bandeja com câmera virtual. Em Ajustes, há uma opção para criar o atalho de inicialização no login do Windows. OBS já aberto não é reiniciado. [Detalhes e limites](docs/obs-ip-camera.md).
 
+## Texto do Ano e fontes OBS — pronto para teste físico
+
+Em **Ajustes → Texto do Ano, captura JWL e câmera virtual…**, capture o JWL visível na tela selecionada, confira prévia/ano e salve. A foto de apresentação não modifica a referência do detector. O app avisa sobre foto ausente, inválida ou de outro ano.
+
+A mesma tela prepara a captura da janela JWL em Mídias e verifica fontes/câmera virtual. A identificação precisa ser inequívoca; nunca é substituída por captura de monitor. **Iniciar reunião** solicita e confirma a câmera virtual, inclusive quando o OBS já está aberto.
+
+[Procedimento de teste](docs/yeartext-and-obs.md) · [Histórico de alterações](CHANGELOG.md)
+
 ## Em preparação
 
-- Completar o assistente OBS: verificar as fontes de Texto do Ano/Mídias e confirmar câmera virtual também quando o OBS já estiver aberto.
-- Capturar/atualizar a foto do texto do ano, salvar e avisar quando faltar ou mudar o ano.
+- Validar fisicamente a nova captura anual e as fontes do OBS no equipamento do Salão.
+- Atualizador com tela própria, consulta de Releases na inicialização e preservação dos dados.
 - Áudio de mídia e microfones para o Zoom sem reenviar o retorno remoto.
 - Ferramentas avançadas em Ajustes, guia ilustrado e instalador independente de Python instalado.
 
-Esses itens **ainda não estão implementados**. Consulte critérios e prioridades no [roteiro](docs/roadmap-after-hall-validation.md).
+Áudio integrado, atualizador, reorganização das ferramentas, tutorial ilustrado e instalador **ainda estão pendentes**. Consulte critérios e prioridades no [roteiro](docs/roadmap-after-hall-validation.md).
 
 ## Desenvolvimento e qualidade
 
@@ -87,4 +95,5 @@ O CI executa Ruff e Pytest no Windows. `core/` guarda estado, `services/` integr
 A publicação do código e do instalador ocorrerá quando o responsável autorizar tornar o projeto público. Antes disso: testes em Windows sem Python, revisão das licenças das dependências, remoção de dados locais/segredos e Releases com versão, notas e checksum. Links privados de reunião, senhas, imagens locais e telemetria não devem integrar o pacote público.
 
 Projeto independente, não oficial de JW Library, Zoom ou OBS.
+
 

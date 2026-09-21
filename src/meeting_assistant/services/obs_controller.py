@@ -7,6 +7,7 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import obsws_python as obs
@@ -14,7 +15,14 @@ from obsws_python.error import OBSSDKRequestError
 from PySide6.QtCore import QObject, Signal
 from websocket import WebSocketTimeoutException
 
+from meeting_assistant.services.obs_hall_setup import (
+    apply_yeartext,
+    inspect_visual_sources,
+    prepare_media,
+    virtual_camera_step,
+)
 from meeting_assistant.services.obs_setup import prepare_obs
+from meeting_assistant.services.yeartext_store import YeartextStore
 
 
 def is_obs_not_ready(exc: BaseException | None) -> bool:
@@ -128,6 +136,7 @@ class ObsController(QObject):
     preview_error = Signal(str)
     error = Signal(str)
     setup_finished = Signal(bool, str)
+    hall_task_finished = Signal(str, bool, str)
 
     def __init__(self, poll_interval: float = 0.5, preview_interval: float = 0.15) -> None:
         super().__init__()
@@ -144,6 +153,8 @@ class ObsController(QObject):
         self._last_scenes: list[str] = []
         self._last_scene: str | None = None
         self._last_preview_error: str | None = None
+        self._virtual_deadline = 0.0
+        self._next_virtual_check = 0.0
 
     def start(self, config: ObsConnectionConfig) -> None:
         self._config = config
@@ -172,6 +183,12 @@ class ObsController(QObject):
         from dataclasses import replace
 
         self._commands.put(("prepare_stage", replace(settings)))
+
+    def hall_task(self, action: str, data: dict | None = None) -> None:
+        self._commands.put(("hall_task", (action, dict(data or {}))))
+
+    def ensure_virtual_camera(self) -> None:
+        self._commands.put(("virtual_camera", None))
 
     def refresh(self) -> None:
         self._commands.put(("refresh", None))
@@ -207,6 +224,11 @@ class ObsController(QObject):
                     next_preview = 0.0
                 elif command == "prepare_stage":
                     self._handle_prepare_stage(payload)
+                elif command == "hall_task":
+                    self._handle_hall_task(*payload)
+                elif command == "virtual_camera":
+                    self._virtual_deadline = time.monotonic() + 60.0
+                    self._next_virtual_check = 0.0
                 elif command == "refresh":
                     next_poll = 0.0
                 elif command == "preview":
@@ -222,6 +244,26 @@ class ObsController(QObject):
                 else:
                     # Count the retry delay after a potentially blocking timeout.
                     next_reconnect = time.monotonic() + 2.0
+
+            if self._virtual_deadline:
+                if now >= self._virtual_deadline:
+                    self._virtual_deadline = 0.0
+                    self.hall_task_finished.emit(
+                        "virtual_camera", False, "Câmera virtual não confirmou em 60 s."
+                    )
+                elif self._client is not None and now >= self._next_virtual_check:
+                    self._next_virtual_check = now + 1.0
+                    try:
+                        if virtual_camera_step(self._client):
+                            self._virtual_deadline = 0.0
+                            self.hall_task_finished.emit(
+                                "virtual_camera", True, "Câmera virtual confirmada ativa."
+                            )
+                    except Exception:
+                        self._virtual_deadline = 0.0
+                        self.hall_task_finished.emit(
+                            "virtual_camera", False, "Falha ao iniciar a câmera virtual. Confira o OBS."
+                        )
 
             if self._client is not None and now >= next_poll:
                 self._poll()
@@ -351,6 +393,35 @@ class ObsController(QObject):
                 False, "Preparação incompleta no OBS. Revise as cenas/fontes antes de tentar novamente."
             )
 
+    def _handle_hall_task(self, action: str, data: dict) -> None:
+        if self._client is None:
+            self.hall_task_finished.emit(action, False, "OBS desconectado; configuração pendente.")
+            return
+        try:
+            if action == "yeartext":
+                store = YeartextStore(Path(data["directory"]))
+                photo = store.current()
+                if photo is None:
+                    raise ValueError("Foto ausente ou inválida; capture novamente.")
+                apply_yeartext(self._client, photo, data["scene"])
+                store.mark_applied(photo["sha256"], photo["file"])
+                message = "Foto salva e fonte de imagem confirmada no OBS."
+            elif action == "media":
+                prepare_media(self._client, data["scene"], data["selectors"])
+                message = "Fonte JWL configurada. Confira a imagem no OBS; nenhuma cena Program foi trocada."
+            elif action == "inspect":
+                message = inspect_visual_sources(self._client, data["background"], data["media"])
+            else:
+                raise ValueError("Operação OBS desconhecida.")
+            self._refresh_scene_list()
+            self.hall_task_finished.emit(action, True, message)
+        except ValueError as exc:
+            self.hall_task_finished.emit(action, False, str(exc))
+        except Exception:
+            self.hall_task_finished.emit(
+                action, False, "Operação OBS incompleta. Confira cenas/fontes e tente novamente."
+            )
+
     def _emit_preview_error(self, message: str) -> None:
         if message == self._last_preview_error:
             return
@@ -394,4 +465,3 @@ class ObsController(QObject):
         if "timed out" in lowered or "timeout" in lowered:
             return "Tempo esgotado ao conectar ao OBS WebSocket."
         return f"OBS WebSocket desconectado: {text or type(exc).__name__}"
-

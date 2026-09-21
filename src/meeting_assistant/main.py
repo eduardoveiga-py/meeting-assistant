@@ -167,6 +167,8 @@ def main() -> int:
         meeting_launcher=meeting_launcher,
         zoom_hall_service=zoom_hall,
         app_icon=app_icon,
+        hall_window_provider=lambda: jwl_secondary.current or jwl_fast_guard.cached_candidate,
+        hall_display_provider=current_hall_display,
     )
     # Startup routing belongs to the media automation now. Preserving the OBS
     # scene here is essential when Meeting Assistant is reopened mid-video.

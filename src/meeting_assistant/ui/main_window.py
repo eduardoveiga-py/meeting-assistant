@@ -5,6 +5,7 @@ from PySide6.QtCore import (
     QPropertyAnimation,
     QSequentialAnimationGroup,
     Qt,
+    QTimer,
     Signal,
 )
 from PySide6.QtGui import QIcon, QPixmap
@@ -26,13 +27,16 @@ from PySide6.QtWidgets import (
 
 from meeting_assistant.core.state import AppState, OperatingMode
 from meeting_assistant.services.display_service import DisplayInfo, DisplayService
+from meeting_assistant.services.hall_capture import verified_hall_target
 from meeting_assistant.services.jwl_probe_service import JwlProbeService
 from meeting_assistant.services.jwl_service import JwlService, JwlWindowInfo
 from meeting_assistant.services.meeting_launcher import LaunchSummary, MeetingLauncherService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.obs_setup import STANDARD_SCENES, configure_obs_logon
 from meeting_assistant.services.settings import AppSettings, SettingsService
+from meeting_assistant.services.yeartext_store import YeartextStore
 from meeting_assistant.services.zoom_hall_service import ZoomHallService
+from meeting_assistant.ui.hall_setup_dialog import HallSetupDialog
 from meeting_assistant.ui.settings_dialog import SettingsDialog
 from meeting_assistant.ui.window_geometry import ScreenFitController
 
@@ -53,6 +57,8 @@ class MainWindow(QMainWindow):
         meeting_launcher: MeetingLauncherService,
         zoom_hall_service: ZoomHallService,
         app_icon: QIcon | None = None,
+        hall_window_provider=None,
+        hall_display_provider=None,
     ) -> None:
         super().__init__()
         self.state = state
@@ -65,6 +71,10 @@ class MainWindow(QMainWindow):
         self.launcher = meeting_launcher
         self.zoom_hall = zoom_hall_service
         self.app_icon = app_icon or QIcon()
+        self._hall_window_provider = hall_window_provider or (lambda: None)
+        self._hall_display_provider = hall_display_provider or (lambda: None)
+        self.yeartext_store = YeartextStore(settings_service.path.parent / "yeartext")
+        self._latest_media_active = False
         self.obs_connected = False
         self.obs_scenes: list[str] = []
         self.current_obs_scene: str | None = None
@@ -91,6 +101,11 @@ class MainWindow(QMainWindow):
         self._set_automation_ui(False)
         self._refresh_mode()
         self._screen_fit = ScreenFitController(self)
+        self._yeartext_timer = QTimer(self)
+        self._yeartext_timer.setInterval(60000)
+        self._yeartext_timer.timeout.connect(self._refresh_yeartext_notice)
+        self._yeartext_timer.start()
+        self._refresh_yeartext_notice()
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -175,6 +190,10 @@ class MainWindow(QMainWindow):
         self.automation_status.setObjectName("AutomationStatus")
         self.automation_status.setWordWrap(True)
         controls.addWidget(self.automation_status)
+        self.yeartext_notice = QLabel()
+        self.yeartext_notice.setWordWrap(True)
+        self.yeartext_notice.linkActivated.connect(lambda _: self._open_hall_setup(self))
+        controls.addWidget(self.yeartext_notice)
 
         panic = QPushButton("🛟 Cena segura → Palco")
         panic.setObjectName("DangerButton")
@@ -270,6 +289,7 @@ class MainWindow(QMainWindow):
         self.obs.preview_error.connect(self._on_obs_preview_error)
         self.obs.error.connect(self._on_obs_error)
         self.obs.setup_finished.connect(self._on_obs_setup_finished)
+        self.obs.hall_task_finished.connect(self._on_hall_task_finished)
 
     def _connect_display_signals(self) -> None:
         self.displays.displays_changed.connect(self._on_displays_changed)
@@ -399,6 +419,7 @@ class MainWindow(QMainWindow):
     ) -> None:
         if not self.state.automation_enabled:
             return
+        self._latest_media_active = active
         state_text = "MÍDIA DETECTADA" if active else "repouso / aguardando mídia"
         self.automation_status.setText(
             f"Sensor: {source_name} • sinal {changed_percent:.1f}% • {state_text}"
@@ -407,6 +428,13 @@ class MainWindow(QMainWindow):
     def _on_obs_connected(self, connected: bool, message: str) -> None:
         self.obs_connected = connected
         if connected:
+            current = self.yeartext_store.current()
+            if current and current.get("obs_pending") and self.settings.obs_host.lower() in {
+                "127.0.0.1", "localhost", "::1",
+            }:
+                self.obs.hall_task("yeartext", {
+                    "directory": str(self.yeartext_store.directory), "scene": self.settings.scene_background,
+                })
             self._set_component_status("OBS", "ok", "● OBS", message)
             self.preview.clear()
             self.preview.setText("Aguardando preview do OBS…")
@@ -587,6 +615,9 @@ class MainWindow(QMainWindow):
             self.mode_label.setText("Inicialização concluída.")
             return
 
+        if payload.obs_running:
+            self.obs.ensure_virtual_camera()
+
         if payload.zoom_running:
             zoom_text = "● Zoom"
             zoom_state = "ok"
@@ -647,6 +678,7 @@ class MainWindow(QMainWindow):
 
     def _show_settings(self) -> None:
         dialog = SettingsDialog(self.settings, self.obs_scenes, self)
+        dialog.hall_setup_requested.connect(lambda: self._open_hall_setup(dialog))
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
@@ -685,6 +717,39 @@ class MainWindow(QMainWindow):
             self.settings.obs_standard_scenes = True
             self.settings_service.save(self.settings)
         QMessageBox.information(self, "Preparação OBS", message)
+
+    def _hall_capture_target(self):
+        if self.state.automation_enabled and self._latest_media_active:
+            raise ValueError("O detector ainda indica mídia. Pare a mídia antes de capturar o Texto do Ano.")
+        return verified_hall_target(
+            self._hall_window_provider(), self._hall_display_provider(),
+            self.zoom_hall.active or self.zoom_hall.returning,
+        )
+
+    def _open_hall_setup(self, parent):
+        dialog = HallSetupDialog(
+            self.yeartext_store, self._hall_capture_target, self.obs, self.settings, parent
+        )
+        dialog.exec()
+        dialog.deleteLater()
+        self._refresh_yeartext_notice()
+
+    def _refresh_yeartext_notice(self):
+        from datetime import datetime
+
+        current = self.yeartext_store.current()
+        outdated = current is None or current["year"] != datetime.now().year
+        self.yeartext_notice.setVisible(outdated)
+        if outdated:
+            self.yeartext_notice.setText(
+                self.yeartext_store.status() + ' <a href="yeartext">Criar / atualizar foto</a>'
+            )
+
+    def _on_hall_task_finished(self, action, ok, message):
+        if action == "yeartext":
+            self._refresh_yeartext_notice()
+        if action == "virtual_camera":
+            self.zoom_output_label.setText(message + " • Selecione OBS Virtual Camera no Zoom.")
 
     def _show_diagnostics(self) -> None:
         display_lines = "\n".join(

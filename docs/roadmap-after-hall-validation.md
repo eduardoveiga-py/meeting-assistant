@@ -83,3 +83,30 @@ Antes de devolver o monitor: três ciclos pausado e três ativo; reproduzir/para
 
 Cronômetro, atalhos, controle remoto, lembretes e preparação de mídias. Veja a [pesquisa de reaproveitamento](reuse-assessment.md).
 
+
+## Atualização do aplicativo pelo GitHub — nova pendência
+
+Requisito adicionado pelo operador em 21/09/2026; **ainda não implementado**.
+
+- Consultar Releases na inicialização em segundo plano, com timeout, sem bloquear a operação ou falhar quando não houver internet.
+- Comparar versões de forma semântica; canal estável por padrão. Não instalar automaticamente pré-releases nem confundir a data de um commit com versão.
+- Tela própria: versão instalada, versão disponível, notas da Release, tamanho, progresso de download, instalar agora/depois e erros recuperáveis.
+- Nas Releases, separar **novidades**, **melhorias**, **correções**, **mudanças de configuração/migração**, **limitações conhecidas** e **testes realizados**. Informar requisitos Windows/OBS, versão e data.
+- Baixar o artefato correspondente ao Windows/arquitetura em uso, verificar integridade/autenticidade conforme o mecanismo de distribuição escolhido e concluir a instalação fora da execução do app.
+- Preservar configurações, foto do texto do ano e referências do detector; preparar recuperação da versão anterior. Não atualizar durante reunião/automação ativa.
+- Instalador usa binário da Release; instalação de desenvolvimento precisa de fluxo distinto que preserve alterações locais, sem git pull automático nem sobrescrita silenciosa de código.
+- Repositório privado exige acesso autorizado; nunca embutir tokens no executável. Depois da publicação autorizada, usar Releases públicas. Esta etapa não torna o projeto público.
+- Testar: versão atual/nova, pré-release, offline, download interrompido/corrompido, disco cheio, permissões, atualização e recuperação. Entregar junto à fase de instalador/publicação.
+
+Modelo de notas: [template de Release](release-template.md). Histórico em [CHANGELOG](../CHANGELOG.md).
+
+## Entrega dos passos 1 e 2 — implementação, validação física pendente
+
+- Em Ajustes há uma tela de captura, prévia, confirmação de ano, gravação e aplicação da foto no OBS.
+- PNGs versionados e manifesto atômico; imagem anterior preservada em falha. Detecção de ausência/corrupção e aviso anual não modal, reavaliado na abertura e a cada minuto.
+- Fonte de imagem gerenciada criada/atualizada na cena Fundo; arquivo salvo offline fica pendente e é aplicado na próxima conexão OBS local.
+- Fonte Mídias usa janela JWL identificada, correspondência exata e única e áudio desativado; nunca usa captura de monitor/Zoom como fallback.
+- Verificação de fontes, arquivos e estado da câmera virtual; Iniciar reunião solicita e confirma câmera virtual também com OBS já aberto.
+- Métodos não alteram Program, guardiões, detector nem calibração. Conteúdo real da imagem e isolamento no Zoom ainda devem ser testados com o operador.
+- Identidade ambígua no OBS impede aplicação. Esse resultado requer diagnóstico da lista de janelas; não enfraquecer a proteção para forçar sucesso.
+

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -29,6 +30,8 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
 class SettingsDialog(QDialog):
+    hall_setup_requested = Signal()
+
     def __init__(
         self,
         settings: AppSettings,
@@ -223,6 +226,9 @@ class SettingsDialog(QDialog):
             for combo in (self.background_combo, self.speaker_combo, self.media_combo):
                 combo.setEnabled(False)
         root.addWidget(scenes_group)
+        hall_setup = QPushButton("Texto do Ano, captura JWL e câmera virtual…")
+        hall_setup.clicked.connect(self.hall_setup_requested.emit)
+        root.addWidget(hall_setup)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
