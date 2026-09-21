@@ -16,6 +16,7 @@ from meeting_assistant.services.jwl_secondary_window import (
     title_has_jw_library,
 )
 from meeting_assistant.services.jwl_uia_secondary_window import choose_native_monitor_rect
+from meeting_assistant.services.native_window import show_window_async
 
 try:
     import win32api
@@ -250,7 +251,7 @@ class JwlFastWindowGuard(QObject):
                 # changing IsIconic/IsWindowVisible. Calling ShowWindow again
                 # followed by SetWindowPos makes Explorer/DWM surface it again
                 # without activating the operator's main JW Library window.
-                win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
+                show_window_async(hwnd, win32con.SW_SHOWNOACTIVATE)
 
             flags = (
                 win32con.SWP_NOACTIVATE

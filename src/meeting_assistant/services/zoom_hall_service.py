@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import sys
+import time
 from dataclasses import dataclass
 
 import psutil
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 
 from meeting_assistant.services.display_service import DisplayInfo
+from meeting_assistant.services.jwl_fast_window_guard import JwlFastWindowGuard
 from meeting_assistant.services.jwl_secondary_window import JwlSecondaryWindowInfo, WindowRect
 from meeting_assistant.services.jwl_uia_secondary_window import choose_native_monitor_rect
+from meeting_assistant.services.native_window import show_window_async
 
 try:
     import win32api
@@ -59,11 +62,21 @@ def has_descendant_class(hwnd: int, class_name: str, max_depth: int = 3) -> bool
     return False
 
 
+def hall_runtime_flags(
+    enabled: bool, zoom_active: bool, returning: bool, switching_to_zoom: bool = False,
+) -> tuple[bool, bool]:
+    protect_jwl = returning or not (zoom_active or switching_to_zoom)
+    media_enabled = enabled and protect_jwl and not returning
+    return protect_jwl, media_enabled
+
+
 class ZoomHallService(QObject):
     """Switch only the local Hall display between JWL and Zoom dual-monitor output."""
 
     discovery_changed = Signal(object)
     about_to_show = Signal()
+    returning_changed = Signal(bool)
+    transition_diagnostic = Signal(object)
     active_changed = Signal(bool, str)
     status_changed = Signal(bool, str)
 
@@ -78,6 +91,17 @@ class ZoomHallService(QObject):
         self._active = False
         self._zoom_hwnd = 0
         self._jwl_hwnd = 0
+        self._returning = False
+        self._return_started = 0.0
+        self._return_rect = None
+        self._return_timer = QTimer(self)
+        self._return_timer.setInterval(100)
+        self._return_timer.timeout.connect(self._poll_return)
+
+    @property
+    def returning(self) -> bool:
+        return self._returning
+
 
     @property
     def active(self) -> bool:
@@ -112,12 +136,12 @@ class ZoomHallService(QObject):
 
         target_rect = self._native_target_rect(target)
         try:
-            win32gui.ShowWindow(zoom.hwnd, win32con.SW_RESTORE)
-            win32gui.ShowWindow(zoom.hwnd, win32con.SW_SHOW)
+            show_window_async(zoom.hwnd, win32con.SW_RESTORE)
+            show_window_async(zoom.hwnd, win32con.SW_SHOW)
             flags = (
                 win32con.SWP_NOACTIVATE
                 | win32con.SWP_SHOWWINDOW
-                | win32con.SWP_FRAMECHANGED
+                | win32con.SWP_ASYNCWINDOWPOS
             )
             win32gui.SetWindowPos(
                 zoom.hwnd,
@@ -146,67 +170,108 @@ class ZoomHallService(QObject):
         return True
 
     def restore_jwl(self) -> bool:
+        """Accept a return request; only a verified later tick completes it."""
+        if self._returning:
+            return True
         if sys.platform != "win32" or win32gui is None or win32con is None:
             return False
-
         target = self._display_provider()
-
-        restored = False
-        jwl = self._jwl_window_provider()
-        jwl_hwnd = (
-            jwl.hwnd
-            if isinstance(jwl, JwlSecondaryWindowInfo) and self._is_window(jwl.hwnd)
-            else self._jwl_hwnd
-        )
-        if target is not None and self._is_window(jwl_hwnd):
-            rect = self._native_target_rect(target)
-            try:
-                win32gui.ShowWindow(jwl_hwnd, win32con.SW_RESTORE)
-                win32gui.ShowWindow(jwl_hwnd, win32con.SW_SHOWNOACTIVATE)
-                flags = (
-                    win32con.SWP_NOACTIVATE
-                    | win32con.SWP_SHOWWINDOW
-                    | win32con.SWP_FRAMECHANGED
-                )
-                win32gui.SetWindowPos(
-                    jwl_hwnd,
-                    win32con.HWND_TOPMOST,
-                    rect.left,
-                    rect.top,
-                    rect.width,
-                    rect.height,
-                    flags,
-                )
-                actual = self._window_rect(jwl_hwnd)
-                restored = (
-                    bool(win32gui.IsWindowVisible(jwl_hwnd))
-                    and not win32gui.IsIconic(jwl_hwnd)
-                    and all(abs(a - b) <= 8 for a, b in zip(
-                        (actual.left, actual.top, actual.width, actual.height),
-                        (rect.left, rect.top, rect.width, rect.height), strict=True,
-                    ))
-                )
-            except (OSError, RuntimeError):
-                restored = False
-
-        if not restored:
-            self.status_changed.emit(
-                False, "Não foi possível restaurar o JW Library na Tela do Salão. Tente novamente."
-            )
+        if not self._is_window(self._jwl_hwnd):
+            jwl = self._jwl_window_provider()
+            self._jwl_hwnd = jwl.hwnd if isinstance(jwl, JwlSecondaryWindowInfo) else 0
+        if target is None or not self._is_window(self._jwl_hwnd):
+            self.status_changed.emit(False, "Saída do JW Library não encontrada; Zoom mantido no Salão.")
             return False
 
-        if self._is_window(self._zoom_hwnd):
-            try:
-                win32gui.ShowWindow(self._zoom_hwnd, win32con.SW_HIDE)
-            except (OSError, RuntimeError):
-                self.status_changed.emit(False, "JW Library restaurado, mas não foi possível ocultar o Zoom.")
-                return False
-
-        self._active = False
-        message = "Zoom removido da Tela do Salão; saída do JW Library restaurada."
-        self.status_changed.emit(True, message)
-        self.active_changed.emit(False, message)
+        self._return_rect = self._native_target_rect(target)
+        self._return_started = time.monotonic()
+        self._returning = True
+        self.transition_diagnostic.emit({"phase": "return_requested", "hwnd": self._jwl_hwnd})
+        # Re-enable native recovery, including the shell-uncloak worker, while
+        # media recognition stays suspended until actual exposure is confirmed.
+        self.returning_changed.emit(True)
+        self.status_changed.emit(True, "Restaurando JW Library na Tela do Salão…")
+        self._request_return()
+        self._return_timer.start()
         return True
+
+    def _request_return(self) -> None:
+        rect = self._return_rect
+        try:
+            show_window_async(self._jwl_hwnd, win32con.SW_SHOWNOACTIVATE)
+            win32gui.SetWindowPos(
+                self._jwl_hwnd, win32con.HWND_TOPMOST,
+                rect.left, rect.top, rect.width, rect.height,
+                win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW | win32con.SWP_ASYNCWINDOWPOS,
+            )
+        except (OSError, RuntimeError) as exc:
+            self.transition_diagnostic.emit({"phase": "return_command_error", "error": type(exc).__name__})
+
+    def _return_snapshot(self) -> dict:
+        hwnd, rect = self._jwl_hwnd, self._return_rect
+        valid = self._is_window(hwnd)
+        if not valid:
+            return {"ready": False, "valid": False}
+        actual = self._window_rect(hwnd)
+        visible = bool(win32gui.IsWindowVisible(hwnd))
+        minimized = bool(win32gui.IsIconic(hwnd))
+        cloaked = JwlFastWindowGuard._cloak_state(hwnd)
+        exposed = JwlFastWindowGuard._is_exposed_at_center(hwnd, rect)
+        geometry_ok = all(abs(a - b) <= 8 for a, b in zip(
+            (actual.left, actual.top, actual.width, actual.height),
+            (rect.left, rect.top, rect.width, rect.height), strict=True,
+        ))
+        return {
+            "ready": visible and not minimized and not cloaked and exposed and geometry_ok,
+            "valid": valid, "visible": visible, "minimized": minimized,
+            "cloaked": cloaked, "exposed": exposed, "geometry_ok": geometry_ok,
+        }
+
+    def _poll_return(self) -> None:
+        if not self._returning:
+            return
+        elapsed = round((time.monotonic() - self._return_started) * 1000)
+        try:
+            snapshot = self._return_snapshot()
+            if snapshot["ready"]:
+                if self._is_window(self._zoom_hwnd) and win32gui.IsWindowVisible(self._zoom_hwnd):
+                    show_window_async(self._zoom_hwnd, win32con.SW_HIDE)
+                    # The asynchronous hide is not confirmation. Check next tick.
+                else:
+                    self._finish_return(True, elapsed, snapshot)
+                    return
+            else:
+                self._request_return()
+        except (OSError, RuntimeError) as exc:
+            snapshot = {"ready": False, "error": type(exc).__name__}
+        if elapsed >= 5000:
+            self._finish_return(False, elapsed, snapshot)
+
+    def _finish_return(self, ok: bool, elapsed: int, snapshot: dict) -> None:
+        self._return_timer.stop()
+        self._returning = False
+        self.transition_diagnostic.emit({
+            "phase": "return_confirmed" if ok else "return_timeout",
+            "elapsed_ms": elapsed, "hwnd": self._jwl_hwnd, **snapshot,
+        })
+        if ok:
+            self._active = False
+        self.returning_changed.emit(False)
+        if not ok:
+            # Keep the Zoom state and allow a new explicit attempt. Never resume
+            # media classification on an unverified desktop/Zoom image.
+            try:
+                if self._is_window(self._zoom_hwnd):
+                    show_window_async(self._zoom_hwnd, win32con.SW_SHOWNOACTIVATE)
+            except (OSError, RuntimeError):
+                pass
+            self.status_changed.emit(
+                False, "JWL não confirmou retorno em 5 s; tente novamente. Diagnóstico salvo."
+            )
+            return
+        message = "Zoom removido da Tela do Salão; JW Library confirmado visível."
+        self.active_changed.emit(False, message)
+        self.status_changed.emit(True, message)
 
     def toggle(self) -> bool:
         return self.restore_jwl() if self._active else self.show_on_hall()

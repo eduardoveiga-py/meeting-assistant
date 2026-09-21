@@ -84,9 +84,9 @@ def test_position_failure_restores_jwl_and_releases_automation_pause(monkeypatch
     monkeypatch.setattr(module.sys, "platform", "win32")
     monkeypatch.setattr(module, "win32con", SimpleNamespace(
         SW_RESTORE=1, SW_SHOW=2, SW_SHOWNOACTIVATE=4, SW_HIDE=0, SWP_NOACTIVATE=16,
-        SWP_SHOWWINDOW=64, SWP_FRAMECHANGED=32, HWND_TOPMOST=-1,
+        SWP_SHOWWINDOW=64, SWP_ASYNCWINDOWPOS=32, HWND_TOPMOST=-1,
     ))
-    module.win32gui.ShowWindow = lambda *args: None
+    monkeypatch.setattr(module, "show_window_async", lambda *args: None)
     module.win32gui.IsWindow = lambda hwnd: hwnd in {1, 2}
 
     def fail_position(*args):
@@ -102,6 +102,7 @@ def test_position_failure_restores_jwl_and_releases_automation_pause(monkeypatch
     assert not service.show_on_hall()
     assert not service.active
     assert changes == ["paused", False]
+    service._return_timer.stop()
 
 
 def jwl_info():
@@ -113,46 +114,16 @@ def jwl_info():
     )
 
 
-@pytest.mark.parametrize("valid_jwl", [True, False])
-def test_return_restores_cached_jwl_before_hiding_zoom(monkeypatch, valid_jwl):
-    service, _ = setup_windows(monkeypatch, {1: {}, 2: {}})
-    monkeypatch.setattr(module.sys, "platform", "win32")
-    monkeypatch.setattr(module, "win32con", SimpleNamespace(
-        SW_RESTORE=1, SW_SHOWNOACTIVATE=4, SW_HIDE=0, SWP_NOACTIVATE=16,
-        SWP_SHOWWINDOW=64, SWP_FRAMECHANGED=32, HWND_TOPMOST=-1,
-    ))
-    calls = []
-    module.win32gui.IsWindow = lambda hwnd: hwnd == 2 or (hwnd == 1 and valid_jwl)
-    module.win32gui.IsIconic = lambda hwnd: False
-    module.win32gui.ShowWindow = lambda hwnd, mode: calls.append(("show", hwnd, mode))
-    module.win32gui.SetWindowPos = lambda *args: calls.append(("position", args[0]))
-    service._display_provider = lambda: object()
-    monkeypatch.setattr(service, "_native_target_rect", lambda _: module.WindowRect(0, 0, 1280, 720))
-    service._jwl_hwnd = 1
-    service._zoom_hwnd = 2
-    service._active = True
-    statuses = []
-    service.status_changed.connect(lambda ok, _: statuses.append(ok))
-    assert service.restore_jwl() is valid_jwl
-    assert service.active is not valid_jwl
-    assert statuses[-1] is valid_jwl
-    if valid_jwl:
-        assert calls.index(("position", 1)) < calls.index(("show", 2, 0))
-        assert ("show", 1, 1) in calls
-    else:
-        assert ("show", 2, 0) not in calls
-
-
 def test_enter_zoom_keeps_jwl_visible_and_saves_return_handle(monkeypatch):
     service, _ = setup_windows(monkeypatch, {1: {"controls": True}, 2: {}})
     monkeypatch.setattr(module.sys, "platform", "win32")
     monkeypatch.setattr(module, "win32con", SimpleNamespace(
         SW_RESTORE=1, SW_SHOW=2, SWP_NOACTIVATE=16,
-        SWP_SHOWWINDOW=64, SWP_FRAMECHANGED=32, HWND_TOPMOST=-1,
+        SWP_SHOWWINDOW=64, SWP_ASYNCWINDOWPOS=32, HWND_TOPMOST=-1,
     ))
     calls = []
     module.win32gui.IsWindow = lambda hwnd: hwnd in {1, 2}
-    module.win32gui.ShowWindow = lambda hwnd, mode: calls.append((hwnd, mode))
+    monkeypatch.setattr(module, "show_window_async", lambda hwnd, mode: calls.append((hwnd, mode)))
     module.win32gui.SetWindowPos = lambda *args: None
     service._jwl_window_provider = lambda: jwl_info()
     service._display_provider = lambda: object()
@@ -161,3 +132,99 @@ def test_enter_zoom_keeps_jwl_visible_and_saves_return_handle(monkeypatch):
     assert service.active
     assert service._jwl_hwnd == 1
     assert all(hwnd != 1 for hwnd, _ in calls)
+
+
+def setup_return(monkeypatch):
+    service, _ = setup_windows(monkeypatch, {1: {}, 2: {}})
+    monkeypatch.setattr(module.sys, "platform", "win32")
+    monkeypatch.setattr(module, "win32con", SimpleNamespace(
+        SW_SHOWNOACTIVATE=4, SW_HIDE=0, SWP_NOACTIVATE=16,
+        SWP_SHOWWINDOW=64, SWP_ASYNCWINDOWPOS=32, HWND_TOPMOST=-1,
+    ))
+    state = {"cloaked": 0, "exposed": True, "zoom_visible": True, "valid": True}
+    calls, events = [], []
+    module.win32gui.IsWindow = lambda hwnd: hwnd == 2 or (hwnd == 1 and state["valid"])
+    module.win32gui.IsIconic = lambda hwnd: False
+    module.win32gui.IsWindowVisible = lambda hwnd: True if hwnd == 1 else state["zoom_visible"]
+    module.win32gui.ShowWindow = lambda *args: pytest.fail("Synchronous show must never be called")
+    monkeypatch.setattr(module, "show_window_async", lambda hwnd, mode: calls.append(("show", hwnd, mode)))
+    module.win32gui.SetWindowPos = lambda *args: calls.append(("position", args[0], args[-1]))
+    monkeypatch.setattr(module.JwlFastWindowGuard, "_cloak_state", lambda _: state["cloaked"])
+    monkeypatch.setattr(module.JwlFastWindowGuard, "_is_exposed_at_center", lambda *_: state["exposed"])
+    service._display_provider = lambda: object()
+    monkeypatch.setattr(service, "_native_target_rect", lambda _: module.WindowRect(0, 0, 1280, 720))
+    service._jwl_hwnd, service._zoom_hwnd, service._active = 1, 2, True
+    service.transition_diagnostic.connect(events.append)
+    return service, state, calls, events
+
+
+def test_return_waits_for_native_confirmation_before_resuming(monkeypatch):
+    service, state, calls, events = setup_return(monkeypatch)
+    assert service.restore_jwl()
+    assert service.returning and service.active
+    assert ("show", 2, 0) not in calls
+    service._poll_return()
+    assert ("show", 2, 0) in calls
+    assert service.active
+    state["zoom_visible"] = False
+    service._poll_return()
+    assert not service.returning and not service.active
+    assert events[-1]["phase"] == "return_confirmed"
+    assert all(flags & 32 for kind, _, flags in calls if kind == "position")
+
+
+@pytest.mark.parametrize("obstruction", ["cloaked", "exposed"])
+def test_visible_but_cloaked_or_covered_jwl_is_not_success(monkeypatch, obstruction):
+    service, state, calls, events = setup_return(monkeypatch)
+    state[obstruction] = 2 if obstruction == "cloaked" else False
+    service.restore_jwl()
+    service._poll_return()
+    assert service.active and service.returning
+    assert ("show", 2, 0) not in calls
+    assert not any(e["phase"] == "return_confirmed" for e in events)
+    service._return_timer.stop()
+
+
+def test_return_timeout_keeps_zoom_and_can_be_retried(monkeypatch):
+    service, state, calls, events = setup_return(monkeypatch)
+    state["cloaked"] = 2
+    service.restore_jwl()
+    service._return_started -= 6
+    service._poll_return()
+    assert service.active and not service.returning
+    assert not service._return_timer.isActive()
+    assert events[-1]["phase"] == "return_timeout"
+    assert ("show", 2, 0) not in calls
+    state["cloaked"] = 0
+    service.restore_jwl()
+    service._poll_return()
+    state["zoom_visible"] = False
+    service._poll_return()
+    assert not service.active
+
+
+def test_repeated_stop_click_does_not_restart_deadline(monkeypatch):
+    service, _, _, events = setup_return(monkeypatch)
+    service.restore_jwl()
+    started = service._return_started
+    service.restore_jwl()
+    assert service._return_started == started
+    assert len(events) == 1
+    service._return_timer.stop()
+
+
+def test_missing_jwl_does_not_hide_zoom(monkeypatch):
+    service, state, calls, _ = setup_return(monkeypatch)
+    state["valid"] = False
+    assert not service.restore_jwl()
+    assert service.active
+    assert calls == []
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_guard_and_media_policy_through_entire_zoom_cycle(enabled):
+    assert module.hall_runtime_flags(enabled, False, False) == (True, enabled)
+    assert module.hall_runtime_flags(enabled, False, False, True) == (False, False)
+    assert module.hall_runtime_flags(enabled, True, False) == (False, False)
+    assert module.hall_runtime_flags(enabled, True, True) == (True, False)
+    assert module.hall_runtime_flags(enabled, False, False) == (True, enabled)

@@ -28,7 +28,7 @@ from meeting_assistant.services.meeting_launcher import MeetingLauncherService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.settings import SettingsService
 from meeting_assistant.services.telemetry_service import TelemetryService
-from meeting_assistant.services.zoom_hall_service import ZoomHallService
+from meeting_assistant.services.zoom_hall_service import ZoomHallService, hall_runtime_flags
 from meeting_assistant.ui.main_window import MainWindow
 
 APP_USER_MODEL_ID = "MeetingAssistant.Desktop.3"
@@ -343,8 +343,9 @@ def main() -> int:
     )
 
     def apply_automation_runtime(enabled: bool, *, switching_to_zoom: bool = False) -> None:
-        protect_jwl = not (zoom_hall.active or switching_to_zoom)
-        effective = bool(enabled and protect_jwl)
+        protect_jwl, effective = hall_runtime_flags(
+            enabled, zoom_hall.active, zoom_hall.returning, switching_to_zoom
+        )
         telemetry.event(
             "automation_runtime",
             requested=enabled,
@@ -355,6 +356,10 @@ def main() -> int:
         jwl_fast_guard.set_enabled(protect_jwl)
         media_automation.set_enabled(effective and not jwl_fast_guard.recovering)
 
+    zoom_hall.returning_changed.connect(lambda _: apply_automation_runtime(state.automation_enabled))
+    zoom_hall.transition_diagnostic.connect(
+        lambda detail: telemetry.event("zoom_hall_transition", **detail)
+    )
     window.automation_enabled_changed.connect(apply_automation_runtime)
     window.idle_reference_requested.connect(media_automation.reset_idle_reference)
     zoom_hall.about_to_show.connect(
