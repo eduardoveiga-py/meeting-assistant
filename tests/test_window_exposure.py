@@ -4,7 +4,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from meeting_assistant.services.window_exposure import first_covering_window, verify_visual_exposure
+from meeting_assistant.services.window_exposure import (
+    first_covering_window,
+    verify_visual_exposure,
+    windows_above_target,
+)
 
 
 def row(hwnd, rect=(0, 0, 1920, 1080), **kwargs):
@@ -37,7 +41,8 @@ def test_missing_root_is_not_assumed_safe():
 def test_disabled_jwl_and_child_handle_do_not_need_mouse_hit_test(monkeypatch):
     gui = SimpleNamespace(
         GetAncestor=lambda hwnd, _: 7,
-        EnumWindows=lambda callback, _: [callback(hwnd, None) for hwnd in (7, 8)],
+        GetWindow=lambda hwnd, command: 0,
+        IsWindow=lambda hwnd: True,
     )
     # No WindowFromPoint API in this fake: disabled UWP input does not imply occlusion.
     monkeypatch.setitem(sys.modules, 'win32gui', gui)
@@ -45,7 +50,8 @@ def test_disabled_jwl_and_child_handle_do_not_need_mouse_hit_test(monkeypatch):
         monkeypatch.setattr(ctypes, 'windll', SimpleNamespace(), raising=False)
     evidence = []
     verify_visual_exposure(70, (0, -1080, 1920, 0), evidence.append)
-    assert evidence == [{'hwnd': 70, 'root_hwnd': 7, 'visual_blocker': None}]
+    assert evidence == [{'hwnd': 70, 'root_hwnd': 7, 'visual_blocker': None,
+                         'exposure_check': 'anchored_z_order', 'windows_checked': 1}]
 
 
 @pytest.mark.parametrize('class_name', ['Shell_TrayWnd', 'Shell_SecondaryTrayWnd'])
@@ -71,3 +77,23 @@ def test_shell_desktop_surface_does_not_block_confirmed_preview(class_name):
     rows.insert(1, row(8, (-629, -1080, 1291, 0), class_name='Chrome_WidgetWin_1'))
     assert first_covering_window(7, (-629, -1080, 1291, 0), rows,
                                  allow_taskbar_preview=True)['hwnd'] == 8
+
+
+def test_uwp_target_need_not_appear_in_enumwindows():
+    # UWP target 7 is absent from a hypothetical desktop-app enumeration.
+    # Its own Z-order links still give the actual windows above it.
+    links = {7: 8, 8: 9, 9: 0}
+    assert windows_above_target(7, links.get, lambda _: True) == [9, 8, 7]
+
+
+@pytest.mark.parametrize('links', [{7: 8, 8: 7}, {7: 7}])
+def test_z_order_cycle_cannot_loop_forever(links):
+    with pytest.raises(ValueError, match='mudaram'):
+        windows_above_target(7, links.get, lambda _: True)
+
+
+def test_destroyed_window_and_traversal_limit_refuse_capture():
+    with pytest.raises(ValueError, match='mudaram'):
+        windows_above_target(7, lambda _: 8, lambda hwnd: hwnd != 8)
+    with pytest.raises(ValueError, match='todas'):
+        windows_above_target(7, lambda hwnd: hwnd + 1, lambda _: True, limit=4)

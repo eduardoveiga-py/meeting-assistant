@@ -23,6 +23,9 @@
 
 ### Correções e estabilidade preservada
 
+- Captura verifica a ordem das janelas a partir do HWND JWL já identificado, sem exigir
+  que a saída UWP apareça no EnumWindows. Percurso limitado, detecção de ciclos e diagnóstico.
+
 - Correção candidata do guardião: remover maximização incondicional do JWL na abertura;
   inspecionar antes de recuperar. Exige nova validação física, sem atualizar o baseline.
 - WorkerW/Progman tratados como superfícies internas do shell na prévia confirmada da foto.

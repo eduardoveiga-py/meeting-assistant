@@ -27,6 +27,29 @@ def first_covering_window(target_root, target_rect, windows, *, allow_taskbar_pr
     raise ValueError("A ordem das janelas mudou. Aguarde o JWL e tente capturar novamente.")
 
 
+def windows_above_target(root, previous_window, is_window, *, limit=512):
+    """Anchor to the verified HWND, including UWP windows omitted by EnumWindows.
+
+    Bound the traversal and reject destroyed handles/cycles to handle Z-order races.
+    Return top-to-bottom with the target last, as first_covering_window expects.
+    """
+    if not is_window(root):
+        raise ValueError("A janela do JWL deixou de existir. Aguarde sua identificação.")
+    handles = [root]
+    seen = {root}
+    for _ in range(limit):
+        previous = int(previous_window(handles[-1]) or 0)
+        if not previous:
+            if not is_window(root):
+                raise ValueError("A janela do JWL mudou durante a verificação.")
+            return list(reversed(handles))
+        if previous in seen or not is_window(previous):
+            raise ValueError("As janelas mudaram durante a verificação. Tente capturar novamente.")
+        seen.add(previous)
+        handles.append(previous)
+    raise ValueError("Não foi possível verificar todas as janelas. Tente capturar novamente.")
+
+
 def verify_visual_exposure(hwnd, target_rect, diagnostic=None, *, allow_taskbar_preview=False):
     import ctypes
     from ctypes import wintypes
@@ -34,8 +57,14 @@ def verify_visual_exposure(hwnd, target_rect, diagnostic=None, *, allow_taskbar_
     import win32gui
 
     root = win32gui.GetAncestor(hwnd, 2) or hwnd
-    handles = []
-    win32gui.EnumWindows(lambda handle, _: handles.append(handle), None)
+    try:
+        handles = windows_above_target(
+            root, lambda handle: win32gui.GetWindow(handle, 3), win32gui.IsWindow  # GW_HWNDPREV
+        )
+    except Exception:
+        if diagnostic:
+            diagnostic({"hwnd": hwnd, "root_hwnd": root, "exposure_check": "traversal_failed"})
+        raise
     rows = []
     for handle in handles:
         if handle == root:
@@ -81,7 +110,8 @@ def verify_visual_exposure(hwnd, target_rect, diagnostic=None, *, allow_taskbar_
         root, target_rect, rows, allow_taskbar_preview=allow_taskbar_preview
     )
     if diagnostic:
-        detail = {"hwnd": hwnd, "root_hwnd": root, "visual_blocker": blocker}
+        detail = {"hwnd": hwnd, "root_hwnd": root, "visual_blocker": blocker,
+                  "exposure_check": "anchored_z_order", "windows_checked": len(handles)}
         if shell_rows:
             detail["shell_surfaces"] = shell_rows
             detail["shell_preview_allowed"] = allow_taskbar_preview
