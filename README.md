@@ -1,66 +1,81 @@
-# Meeting Assistant 3.0
+<p align="center"><img src="src/meeting_assistant/resources/app_icon.svg" width="80" alt="Meeting Assistant"></p>
 
-Assistente de operação para reuniões usando **OBS Studio, Zoom e JW Library** em Windows.
+# Meeting Assistant
 
-## Estado atual
+**Uma interface para operar JW Library, OBS Studio e Zoom nas reuniões.**
 
-A versão 3.0 está sendo reconstruída sobre uma arquitetura modular. O primeiro marco contém a interface PySide6, modelo de estado centralizado, configurações persistentes, testes e CI para Windows. As integrações reais com OBS, JW Library e Zoom serão adicionadas separadamente para reduzir regressões.
+[![Verificações Windows](https://github.com/eduardoveiga-py/meeting-assistant/actions/workflows/ci.yml/badge.svg?branch=feature%2Fmeeting-launch-zoom-hall)](https://github.com/eduardoveiga-py/meeting-assistant/actions/workflows/ci.yml)
+![Plataforma Windows](https://img.shields.io/badge/plataforma-Windows-0078D4)
+![Em desenvolvimento](https://img.shields.io/badge/status-em_desenvolvimento-DAA520)
 
-## Requisitos de desenvolvimento
+[Guia de uso](docs/operator-guide.md) · [Próximas entregas](docs/roadmap-after-hall-validation.md) · [Versão protegida](docs/validated-hall-contract.md) · [Soluções reaproveitáveis](docs/reuse-assessment.md)
 
-- Windows 10/11 x64
-- Python 3.12 x64
-- Git for Windows
+## O que já funciona
 
-## Preparar o ambiente
+| Recurso | Comportamento |
+| --- | --- |
+| Saída do Salão | Janela secundária nativa do JW Library; recuperação após Windows+D. |
+| Zoom → Salão | Alterna a segunda tela entre JWL e participantes, mantendo as janelas abertas. |
+| Automação de cenas | Texto do ano em repouso → Palco; mídia → Mídias; fim da mídia → Palco. |
+| Controle do OBS | WebSocket, seleção de cenas, preview e diagnóstico de cenas ausentes. |
+| Iniciar reunião | Abre/reaproveita programas e solicita entrada no Zoom pelo link configurado. |
+| Operação | Ajustes persistentes, cena segura, observação de mídia e telemetria configurável. |
 
-No PowerShell, dentro da pasta do projeto:
+O operador validou a troca de telas em 21/09/2026. Esse núcleo tem checkpoint e teste de integridade. A validação em outros computadores ainda faz parte da entrega.
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -e ".[dev]"
-```
+**A saída física do Salão e o vídeo enviado ao Zoom são independentes.** Mostrar participantes na segunda tela não deve reenviar a imagem deles pela câmera virtual. O preview atual vem do OBS e não comprova sozinho o que aparece no monitor do Salão.
 
-## Executar
+## Instalação atual — desenvolvimento
 
-```powershell
-meeting-assistant
-```
-
-Alternativamente:
+Ainda não há um instalador final aprovado neste roteiro. O procedimento abaixo exige Windows x64, Python **3.12 estável**, Git e acesso ao repositório. O app é apresentado como Meeting Assistant 3.0; a versão técnica atual do pacote é 0.4.2.
 
 ```powershell
-python -m meeting_assistant.main
+git clone --branch feature/meeting-launch-zoom-hall https://github.com/eduardoveiga-py/meeting-assistant.git
+cd meeting-assistant
+.\scripts\setup-dev.ps1
+.\scripts\run-dev.ps1
 ```
 
-## Testes e qualidade
+O script cria o ambiente virtual, instala dependências e executa testes. Se o PowerShell bloquear scripts, siga a política do computador antes de executá-los.
+
+Para atualizar uma instalação de desenvolvimento sem alterações locais, feche apenas o Meeting Assistant:
 
 ```powershell
-ruff check .
-pytest
+git pull --ff-only
+.\scripts\setup-dev.ps1
+.\scripts\run-dev.ps1
 ```
 
-## Arquitetura
+OBS Studio, Zoom e JW Library são aplicativos externos. Instale-os pelas fontes oficiais e siga o [guia](docs/operator-guide.md). A primeira configuração das fontes OBS ainda é manual.
 
-```text
-src/meeting_assistant/
-├── core/       # estado e coordenação da operação
-├── services/   # configuração, diagnóstico, logging, preview
-├── controllers/# OBS, Windows, JW Library, Zoom e monitores
-└── ui/         # interface PySide6
+## Preparação rápida
+
+1. Configure o Windows para estender a área de trabalho e a saída secundária do JWL para o monitor do Salão.
+2. Habilite o servidor WebSocket do OBS e informe host, porta e senha em **Ajustes**.
+3. Mapeie **Fundo / Texto do Ano**, **Palco** e **Mídia** para as cenas existentes.
+4. No Zoom, habilite dois monitores antes de entrar na reunião. Selecione **OBS Virtual Camera** como câmera e inicie a câmera virtual no OBS.
+5. Clique em **Verificar** e teste a alternância antes da reunião.
+
+## Em preparação
+
+- Assistente OBS: verificar/criar cenas e fontes sem duplicar as existentes; iniciar e confirmar a câmera virtual.
+- Capturar/atualizar a foto do texto do ano, salvar e avisar quando faltar ou mudar o ano.
+- Áudio de mídia e microfones para o Zoom sem reenviar o retorno remoto.
+- Ferramentas avançadas em Ajustes, guia ilustrado e instalador independente de Python instalado.
+
+Esses itens **ainda não estão implementados**. Consulte critérios e prioridades no [roteiro](docs/roadmap-after-hall-validation.md).
+
+## Desenvolvimento e qualidade
+
+```powershell
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m pytest
 ```
 
-Princípios do projeto:
+O CI executa Ruff e Pytest no Windows. `core/` guarda estado, `services/` integra aplicativos e `ui/` contém a interface. Leia [AGENTS.md](AGENTS.md) antes de alterar o núcleo validado.
 
-- Win32/pywin32 para manipulação confiável de janelas no Windows.
-- OBS WebSocket para controle do OBS.
-- Sem reconhecimento de imagem/cliques cegos em fluxos essenciais.
-- Estado operacional centralizado em vez de regras espalhadas pela UI.
-- Automação inicia pausada e deve possuir retorno visual e uma saída segura.
-- Testes automatizados antes de integrar automações físicas.
+## Distribuição futura
 
-## Desenvolvimento
+A publicação do código e do instalador ocorrerá quando o responsável autorizar tornar o projeto público. Antes disso: testes em Windows sem Python, revisão das licenças das dependências, remoção de dados locais/segredos e Releases com versão, notas e checksum. Links privados de reunião, senhas, imagens locais e telemetria não devem integrar o pacote público.
 
-O desenvolvimento é feito em branches e Pull Requests. O CI é executado em Windows com Python 3.12, Ruff e Pytest.
+Projeto independente, não oficial de JW Library, Zoom ou OBS.
