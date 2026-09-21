@@ -336,3 +336,44 @@ def test_already_exposed_zoom_never_steals_focus(monkeypatch):
     monkeypatch.setattr(module, "activate_window", lambda _: pytest.fail("No activation needed"))
     service._poll_show()
     assert service._show_confirmed
+
+
+def test_cloaked_jwl_activated_before_background_recovery(monkeypatch):
+    service, state, _, events = setup_return(monkeypatch)
+    state["cloaked"] = 2
+    state["exposed"] = False
+    order = []
+    monkeypatch.setattr(module, "activate_window", lambda hwnd: order.append(("activate", hwnd)) or True)
+    service.returning_changed.connect(lambda value: order.append(("guard", value)))
+    assert service.restore_jwl()
+    assert order[:2] == [("activate", 1), ("guard", True)]
+    service._poll_return()
+    assert order.count(("activate", 1)) == 1
+    assert service.active and service.returning
+    assert any(e["phase"] == "return_activation" and e["cloaked"] == 2 for e in events)
+    state["cloaked"] = 0
+    state["exposed"] = True
+    service._poll_return()
+    assert not service.active and not service.returning
+
+
+def test_automatic_rollback_does_not_activate_window(monkeypatch):
+    service, state, _, _ = setup_return(monkeypatch)
+    state["cloaked"] = 2
+    monkeypatch.setattr(module, "activate_window", lambda _: pytest.fail("Rollback must not steal focus"))
+    service.restore_jwl(activate=False)
+    service._poll_return()
+    service._return_timer.stop()
+
+
+def test_return_activation_rearmed_for_next_operator_click(monkeypatch):
+    service, state, _, _ = setup_return(monkeypatch)
+    calls = []
+    monkeypatch.setattr(module, "activate_window", lambda hwnd: calls.append(hwnd) or True)
+    for _ in range(3):
+        service._active = True
+        state["cloaked"] = 2
+        service.restore_jwl()
+        state["cloaked"] = 0
+        service._poll_return()
+    assert calls == [1, 1, 1]

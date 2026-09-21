@@ -99,6 +99,8 @@ class ZoomHallService(QObject):
         self._show_timer.setInterval(100)
         self._show_timer.timeout.connect(self._poll_show)
         self._returning = False
+        self._return_activation_attempted = False
+        self._return_activation_allowed = False
         self._return_started = 0.0
         self._return_rect = None
         self._return_timer = QTimer(self)
@@ -210,10 +212,10 @@ class ZoomHallService(QObject):
         if elapsed >= 5000:
             self._show_timer.stop()
             self.transition_diagnostic.emit({"phase": "show_timeout", "elapsed_ms": elapsed, **snapshot})
-            self.restore_jwl()
+            self.restore_jwl(activate=False)
             self.status_changed.emit(False, "Zoom não confirmou exibição; restaurando o JW Library.")
 
-    def restore_jwl(self) -> bool:
+    def restore_jwl(self, *, activate: bool = True) -> bool:
         """Accept a return request; only a verified later tick completes it."""
         if self._returning:
             return True
@@ -231,14 +233,35 @@ class ZoomHallService(QObject):
         self._return_rect = self._native_target_rect(target)
         self._return_started = time.monotonic()
         self._returning = True
+        self._return_activation_attempted = False
+        self._return_activation_allowed = activate
         self.transition_diagnostic.emit({"phase": "return_requested", "hwnd": self._jwl_hwnd})
-        # Re-enable native recovery, including the shell-uncloak worker, while
-        # media recognition stays suspended until actual exposure is confirmed.
-        self.returning_changed.emit(True)
         self.status_changed.emit(True, "Restaurando JW Library na Tela do Salão…")
         self._request_return()
+        # Activate on the operator's click before background shell recovery.
+        # The inactive UWP view may be shell-cloaked, not merely behind Zoom.
+        self._activate_return_if_needed()
+        self.returning_changed.emit(True)
         self._return_timer.start()
         return True
+
+    def _activate_return_if_needed(self, snapshot: dict | None = None) -> None:
+        if not self._return_activation_allowed or self._return_activation_attempted:
+            return
+        try:
+            snapshot = self._return_snapshot() if snapshot is None else snapshot
+            if snapshot["ready"]:
+                return
+            self._return_activation_attempted = True
+            accepted = activate_window(self._jwl_hwnd)
+            self.transition_diagnostic.emit({
+                "phase": "return_activation", "hwnd": self._jwl_hwnd,
+                "accepted": accepted, **snapshot,
+            })
+        except (OSError, RuntimeError) as exc:
+            self.transition_diagnostic.emit({
+                "phase": "return_activation_error", "error": type(exc).__name__,
+            })
 
     def _request_return(self) -> None:
         rect = self._return_rect
@@ -310,6 +333,7 @@ class ZoomHallService(QObject):
                 self._finish_return(True, elapsed, snapshot)
                 return
             else:
+                self._activate_return_if_needed(snapshot)
                 self._request_return()
         except (OSError, RuntimeError) as exc:
             snapshot = {"ready": False, "error": type(exc).__name__}
