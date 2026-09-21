@@ -165,16 +165,10 @@ class JwlFastWindowGuard(QObject):
         self._remember_foreground(item.hwnd)
 
         target_rect = self._native_target_rect(target)
-        if self._normalized_hwnd != item.hwnd:
-            if self._normalize_maximized_without_activation(item.hwnd, target_rect):
-                self._normalized_hwnd = item.hwnd
-                self.recovery_detail.emit(
-                    {
-                        "hwnd": item.hwnd,
-                        "reason": "normalized_maximized",
-                    }
-                )
-
+        # Do not force SW_SHOWMAXIMIZED on an already fullscreen UWP output.
+        # JWL owns its client layout; changing the show state during startup can
+        # introduce a visible desktop strip despite matching outer rectangles.
+        # Inspect first and use the existing recovery path only if unhealthy.
         current_rect = self._window_rect(item.hwnd)
         if current_rect is None:
             return

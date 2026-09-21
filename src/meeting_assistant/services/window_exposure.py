@@ -8,6 +8,7 @@ def overlaps(a, b):
 
 
 SHELL_TASKBARS = frozenset({"Shell_TrayWnd", "Shell_SecondaryTrayWnd"})
+SHELL_PREVIEW_SURFACES = SHELL_TASKBARS | {"WorkerW", "Progman"}
 
 
 def first_covering_window(target_root, target_rect, windows, *, allow_taskbar_preview=False):
@@ -18,7 +19,7 @@ def first_covering_window(target_root, target_rect, windows, *, allow_taskbar_pr
         # Explorer can report its full taskbar rectangle above a fullscreen UWP
         # output even when DWM does not paint it. Only photo preview may waive
         # this inconclusive shell geometry; other windows still block capture.
-        if allow_taskbar_preview and row.get("class_name") in SHELL_TASKBARS:
+        if allow_taskbar_preview and row.get("class_name") in SHELL_PREVIEW_SURFACES:
             continue
         if row["visible"] and not row["cloaked"] and not row["transparent"]:
             if overlaps(row["rect"], target_rect):
@@ -74,7 +75,7 @@ def verify_visual_exposure(hwnd, target_rect, diagnostic=None, *, allow_taskbar_
         )
     shell_rows = [
         row for row in rows
-        if row.get("class_name") in SHELL_TASKBARS and overlaps(row["rect"], target_rect)
+        if row.get("class_name") in SHELL_PREVIEW_SURFACES and overlaps(row["rect"], target_rect)
     ]
     blocker = first_covering_window(
         root, target_rect, rows, allow_taskbar_preview=allow_taskbar_preview
@@ -82,8 +83,8 @@ def verify_visual_exposure(hwnd, target_rect, diagnostic=None, *, allow_taskbar_
     if diagnostic:
         detail = {"hwnd": hwnd, "root_hwnd": root, "visual_blocker": blocker}
         if shell_rows:
-            detail["shell_taskbars"] = shell_rows
-            detail["taskbar_preview_allowed"] = allow_taskbar_preview
+            detail["shell_surfaces"] = shell_rows
+            detail["shell_preview_allowed"] = allow_taskbar_preview
         diagnostic(detail)
     if blocker:
         raise ValueError(

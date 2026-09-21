@@ -61,3 +61,13 @@ def test_taskbar_exception_does_not_hide_real_window_above_jwl():
             row(8, class_name='ConfMultiTabContentWndClass'), {'hwnd': 7}]
     assert first_covering_window(7, (0, 0, 1920, 1080), rows,
                                  allow_taskbar_preview=True)['hwnd'] == 8
+
+
+@pytest.mark.parametrize('class_name', ['WorkerW', 'Progman'])
+def test_shell_desktop_surface_does_not_block_confirmed_preview(class_name):
+    rows = [row(3, (-629, -1080, 1920, 1080), class_name=class_name), {'hwnd': 7}]
+    assert first_covering_window(7, (-629, -1080, 1291, 0), rows,
+                                 allow_taskbar_preview=True) is None
+    rows.insert(1, row(8, (-629, -1080, 1291, 0), class_name='Chrome_WidgetWin_1'))
+    assert first_covering_window(7, (-629, -1080, 1291, 0), rows,
+                                 allow_taskbar_preview=True)['hwnd'] == 8

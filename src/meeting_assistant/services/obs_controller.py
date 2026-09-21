@@ -405,7 +405,10 @@ class ObsController(QObject):
                     raise ValueError("Foto ausente ou inválida; capture novamente.")
                 apply_yeartext(self._client, photo, data["scene"])
                 store.mark_applied(photo["sha256"], photo["file"])
-                message = "Foto salva e fonte de imagem confirmada no OBS."
+                message = (
+                    "Foto existente aplicada ao OBS. "
+                    "Para substituí-la, capture uma nova foto, confirme e salve."
+                )
             elif action == "media":
                 prepare_media(self._client, data["scene"], data["selectors"])
                 message = "Fonte JWL configurada. Confira a imagem no OBS; nenhuma cena Program foi trocada."

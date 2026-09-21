@@ -23,6 +23,11 @@
 
 ### Correções e estabilidade preservada
 
+- Correção candidata do guardião: remover maximização incondicional do JWL na abertura;
+  inspecionar antes de recuperar. Exige nova validação física, sem atualizar o baseline.
+- WorkerW/Progman tratados como superfícies internas do shell na prévia confirmada da foto.
+- Mensagem de aplicação ao OBS distingue arquivo existente de uma nova captura.
+
 - Retângulo informado pelo Explorer para a barra de tarefas não bloqueia mais a prévia
   do Texto do Ano; confirmação visual continua obrigatória. Outras janelas ainda bloqueiam.
 

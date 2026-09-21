@@ -167,7 +167,7 @@ class HallSetupDialog(QDialog):
             message = "Prévia capturada. Confira o ano e marque a confirmação antes de salvar."
             if before.get("taskbar_preview") or after.get("taskbar_preview"):
                 message = (
-                    "Prévia capturada. O Windows informa uma barra de tarefas nesse monitor. "
+                    "Prévia capturada. O Windows informa elementos da área de trabalho nesse monitor. "
                     "Confira se a foto está limpa, sem barra ou faixa da área de trabalho, "
                     "antes de confirmar."
                 )

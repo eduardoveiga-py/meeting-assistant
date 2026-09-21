@@ -112,7 +112,7 @@ def test_shell_taskbar_allows_preview_but_never_automatic_save(tmp_path, monkeyp
     dialog = hall_setup_dialog.HallSetupDialog(store, lambda: target, ObsController(), AppSettings())
     dialog._capture()
     assert dialog.pending_png is not None
-    assert 'barra de tarefas' in dialog.result.text()
+    assert 'elementos da área de trabalho' in dialog.result.text()
     assert not dialog.save_button.isEnabled()
     dialog._save()
     assert store.current() is None
