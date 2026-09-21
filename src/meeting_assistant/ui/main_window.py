@@ -130,6 +130,8 @@ class MainWindow(QMainWindow):
         title.setObjectName("Title")
         subtitle = QLabel("Operação local • OBS • Zoom • JW Library")
         subtitle.setObjectName("Subtitle")
+        self.yeartext_notice = subtitle
+        subtitle.linkActivated.connect(lambda _: self._open_hall_setup(self))
         title_box.addWidget(title)
         title_box.addWidget(subtitle)
         header.addLayout(title_box)
@@ -190,10 +192,6 @@ class MainWindow(QMainWindow):
         self.automation_status.setObjectName("AutomationStatus")
         self.automation_status.setWordWrap(True)
         controls.addWidget(self.automation_status)
-        self.yeartext_notice = QLabel()
-        self.yeartext_notice.setWordWrap(True)
-        self.yeartext_notice.linkActivated.connect(lambda _: self._open_hall_setup(self))
-        controls.addWidget(self.yeartext_notice)
 
         panic = QPushButton("🛟 Cena segura → Palco")
         panic.setObjectName("DangerButton")
@@ -739,11 +737,13 @@ class MainWindow(QMainWindow):
 
         current = self.yeartext_store.current()
         outdated = current is None or current["year"] != datetime.now().year
-        self.yeartext_notice.setVisible(outdated)
         if outdated:
-            self.yeartext_notice.setText(
-                self.yeartext_store.status() + ' <a href="yeartext">Criar / atualizar foto</a>'
-            )
+            action = "Criar foto do Texto do Ano" if current is None else "Atualizar foto do Texto do Ano"
+            self.yeartext_notice.setText(f'<a href="yeartext">{action}</a>')
+            self.yeartext_notice.setToolTip(self.yeartext_store.status())
+        else:
+            self.yeartext_notice.setText("Operação local • OBS • Zoom • JW Library")
+            self.yeartext_notice.setToolTip(self.yeartext_store.status())
 
     def _on_hall_task_finished(self, action, ok, message):
         if action == "yeartext":
