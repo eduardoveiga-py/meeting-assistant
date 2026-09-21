@@ -88,7 +88,9 @@ def verified_hall_target(candidate, display, blocked: bool, diagnostic=None) -> 
         raise ValueError("O JWL ainda não ocupa a Tela do Salão selecionada.")
     from meeting_assistant.services.window_exposure import verify_visual_exposure
 
-    verify_visual_exposure(hwnd, monitor_rect, diagnostic)
+    taskbar_preview = verify_visual_exposure(
+        hwnd, monitor_rect, diagnostic, allow_taskbar_preview=True
+    )
     related = [hwnd]
     win32gui.EnumChildWindows(hwnd, lambda child, _: related.append(child), None)
     selectors = []
@@ -104,6 +106,7 @@ def verified_hall_target(candidate, display, blocked: bool, diagnostic=None) -> 
         selectors.append(obs_window_key(title, class_name, exe))
     return {
         "hwnd": hwnd,
+        "taskbar_preview": taskbar_preview,
         "rect": (target.left, target.top, target.right, target.bottom),
         "selectors": list(dict.fromkeys(selectors)),
     }

@@ -7,18 +7,26 @@ def overlaps(a, b):
     return max(a[0], b[0]) < min(a[2], b[2]) and max(a[1], b[1]) < min(a[3], b[3])
 
 
-def first_covering_window(target_root, target_rect, windows):
+SHELL_TASKBARS = frozenset({"Shell_TrayWnd", "Shell_SecondaryTrayWnd"})
+
+
+def first_covering_window(target_root, target_rect, windows, *, allow_taskbar_preview=False):
     """Rows are top-to-bottom; never treat a window behind the target as covering it."""
     for row in windows:
         if row["hwnd"] == target_root:
             return None
+        # Explorer can report its full taskbar rectangle above a fullscreen UWP
+        # output even when DWM does not paint it. Only photo preview may waive
+        # this inconclusive shell geometry; other windows still block capture.
+        if allow_taskbar_preview and row.get("class_name") in SHELL_TASKBARS:
+            continue
         if row["visible"] and not row["cloaked"] and not row["transparent"]:
             if overlaps(row["rect"], target_rect):
                 return row
     raise ValueError("A ordem das janelas mudou. Aguarde o JWL e tente capturar novamente.")
 
 
-def verify_visual_exposure(hwnd, target_rect, diagnostic=None):
+def verify_visual_exposure(hwnd, target_rect, diagnostic=None, *, allow_taskbar_preview=False):
     import ctypes
     from ctypes import wintypes
 
@@ -64,10 +72,21 @@ def verify_visual_exposure(hwnd, target_rect, diagnostic=None):
                 "class_name": win32gui.GetClassName(handle),
             }
         )
-    blocker = first_covering_window(root, target_rect, rows)
+    shell_rows = [
+        row for row in rows
+        if row.get("class_name") in SHELL_TASKBARS and overlaps(row["rect"], target_rect)
+    ]
+    blocker = first_covering_window(
+        root, target_rect, rows, allow_taskbar_preview=allow_taskbar_preview
+    )
     if diagnostic:
-        diagnostic({"hwnd": hwnd, "root_hwnd": root, "visual_blocker": blocker})
+        detail = {"hwnd": hwnd, "root_hwnd": root, "visual_blocker": blocker}
+        if shell_rows:
+            detail["shell_taskbars"] = shell_rows
+            detail["taskbar_preview_allowed"] = allow_taskbar_preview
+        diagnostic(detail)
     if blocker:
         raise ValueError(
             f"Janela visível sobre o JWL ({blocker['class_name']}). Libere a Tela do Salão antes de capturar."
         )
+    return bool(shell_rows and allow_taskbar_preview)

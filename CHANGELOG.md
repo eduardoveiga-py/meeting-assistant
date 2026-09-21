@@ -23,6 +23,9 @@
 
 ### Correções e estabilidade preservada
 
+- Retângulo informado pelo Explorer para a barra de tarefas não bloqueia mais a prévia
+  do Texto do Ano; confirmação visual continua obrigatória. Outras janelas ainda bloqueiam.
+
 - Verificação visual de sobreposição por ordem das janelas, substituindo teste de ponteiro
   que pode ignorar janelas desabilitadas; diagnóstico identifica classe/retângulo do bloqueador.
 

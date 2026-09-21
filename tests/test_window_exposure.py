@@ -46,3 +46,18 @@ def test_disabled_jwl_and_child_handle_do_not_need_mouse_hit_test(monkeypatch):
     evidence = []
     verify_visual_exposure(70, (0, -1080, 1920, 0), evidence.append)
     assert evidence == [{'hwnd': 70, 'root_hwnd': 7, 'visual_blocker': None}]
+
+
+@pytest.mark.parametrize('class_name', ['Shell_TrayWnd', 'Shell_SecondaryTrayWnd'])
+def test_reported_full_taskbar_does_not_prevent_operator_photo_preview(class_name):
+    target = (-629, -1080, 1291, 0)
+    rows = [row(3, (-629, -60, 1291, 0), class_name=class_name), {'hwnd': 7}]
+    assert first_covering_window(7, target, rows)['hwnd'] == 3
+    assert first_covering_window(7, target, rows, allow_taskbar_preview=True) is None
+
+
+def test_taskbar_exception_does_not_hide_real_window_above_jwl():
+    rows = [row(3, class_name='Shell_SecondaryTrayWnd'),
+            row(8, class_name='ConfMultiTabContentWndClass'), {'hwnd': 7}]
+    assert first_covering_window(7, (0, 0, 1920, 1080), rows,
+                                 allow_taskbar_preview=True)['hwnd'] == 8

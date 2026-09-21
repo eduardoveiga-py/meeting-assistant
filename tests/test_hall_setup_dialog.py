@@ -103,3 +103,20 @@ def test_failed_recapture_cannot_save_stale_preview(tmp_path, monkeypatch):
     assert not dialog.save_button.isEnabled()
     assert 'indisponível' in dialog.result.text()
     dialog.close()
+
+
+def test_shell_taskbar_allows_preview_but_never_automatic_save(tmp_path, monkeypatch):
+    target = {'hwnd': 7, 'rect': (-629, -1080, 1291, 0), 'taskbar_preview': True}
+    monkeypatch.setattr(hall_setup_dialog, 'capture_png', lambda _: png())
+    store = YeartextStore(tmp_path)
+    dialog = hall_setup_dialog.HallSetupDialog(store, lambda: target, ObsController(), AppSettings())
+    dialog._capture()
+    assert dialog.pending_png is not None
+    assert 'barra de tarefas' in dialog.result.text()
+    assert not dialog.save_button.isEnabled()
+    dialog._save()
+    assert store.current() is None
+    dialog.confirm.setChecked(True)
+    dialog._save()
+    assert store.current() is not None
+    dialog.close()

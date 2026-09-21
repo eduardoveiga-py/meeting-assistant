@@ -164,7 +164,14 @@ class HallSetupDialog(QDialog):
             self._update_save_state()
             self._refresh_photo()
             self._preview(QImage.fromData(png))
-            self.result.setText("Prévia capturada. Confira o ano e marque a confirmação antes de salvar.")
+            message = "Prévia capturada. Confira o ano e marque a confirmação antes de salvar."
+            if before.get("taskbar_preview") or after.get("taskbar_preview"):
+                message = (
+                    "Prévia capturada. O Windows informa uma barra de tarefas nesse monitor. "
+                    "Confira se a foto está limpa, sem barra ou faixa da área de trabalho, "
+                    "antes de confirmar."
+                )
+            self.result.setText(message)
         except Exception as exc:
             self.result.setText(
                 str(exc) if isinstance(exc, ValueError) else "Não foi possível capturar o JWL."
