@@ -30,6 +30,9 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
 class SettingsDialog(QDialog):
+    audio_setup_requested = Signal()
+    observe_requested = Signal()
+    calibrate_requested = Signal()
     hall_setup_requested = Signal()
     setup_assistant_requested = Signal()
 
@@ -69,6 +72,23 @@ class SettingsDialog(QDialog):
         root = QVBoxLayout(content)
         scroll.setWidget(content)
         outer.addWidget(scroll, 1)
+
+        if not embedded:
+            tools_group = QGroupBox("Ferramentas e áudio")
+            tools_layout = QVBoxLayout(tools_group)
+            for text, signal in (
+                ("Áudio da mesa e das mídias → Zoom…", self.audio_setup_requested),
+                ("Observar mídia no JW Library (20 s)", self.observe_requested),
+                ("Calibrar Texto do Ano", self.calibrate_requested),
+            ):
+                button = QPushButton(text)
+                button.clicked.connect(signal.emit)
+                tools_layout.addWidget(button)
+            hint = QLabel("Observar e calibrar fecham os ajustes sem salvar alterações pendentes. "
+                          "Salve antes se tiver editado algum campo. F1 na tela principal mostra os atalhos.")
+            hint.setWordWrap(True)
+            tools_layout.addWidget(hint)
+            root.addWidget(tools_group)
 
         output_group = QGroupBox("Saída do Salão")
         output_form = QFormLayout(output_group)

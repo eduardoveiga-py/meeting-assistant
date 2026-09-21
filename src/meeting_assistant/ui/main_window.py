@@ -94,6 +94,16 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._apply_style()
+        from meeting_assistant.ui.shortcuts import MainWindowShortcuts
+
+        self._shortcuts = MainWindowShortcuts(self, [
+            lambda: self._select_mode(OperatingMode.BACKGROUND),
+            lambda: self._select_mode(OperatingMode.SPEAKER),
+            lambda: self._select_mode(OperatingMode.MEDIA),
+            lambda: self._select_mode(OperatingMode.ZOOM),
+            self._toggle_automation, self._activate_safe_scene,
+            self._start_meeting, self._show_diagnostics, self._show_settings,
+        ])
         self._connect_obs_signals()
         self._connect_display_signals()
         self._connect_jwl_signals()
@@ -221,18 +231,9 @@ class MainWindow(QMainWindow):
         system_grid.addWidget(settings_button, 0, 2)
         controls.addLayout(system_grid)
 
-        self.jwl_probe_button = QPushButton("🧪 Observar mídia (20 s)")
-        self.jwl_probe_button.setToolTip(
-            "Diagnóstico opcional da saída de mídia do JW Library."
-        )
-        self.jwl_probe_button.clicked.connect(self._start_jwl_probe)
-        reference_row = QHBoxLayout()
-        reference_row.addWidget(self.jwl_probe_button, 1)
-        calibrate = QPushButton("Calibrar Texto do Ano")
-        calibrate.setToolTip("Atualiza a referência visual usada para reconhecer o repouso do JWL.")
-        calibrate.clicked.connect(self._calibrate_idle_reference)
-        reference_row.addWidget(calibrate, 1)
-        controls.addLayout(reference_row)
+        # Retain the existing probe progress callbacks; the command lives in Settings.
+        self.jwl_probe_button = QPushButton("Observar mídia (20 s)", self)
+        self.jwl_probe_button.hide()
 
         controls.addSpacing(2)
         controls.addWidget(self._section_label("RETORNO — SALÃO"))
@@ -676,9 +677,23 @@ class MainWindow(QMainWindow):
     def _on_obs_error(self, message: str) -> None:
         self.mode_label.setText(message)
 
+    def _open_audio_setup(self, parent=None) -> None:
+        from meeting_assistant.ui.audio_setup_dialog import AudioSetupDialog
+
+        dialog = AudioSetupDialog(self.obs, self.settings, parent or self)
+        dialog.exec()
+        dialog.deleteLater()
+
     def _show_settings(self) -> None:
         dialog = SettingsDialog(self.settings, self.obs_scenes, self)
         dialog.hall_setup_requested.connect(lambda: self._open_hall_setup(dialog))
+        dialog.audio_setup_requested.connect(lambda: self._open_audio_setup(dialog))
+        dialog.observe_requested.connect(
+            lambda: (dialog.reject(), QTimer.singleShot(0, self._start_jwl_probe))
+        )
+        dialog.calibrate_requested.connect(
+            lambda: (dialog.reject(), QTimer.singleShot(0, self._calibrate_idle_reference))
+        )
         dialog.setup_assistant_requested.connect(
             lambda: (dialog.reject(), QTimer.singleShot(0, self._open_setup_assistant))
         )

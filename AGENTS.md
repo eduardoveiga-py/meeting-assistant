@@ -5,7 +5,7 @@
 Em 21/09/2026 Eduardo confirmou que a troca Zoom → Salão → JW Library funciona
 como deveria e pediu explicitamente para preservar esse comportamento.
 
-- Versão validada: 48b159b5b819b174011aab143e5772ff6bcbc8b1.
+- Versão validada: 02094d80aa45ab0088d271691122839da759b1ee.
 - Recuperação: checkpoint/zoom-jwl-validated-20260921.
 - Arquivos protegidos: docs/validated-hall-baseline.json.
 - Contrato e testes manuais: docs/validated-hall-contract.md.

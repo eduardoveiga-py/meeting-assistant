@@ -2,6 +2,13 @@
 
 Requisitos ampliados pelo operador. O núcleo JWL ↔ Zoom continua congelado conforme o [contrato](validated-hall-contract.md). Novas funções usarão módulos separados e interfaces existentes.
 
+## Situação após os testes 1, 2 e 3 aprovados
+
+Em 21/09/2026 o operador confirmou a nova referência 02094d8: fonte JWL, trocas de telas,
+Windows+D, mídia e vídeo remoto. Baseline atualizado após essa confirmação, sem mover o checkpoint.
+O lote seguinte implementa áudio, atalhos locais e organização de botões. O teste físico de áudio,
+a câmera IP e o ensaio do instalador não estão aprovados por essa confirmação.
+
 ## Entregas e critérios de aceite
 
 | Etapa | Entrega | Critério principal | Segunda tela? |
@@ -54,7 +61,7 @@ Todos os botões atuais têm ações conectadas; isso não comprova frequência 
 | Observar mídia (20 s) | Mover para Ajustes → Diagnóstico |
 | Calibrar Texto do Ano | Mover para Ajustes → Calibração; distinguir da foto |
 
-A mudança de posição está pendente. Preservar callbacks/sinais e testar layout em resolução menor e escala ampliada. Rever também o rótulo do preview: a imagem atual é do OBS, não prova da saída física do Salão.
+A mudança de posição foi implementada neste lote (Ajustes → Ferramentas e áudio). Preservar callbacks/sinais e testar layout em resolução menor e escala ampliada. Rever também o rótulo do preview: a imagem atual é do OBS, não prova da saída física do Salão.
 
 ## Instalador e distribuição
 
@@ -123,11 +130,11 @@ Modelo de notas: [template de Release](release-template.md). Histórico em [CHAN
 4. **Release candidata:** ensaio do instalador Windows limpo e de atualização, configuração
    inteira pelo assistente, recuperação de falhas e teste final no Salão.
 
-### Atalhos F1–F10 — pendente de implementação
+### Atalhos F1–F10 — escopo local implementado; teste físico pendente
 
 Proposta inicial: F1 ajuda, F2 Texto do Ano, F3 Palco, F4 Mídias, F5 Zoom → Salão,
 F6 ativar/pausar automação, F7 cena segura, F8 iniciar reunião, F9 verificar, F10 ajustes.
-Mapeamento configurável, rótulos visíveis e nenhuma ação duplicada em tecla mantida pressionada.
+Mapeamento fixo com ajuda F1 e sem repetição por tecla mantida. Remapeamento permanece pendente.
 
 - Primeiro escopo: somente com foco no app; suspender ações de operação enquanto houver
   edição de ajustes, diálogos ou instalação em andamento.
@@ -181,7 +188,9 @@ ligação física e mudar a seleção de microfone do Zoom quando o novo caminho
   cena, navegador com título variável, reinício e reconexão. Teste remoto deve usar fones.
 - Captura por aplicativo tem limitações de compatibilidade; quando falhar, estudar saída
   dedicada de mídia por segundo cabo/roteador virtual. Não recorrer ao áudio total do PC.
-- Implementação e teste do roteamento ainda pendentes; não foi alterado o áudio atual.
+- Módulo de preparação/ativação implementado. Nenhuma configuração de áudio é aplicada
+  automaticamente na abertura. Escuta real com mesa e Zoom permanece pendente.
+- [Roteiro e formulário de retorno](test-audio-shortcuts.md).
 
 Referências: [captura por aplicativo OBS](https://obsproject.com/kb/application-audio-capture-guide),
 [VB-CABLE](https://vb-audio.com/Cable/),

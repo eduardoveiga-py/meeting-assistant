@@ -97,3 +97,9 @@ A publicação do código e do instalador ocorrerá quando o responsável autori
 Projeto independente, não oficial de JW Library, Zoom ou OBS.
 
 
+
+## Novo lote em validação: áudio e atalhos
+
+Veja o [passo a passo e formulário de retorno](docs/test-audio-shortcuts.md).
+F1 mostra os atalhos locais. Em Ajustes ficam a configuração de áudio, Observar mídia
+e Calibrar Texto do Ano. O áudio exige VB-CABLE e teste real antes do uso em reunião.

@@ -137,6 +137,7 @@ class ObsController(QObject):
     error = Signal(str)
     setup_finished = Signal(bool, str)
     hall_task_finished = Signal(str, bool, str)
+    audio_task_finished = Signal(str, str, bool, object)
 
     def __init__(self, poll_interval: float = 0.5, preview_interval: float = 0.15) -> None:
         super().__init__()
@@ -187,6 +188,28 @@ class ObsController(QObject):
     def hall_task(self, action: str, data: dict | None = None) -> None:
         self._commands.put(("hall_task", (action, dict(data or {}))))
 
+    def audio_task(self, token: str, action: str, data: dict) -> None:
+        from copy import deepcopy
+
+        self._commands.put(("audio_task", (token, action, deepcopy(data))))
+
+    def _handle_audio_task(self, token: str, action: str, data: dict) -> None:
+        from meeting_assistant.services.obs_audio import run_audio_task
+
+        if self._client is None:
+            self.audio_task_finished.emit(token, action, False, {"message": "OBS desconectado."})
+            return
+        try:
+            result = run_audio_task(self._client, action, data)
+            self.audio_task_finished.emit(token, action, True, result)
+        except ValueError as exc:
+            self.audio_task_finished.emit(token, action, False, {"message": str(exc)})
+        except Exception:
+            self.audio_task_finished.emit(token, action, False, {
+                "message": "Configuração de áudio incompleta. Confira o OBS e, se necessário, "
+                           "silencie o microfone no Zoom antes de tentar novamente."
+            })
+
     def ensure_virtual_camera(self) -> None:
         self._commands.put(("virtual_camera", None))
 
@@ -226,6 +249,8 @@ class ObsController(QObject):
                     self._handle_prepare_stage(payload)
                 elif command == "hall_task":
                     self._handle_hall_task(*payload)
+                elif command == "audio_task":
+                    self._handle_audio_task(*payload)
                 elif command == "virtual_camera":
                     self._virtual_deadline = time.monotonic() + 60.0
                     self._next_virtual_check = 0.0

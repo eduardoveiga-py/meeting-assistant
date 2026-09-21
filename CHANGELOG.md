@@ -4,6 +4,13 @@
 
 ### Novidades
 
+- Módulo separado de áudio para Zoom: preparação silenciada, seleção de entrada da mesa
+  e captura JWL/VLC/Chrome/Edge, barramento nas três cenas, ativação explícita e silêncio.
+  Roteamento CABLE Input/Output guiado; driver e escuta física ainda exigem teste do operador.
+- Atalhos F1–F10 locais, sem repetição automática nem interferência em diálogos/outros apps.
+- Observar mídia e Calibrar Texto do Ano movidos para Ajustes; controles diários preservados.
+- Roteiro separado de testes de interface, preparação de áudio e escuta remota.
+
 - Assistente unificado de configuração com revisão por versão no executável, diagnóstico,
   instalação consentida OBS/Zoom via WinGet e preparação autenticada de WebSocket com backup.
 - Formulários de ajustes e foto/fontes integrados no assistente; ensaio real reservado para a Release.
@@ -26,8 +33,8 @@
 - Captura verifica a ordem das janelas a partir do HWND JWL já identificado, sem exigir
   que a saída UWP apareça no EnumWindows. Percurso limitado, detecção de ciclos e diagnóstico.
 
-- Correção candidata do guardião: remover maximização incondicional do JWL na abertura;
-  inspecionar antes de recuperar. Exige nova validação física, sem atualizar o baseline.
+- Correção do guardião aprovada pelo operador nos testes 1/2/3: sem maximização
+  incondicional na abertura. Baseline atualizado para 02094d8 após confirmação; checkpoint preservado.
 - WorkerW/Progman tratados como superfícies internas do shell na prévia confirmada da foto.
 - Mensagem de aplicação ao OBS distingue arquivo existente de uma nova captura.
 

@@ -1,7 +1,7 @@
 # Contrato validado — saída do Salão
 
 Validado pelo operador em 21/09/2026 no commit
-48b159b5b819b174011aab143e5772ff6bcbc8b1.
+02094d80aa45ab0088d271691122839da759b1ee.
 
 ## Comportamento a preservar
 
@@ -40,3 +40,11 @@ cada cenário desta lista foi novamente executado nesta data.
 
 O teste de integridade é uma barreira contra regressões acidentais, não uma proteção
 administrativa de branch. Não foi configurado bloqueio de escrita no GitHub.
+
+## Revalidação de 21/09/2026
+
+O operador confirmou “Teste 1 OK / 2 OK / 3 OK”: imagem completa no OBS,
+Windows+D e ciclos Zoom/JWL com automação pausada e ativa, início/fim de mídia,
+e câmera virtual remota sem retorno dos participantes. O checkpoint original
+permanece em 48b159b; o baseline atual usa 02094d8, incluindo a correção de
+inicialização do guardião. Nenhum arquivo protegido foi alterado neste lote.
