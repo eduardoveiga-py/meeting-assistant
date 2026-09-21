@@ -6,6 +6,7 @@ from meeting_assistant.services import zoom_hall_service as module
 
 
 def setup_windows(monkeypatch, rows):
+    monkeypatch.setattr(module, "activate_window", lambda _: False)
     def children(hwnd, callback, _):
         if rows[hwnd].get("controls"):
             callback(1000 + hwnd, None)
@@ -308,3 +309,30 @@ def test_stale_uia_cycle_cannot_raise_jwl_after_guard_disabled(monkeypatch):
     monkeypatch.setattr(uia, "win32con", object())
     item = jwl_info()
     assert service._ensure_window(item, object()) is item
+
+
+def test_covered_zoom_requests_activation_once_and_waits_for_exposure(monkeypatch):
+    service, state, _, events = setup_return(monkeypatch)
+    service._show_rect = module.WindowRect(0, 0, 1280, 720)
+    service._show_started = module.time.monotonic()
+    state["exposed"] = False
+    activated = []
+    monkeypatch.setattr(module, "activate_window", lambda hwnd: activated.append(hwnd) or True)
+    service._poll_show()
+    service._poll_show()
+    assert activated == [2]
+    assert not service._show_confirmed
+    assert any(e["phase"] == "show_activation" and e["accepted"] for e in events)
+    state["exposed"] = True
+    service._poll_show()
+    assert service._show_confirmed
+    assert events[-1]["phase"] == "show_confirmed"
+
+
+def test_already_exposed_zoom_never_steals_focus(monkeypatch):
+    service, _, _, _ = setup_return(monkeypatch)
+    service._show_rect = module.WindowRect(0, 0, 1280, 720)
+    service._show_started = module.time.monotonic()
+    monkeypatch.setattr(module, "activate_window", lambda _: pytest.fail("No activation needed"))
+    service._poll_show()
+    assert service._show_confirmed

@@ -11,7 +11,7 @@ from meeting_assistant.services.display_service import DisplayInfo
 from meeting_assistant.services.jwl_fast_window_guard import JwlFastWindowGuard
 from meeting_assistant.services.jwl_secondary_window import JwlSecondaryWindowInfo, WindowRect
 from meeting_assistant.services.jwl_uia_secondary_window import choose_native_monitor_rect
-from meeting_assistant.services.native_window import show_window_async
+from meeting_assistant.services.native_window import activate_window, show_window_async
 
 try:
     import win32api
@@ -94,6 +94,7 @@ class ZoomHallService(QObject):
         self._show_started = 0.0
         self._show_rect = None
         self._show_confirmed = False
+        self._activation_attempted = False
         self._show_timer = QTimer(self)
         self._show_timer.setInterval(100)
         self._show_timer.timeout.connect(self._poll_show)
@@ -144,6 +145,7 @@ class ZoomHallService(QObject):
         self._show_rect = self._native_target_rect(target)
         self._show_started = time.monotonic()
         self._show_confirmed = False
+        self._activation_attempted = False
         self._active = True
         self.transition_diagnostic.emit({
             "phase": "show_requested", "hwnd": zoom.hwnd, "jwl_hwnd": self._jwl_hwnd,
@@ -189,6 +191,19 @@ class ZoomHallService(QObject):
                     self.active_changed.emit(True, message)
                     self.status_changed.emit(True, message)
                 return
+            if (
+                not snapshot.get("exposed", False)
+                and not self._activation_attempted
+                and not self._show_confirmed
+            ):
+                # TOPMOST/NOACTIVATE can leave a UWP full-screen view above Zoom.
+                # Use the foreground permission from the operator's explicit click
+                # once; never repeatedly steal focus during an active Zoom part.
+                self._activation_attempted = True
+                accepted = activate_window(self._zoom_hwnd)
+                self.transition_diagnostic.emit({
+                    "phase": "show_activation", "accepted": accepted, **snapshot,
+                })
             self._request_show()
         except (OSError, RuntimeError) as exc:
             snapshot = {"ready": False, "error": type(exc).__name__}
@@ -261,11 +276,28 @@ class ZoomHallService(QObject):
             (actual.left, actual.top, actual.width, actual.height),
             (rect.left, rect.top, rect.width, rect.height), strict=True,
         ))
+        cover = self._covering_window(rect)
         return {
+            "rect": [actual.left, actual.top, actual.right, actual.bottom],
+            "target_rect": [rect.left, rect.top, rect.right, rect.bottom],
+            **cover,
             "ready": visible and not minimized and not cloaked and exposed and geometry_ok,
             "valid": valid, "visible": visible, "minimized": minimized,
             "cloaked": cloaked, "exposed": exposed, "geometry_ok": geometry_ok,
         }
+
+    @staticmethod
+    def _covering_window(rect: WindowRect) -> dict:
+        # No window titles or participant names enter telemetry.
+        try:
+            point = int(win32gui.WindowFromPoint(rect.center) or 0)
+            root = int(win32gui.GetAncestor(point, win32con.GA_ROOT) or point)
+            return {
+                "cover_hwnd": root, "cover_class": win32gui.GetClassName(root),
+                "foreground_hwnd": int(win32gui.GetForegroundWindow() or 0),
+            }
+        except (AttributeError, OSError, RuntimeError):
+            return {"cover_hwnd": 0, "cover_class": "unavailable"}
 
     def _poll_return(self) -> None:
         if not self._returning:
