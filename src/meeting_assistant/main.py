@@ -230,6 +230,17 @@ def main() -> int:
 
     media_automation.signal_changed.connect(record_sensor_signal)
 
+    window.hall_capture_diagnostic.connect(
+        lambda detail: (
+            telemetry.event("hall_capture_geometry", **detail),
+            telemetry.request_sync(),
+        )
+    )
+    obs_controller.hall_task_finished.connect(
+        lambda action, ok, message: telemetry.event(
+            "obs_hall_task_finished", action=action, ok=ok, message=message
+        )
+    )
     obs_controller.connected_changed.connect(
         lambda connected, message: telemetry.event(
             "obs_connection",

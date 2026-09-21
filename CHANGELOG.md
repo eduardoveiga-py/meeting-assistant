@@ -19,6 +19,11 @@
 
 ### Correções e estabilidade preservada
 
+- Confirmação, botão de salvar e resultado da foto sempre visíveis, fora da rolagem.
+- Nova prévia identificada como não salva; falha de recaptura invalida a prévia anterior.
+- Captura recusa bordas expostas e registra retângulos de monitor, janela, cliente e DWM.
+- Investigação da faixa física do JWL pendente das novas medidas; guardiões preservados.
+
 - Núcleo de troca Zoom/JWL validado pelo operador, checkpoint e teste de integridade.
 - Escrita atômica da referência da foto, preservando a anterior em falha.
 - Aplicação repetida das fontes sem duplicação; não alternar câmera virtual já ativa.

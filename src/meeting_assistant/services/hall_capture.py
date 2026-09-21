@@ -12,7 +12,16 @@ def obs_window_key(title: str, class_name: str, executable: str) -> str:
     return ":".join(s.replace("#", "#22").replace(":", "#3A") for s in (title, class_name, executable))
 
 
-def verified_hall_target(candidate, display, blocked: bool) -> dict:
+def require_full_coverage(rect, target):
+    """Refuse even a thin exposed desktop/title-bar strip in a saved photo."""
+    if rect[0] > target[0] or rect[1] > target[1] or rect[2] < target[2] or rect[3] < target[3]:
+        raise ValueError(
+            "O conteúdo do JWL não cobre toda a Tela do Salão (há uma borda exposta). "
+            "Restaure a tela cheia no JWL e capture novamente. A foto anterior foi preservada."
+        )
+
+
+def verified_hall_target(candidate, display, blocked: bool, diagnostic=None) -> dict:
     if blocked:
         raise ValueError("Pare Zoom → Salão e aguarde o retorno completo ao JWL.")
     if candidate is None or display is None:
@@ -46,6 +55,28 @@ def verified_hall_target(candidate, display, blocked: bool) -> dict:
         monitors.append((bool(info.get("Flags", 0) & 1), WindowRect(*info.get("Monitor", rect))))
     target = choose_native_monitor_rect(display, monitors)
     actual = WindowRect(*win32gui.GetWindowRect(hwnd))
+    monitor_rect = (target.left, target.top, target.right, target.bottom)
+    client = win32gui.GetClientRect(hwnd)
+    client_rect = (*win32gui.ClientToScreen(hwnd, client[:2]),
+                   *win32gui.ClientToScreen(hwnd, client[2:]))
+    from ctypes import wintypes
+
+    frame = wintypes.RECT()
+    frame_hr = ctypes.windll.dwmapi.DwmGetWindowAttribute(
+        ctypes.c_void_p(hwnd), 9, ctypes.byref(frame), ctypes.sizeof(frame)
+    )
+    frame_rect = (frame.left, frame.top, frame.right, frame.bottom) if frame_hr == 0 else None
+    if diagnostic is not None:
+        diagnostic({
+            "hwnd": hwnd,
+            "monitor_rect": monitor_rect,
+            "outer_rect": (actual.left, actual.top, actual.right, actual.bottom),
+            "client_rect": client_rect,
+            "visible_frame_rect": frame_rect,
+        })
+    require_full_coverage(client_rect, monitor_rect)
+    if frame_rect is not None:
+        require_full_coverage(frame_rect, monitor_rect)
     if any(
         abs(a - b) > 16
         for a, b in zip(
@@ -55,10 +86,10 @@ def verified_hall_target(candidate, display, blocked: bool) -> dict:
         )
     ):
         raise ValueError("O JWL ainda não ocupa a Tela do Salão selecionada.")
-    for fx in (0.1, 0.5, 0.9):
-        for fy in (0.1, 0.5, 0.9):
+    for x in (target.left + 1, target.center[0], target.right - 2):
+        for y in (target.top + 1, target.center[1], target.bottom - 2):
             covering = win32gui.WindowFromPoint(
-                (target.left + int(target.width * fx), target.top + int(target.height * fy))
+                (x, y)
             )
             if win32gui.GetAncestor(covering, 2) != hwnd:
                 raise ValueError("Outra janela está sobre o JWL. Libere a Tela do Salão antes de capturar.")

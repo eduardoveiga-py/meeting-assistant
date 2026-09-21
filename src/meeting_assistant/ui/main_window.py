@@ -44,6 +44,7 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 class MainWindow(QMainWindow):
     automation_enabled_changed = Signal(bool)
     idle_reference_requested = Signal()
+    hall_capture_diagnostic = Signal(object)
 
     def __init__(
         self,
@@ -722,6 +723,7 @@ class MainWindow(QMainWindow):
         return verified_hall_target(
             self._hall_window_provider(), self._hall_display_provider(),
             self.zoom_hall.active or self.zoom_hall.returning,
+            diagnostic=self.hall_capture_diagnostic.emit,
         )
 
     def _open_hall_setup(self, parent):

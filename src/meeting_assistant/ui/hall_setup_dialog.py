@@ -58,14 +58,16 @@ class HallSetupDialog(QDialog):
         self.year.setPrefix("Ano do texto: ")
         root.addWidget(self.year)
         self.confirm = QCheckBox("Conferi a foto do Texto do Ano e o ano.")
-        root.addWidget(self.confirm)
+        outer.addWidget(self.confirm)
         self.capture_button = QPushButton("Capturar foto da Tela do Salão")
         self.capture_button.clicked.connect(self._capture)
         root.addWidget(self.capture_button)
         self.save_button = QPushButton("Salvar foto e aplicar no OBS")
         self.save_button.setEnabled(False)
         self.save_button.clicked.connect(self._save)
-        root.addWidget(self.save_button)
+        self.confirm.toggled.connect(self._update_save_state)
+        self.year.valueChanged.connect(lambda _: self.confirm.setChecked(False))
+        outer.addWidget(self.save_button)
         self.apply_button = QPushButton("Aplicar foto já salva no OBS")
         self.apply_button.clicked.connect(self._apply)
         root.addWidget(self.apply_button)
@@ -89,7 +91,7 @@ class HallSetupDialog(QDialog):
         self.result = QLabel("Nenhuma operação solicitada.")
         self.result.setWordWrap(True)
         self.result.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        root.addWidget(self.result)
+        outer.addWidget(self.result)
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         buttons.button(QDialogButtonBox.Close).setText("Fechar")
         buttons.rejected.connect(self.reject)
@@ -112,6 +114,13 @@ class HallSetupDialog(QDialog):
             message += " Aplicação OBS pendente." if current.get("obs_pending") else " Aplicada ao OBS."
             if self.pending_png is None:
                 self._preview(QImage(current["path"]))
+        elif self.pending_png is None:
+            if hasattr(self, "_preview_image"):
+                del self._preview_image
+            self.preview.clear()
+            self.preview.setText("Nenhuma foto salva")
+        if self.pending_png is not None:
+            message = "Nova prévia — ainda NÃO salva.\n" + message
         self.photo_status.setText(message)
         self.apply_button.setEnabled(current is not None)
         self.capture_button.setText(
@@ -130,7 +139,15 @@ class HallSetupDialog(QDialog):
             self._preview(self._preview_image, event.size().width())
         return super().eventFilter(watched, event)
 
+    def _update_save_state(self):
+        self.save_button.setEnabled(self.pending_png is not None and self.confirm.isChecked())
+
     def _capture(self):
+        # A failed recapture must never leave an older pending image saveable.
+        self.pending_png = None
+        self.confirm.setChecked(False)
+        self._update_save_state()
+        self._refresh_photo()
         try:
             before = self.target_provider()
             png = capture_png(before)
@@ -139,7 +156,8 @@ class HallSetupDialog(QDialog):
                 raise ValueError("A janela mudou durante a captura. Tente novamente.")
             self.pending_png = png
             self.confirm.setChecked(False)
-            self.save_button.setEnabled(True)
+            self._update_save_state()
+            self._refresh_photo()
             self._preview(QImage.fromData(png))
             self.result.setText("Prévia capturada. Confira o ano e marque a confirmação antes de salvar.")
         except Exception as exc:
@@ -194,6 +212,8 @@ class HallSetupDialog(QDialog):
             )
 
     def _finished(self, action, ok, message):
+        if self.pending_png is not None and action == "yeartext":
+            message += " A nova prévia ainda não foi salva; confira e confirme para salvar."
         self.result.setText(message)
         if action == "yeartext":
             self._refresh_photo()

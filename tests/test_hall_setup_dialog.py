@@ -48,3 +48,58 @@ def test_preview_fits_narrow_dialog(tmp_path):
     QApplication.processEvents()
     assert dialog.preview.pixmap().width() <= dialog.preview.width()
     dialog.close()
+
+
+def test_pending_photo_is_distinct_and_save_controls_stay_visible(tmp_path, monkeypatch):
+    from datetime import datetime
+
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QScrollArea
+
+    store = YeartextStore(tmp_path)
+    store.save(png(), datetime.now().year)
+    old_file = store.current()['file']
+    monkeypatch.setattr(hall_setup_dialog, 'capture_png', lambda _: png())
+    dialog = hall_setup_dialog.HallSetupDialog(
+        store, lambda: {'hwnd': 7, 'rect': (0, 0, 100, 100)}, ObsController(), AppSettings(),
+    )
+    dialog.show()
+    dialog.resize(380, 500)
+    dialog._capture()
+    QApplication.processEvents()
+    assert 'NÃO salva' in dialog.photo_status.text()
+    assert not dialog.save_button.isEnabled()
+    assert store.current()['file'] == old_file
+    scroll = dialog.findChild(QScrollArea)
+    for position in (0, scroll.verticalScrollBar().maximum()):
+        scroll.verticalScrollBar().setValue(position)
+        QApplication.processEvents()
+        for widget in (dialog.confirm, dialog.save_button, dialog.result):
+            bounds = widget.rect().translated(widget.mapTo(dialog, QPoint(0, 0)))
+            assert dialog.rect().contains(bounds)
+    dialog._finished('yeartext', True, 'Aplicada ao OBS.')
+    assert 'nova prévia ainda não foi salva' in dialog.result.text()
+    dialog.confirm.setChecked(True)
+    assert dialog.save_button.isEnabled()
+    dialog._save()
+    assert store.current()['file'] != old_file
+    assert 'NÃO salva' not in dialog.photo_status.text()
+    dialog.close()
+
+
+def test_failed_recapture_cannot_save_stale_preview(tmp_path, monkeypatch):
+    monkeypatch.setattr(hall_setup_dialog, 'capture_png', lambda _: png())
+    dialog = hall_setup_dialog.HallSetupDialog(
+        YeartextStore(tmp_path), lambda: {'hwnd': 7, 'rect': (0, 0, 100, 100)},
+        ObsController(), AppSettings(),
+    )
+    dialog._capture()
+    dialog.confirm.setChecked(True)
+    def unavailable():
+        raise ValueError('JWL indisponível')
+    dialog.target_provider = unavailable
+    dialog._capture()
+    assert dialog.pending_png is None
+    assert not dialog.save_button.isEnabled()
+    assert 'indisponível' in dialog.result.text()
+    dialog.close()
