@@ -31,5 +31,4 @@ exe = EXE(
     console=False,
     argv_emulation=False,
     target_arch=None,
-    icon="packaging/app.ico",
 )
