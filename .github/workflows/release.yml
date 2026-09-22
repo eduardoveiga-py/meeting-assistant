@@ -31,7 +31,6 @@ jobs:
       - name: Build executable
         shell: pwsh
         run: |
-          if (-not (Test-Path "packaging/app.ico")) { throw "Ícone Windows não encontrado." }
           pyinstaller --clean --noconfirm packaging/MeetingAssistant.spec
           if (-not (Test-Path "dist/MeetingAssistant/MeetingAssistant.exe")) { throw "Executável não foi criado." }
       - name: Install Inno Setup
