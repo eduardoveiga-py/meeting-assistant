@@ -3,7 +3,7 @@ name: Windows Release
 on:
   workflow_dispatch:
   push:
-    tags:
+    branches:
       - "v*.*.*"
 
 permissions:
@@ -74,4 +74,4 @@ jobs:
           O instalador e o áudio integrado ainda precisam de ensaio em máquina limpa antes de serem considerados certificados para uso em reunião.
           "@
           $notes | Out-File -FilePath release-notes.md -Encoding utf8
-          gh release create $tag release/* --title "Meeting Assistant $tag" --notes-file release-notes.md --verify-tag
+          gh release create $tag release/* --title "Meeting Assistant $tag" --notes-file release-notes.md --target $env:GITHUB_SHA
