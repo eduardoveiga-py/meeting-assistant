@@ -10,6 +10,7 @@ DISPLAY_SETTINGS_VERSION = 1
 
 @dataclass(slots=True)
 class AppSettings:
+    setup_review_version: str = ""
     always_on_top: bool = True
     display_settings_version: int = DISPLAY_SETTINGS_VERSION
     simulation_enabled: bool = False
@@ -21,6 +22,18 @@ class AppSettings:
     scene_speaker: str = "Palco"
     scene_media: str = "Mídias"
     scene_zoom: str = "Zoom"
+    zoom_join_url: str = ""
+    camera_ip: str = "10.0.0.40"
+    camera_rtsp_port: int = 554
+    camera_username: str = ""
+    camera_password: str = ""
+    obs_start_at_logon: bool = False
+    obs_standard_scenes: bool = False
+    obs_executable: str = ""
+    zoom_executable: str = ""
+    telemetry_enabled: bool = True
+    telemetry_screenshots: bool = False
+    telemetry_repo_url: str = "https://github.com/eduardoveiga-py/meeting-assistant-diagnostics.git"
 
 
 class SettingsService:
@@ -63,3 +76,4 @@ class SettingsService:
             encoding="utf-8",
         )
         temp_path.replace(self.path)
+

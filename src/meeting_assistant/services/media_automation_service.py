@@ -13,6 +13,7 @@ from PySide6.QtCore import QObject, Signal
 from meeting_assistant.services.jwl_idle_reference import (
     JwlIdleReference,
     JwlIdleReferenceStore,
+    retain_confirmed_variants,
 )
 from meeting_assistant.services.jwl_screen_sensor import (
     SAMPLE_HEIGHT,
@@ -101,6 +102,13 @@ def dark_pixel_ratio(frame: bytes, *, threshold: int = 48) -> float:
         return 0.0
     dark = sum(1 for value in frame if value <= threshold)
     return (dark / len(frame)) * 100.0
+
+
+def idle_reference_difference(reference: JwlIdleReference, frame: bytes) -> float:
+    return min(
+        pixel_difference(variant, frame)
+        for variant in (reference.pixels, *reference.alternate_pixels)
+    )
 
 
 def sensor_candidate_score(
@@ -196,6 +204,7 @@ class MediaAutomationService(QObject):
         self._sample_interval = max(0.12, sample_interval_seconds)
         self._stop_event = threading.Event()
         self._enabled_event = threading.Event()
+        self._recalibrate_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._detector = MediaSignalDetector()
         self._last_status: str | None = None
@@ -215,9 +224,11 @@ class MediaAutomationService(QObject):
             self._emit_status("Automação pausada; monitoramento de mídia suspenso.")
 
     def reset_idle_reference(self) -> None:
-        self._reference_store.clear()
+        # The capture worker owns its cached reference and all reference I/O.
+        # Keep the last good file until a replacement has actually been saved.
+        self._recalibrate_event.set()
         self._emit_status(
-            "Referência de repouso apagada; a próxima ativação fará nova calibração."
+            "Nova calibração solicitada; mantenha apenas o Texto do Ano visível."
         )
 
     def start(self) -> None:
@@ -241,11 +252,20 @@ class MediaAutomationService(QObject):
         sensor: JwlScreenSensor | None = None
         active_config: MediaAutomationConfig | None = None
         reference = self._reference_store.load()
+        previous_reference: JwlIdleReference | None = None
         active_region_key: tuple[int, int, int, int] | None = None
         initial_route_pending = True
         idle_hits = 0
 
         while not self._stop_event.is_set():
+            if self._recalibrate_event.is_set():
+                self._recalibrate_event.clear()
+                if reference is not None:
+                    previous_reference = reference
+                reference = None
+                initial_route_pending = True
+                idle_hits = 0
+                self._detector.reset()
             if not self._enabled_event.is_set():
                 active_region_key = None
                 initial_route_pending = True
@@ -310,6 +330,7 @@ class MediaAutomationService(QObject):
                     self._stop_event.wait(0.35)
                     continue
                 try:
+                    reference = retain_confirmed_variants(previous_reference, reference)
                     self._reference_store.save(reference)
                 except (OSError, ValueError) as exc:
                     self._emit_error(f"Não foi possível salvar o repouso do JW Library: {exc}")
@@ -317,7 +338,9 @@ class MediaAutomationService(QObject):
                     self._stop_event.wait(0.7)
                     continue
                 self._emit_status(
-                    "Referência do Texto do Ano salva; iniciando automação em Palco."
+                    "Referência do Texto do Ano salva "
+                    f"({1 + len(reference.alternate_pixels)} aparência(s)); "
+                    "iniciando automação em Palco."
                 )
                 self.signal_changed.emit("Tela do Salão / pixels nativos", 0.0, False)
                 self.media_ended.emit(config.preferred_return_scene or "")
@@ -327,6 +350,8 @@ class MediaAutomationService(QObject):
                 continue
 
             frame = sensor.capture(region)
+            if self._recalibrate_event.is_set() or not self.enabled:
+                continue
             if frame is None:
                 self._emit_status(
                     "Tela do Salão encontrada, mas o frame ainda não pôde ser lido; tentando novamente…"
@@ -335,7 +360,7 @@ class MediaAutomationService(QObject):
                 continue
 
             try:
-                changed_percent = pixel_difference(reference.pixels, frame)
+                changed_percent = idle_reference_difference(reference, frame)
             except ValueError:
                 self._reference_store.clear()
                 reference = None

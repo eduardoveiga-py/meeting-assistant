@@ -15,6 +15,26 @@ class JwlIdleReference:
     sample_width: int
     sample_height: int
     crop_version: int = 1
+    alternate_pixels: tuple[bytes, ...] = ()
+
+
+def retain_confirmed_variants(
+    previous: JwlIdleReference | None,
+    current: JwlIdleReference,
+) -> JwlIdleReference:
+    """Retain up to four operator-confirmed appearances, newest first."""
+    if previous is None or (
+        previous.sample_width, previous.sample_height, previous.crop_version
+    ) != (current.sample_width, current.sample_height, current.crop_version):
+        return current
+    variants = tuple(dict.fromkeys((current.pixels, previous.pixels, *previous.alternate_pixels)))
+    return JwlIdleReference(
+        current.pixels,
+        current.sample_width,
+        current.sample_height,
+        current.crop_version,
+        variants[1:4],
+    )
 
 
 class JwlIdleReferenceStore:
@@ -41,11 +61,18 @@ class JwlIdleReferenceStore:
             crop_version = int(data.get("crop_version", 1))
             if width <= 0 or height <= 0 or len(pixels) != width * height:
                 return None
+            alternates = tuple(
+                base64.b64decode(value, validate=True)
+                for value in data.get("alternate_pixels", [])[:3]
+            )
+            if any(len(frame) != width * height for frame in alternates):
+                return None
             return JwlIdleReference(
                 pixels=pixels,
                 sample_width=width,
                 sample_height=height,
                 crop_version=crop_version,
+                alternate_pixels=alternates,
             )
         except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
             return None
@@ -56,6 +83,8 @@ class JwlIdleReferenceStore:
             or reference.sample_height <= 0
             or len(reference.pixels)
             != reference.sample_width * reference.sample_height
+            or len(reference.alternate_pixels) > 3
+            or any(len(frame) != len(reference.pixels) for frame in reference.alternate_pixels)
         ):
             raise ValueError("referência visual inválida")
 
@@ -66,6 +95,9 @@ class JwlIdleReferenceStore:
             "sample_height": reference.sample_height,
             "crop_version": reference.crop_version,
             "pixels": base64.b64encode(reference.pixels).decode("ascii"),
+            "alternate_pixels": [
+                base64.b64encode(frame).decode("ascii") for frame in reference.alternate_pixels
+            ],
         }
         temp_path = self.path.with_suffix(".tmp")
         temp_path.write_text(

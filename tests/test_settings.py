@@ -10,6 +10,9 @@ def test_settings_round_trip(tmp_path) -> None:
         obs_port=4456,
         scene_media="Midias Teste",
         scene_zoom="Zoom Salao",
+        zoom_join_url="https://example.zoom.us/j/123456789?pwd=abc",
+        obs_executable=r"C:\\OBS\\obs64.exe",
+        zoom_executable=r"C:\\Zoom\\Zoom.exe",
     )
 
     service.save(original)
