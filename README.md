@@ -1,105 +1,181 @@
-<p align="center"><img src="src/meeting_assistant/resources/app_icon.svg" width="80" alt="Meeting Assistant"></p>
+<p align="center">
+  <img src="src/meeting_assistant/resources/app_icon.svg" width="88" alt="Meeting Assistant">
+</p>
 
-# Meeting Assistant
+<h1 align="center">Meeting Assistant</h1>
 
-**Uma interface para operar JW Library, OBS Studio e Zoom nas reuniões.**
+<p align="center"><strong>Operação integrada de JW Library, OBS Studio e Zoom para reuniões no Windows.</strong></p>
 
-[![Verificações Windows](https://github.com/eduardoveiga-py/meeting-assistant/actions/workflows/ci.yml/badge.svg?branch=feature%2Fmeeting-launch-zoom-hall)](https://github.com/eduardoveiga-py/meeting-assistant/actions/workflows/ci.yml)
-![Plataforma Windows](https://img.shields.io/badge/plataforma-Windows-0078D4)
-![Em desenvolvimento](https://img.shields.io/badge/status-em_desenvolvimento-DAA520)
+<p align="center">
+  <img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows">
+  <img src="https://img.shields.io/badge/Python-runtime%20incluído-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python runtime incluído">
+  <img src="https://img.shields.io/badge/Release-0.5.0-22C55E?style=for-the-badge" alt="Release 0.5.0">
+  <img src="https://img.shields.io/badge/Status-primeira%20release%20instalável-F59E0B?style=for-the-badge" alt="Primeira release instalável">
+</p>
 
-[Guia de uso](docs/operator-guide.md) · [Próximas entregas](docs/roadmap-after-hall-validation.md) · [Versão protegida](docs/validated-hall-contract.md) · [Soluções reaproveitáveis](docs/reuse-assessment.md)
+<p align="center">
+  <a href="../../releases">📦 Releases</a> ·
+  <a href="docs/installation.md">🚀 Instalação</a> ·
+  <a href="docs/operator-guide.md">🎛️ Guia do operador</a> ·
+  <a href="docs/roadmap-after-hall-validation.md">🧭 Próximos passos</a>
+</p>
 
-## O que já funciona
+---
 
-| Recurso | Comportamento |
-| --- | --- |
-| Saída do Salão | Janela secundária nativa do JW Library; recuperação após Windows+D. |
-| Zoom → Salão | Alterna a segunda tela entre JWL e participantes, mantendo as janelas abertas. |
-| Automação de cenas | Texto do ano em repouso → Palco; mídia → Mídias; fim da mídia → Palco. |
-| Controle do OBS | WebSocket, seleção de cenas, preview e diagnóstico de cenas ausentes. |
-| Iniciar reunião | Abre/reaproveita programas e solicita entrada no Zoom pelo link configurado. |
-| Operação | Ajustes persistentes, cena segura, observação de mídia e telemetria configurável. |
+## ✨ O que esta versão entrega
 
-O operador validou a troca de telas em 21/09/2026. Esse núcleo tem checkpoint e teste de integridade. A validação em outros computadores ainda faz parte da entrega.
+| Área | O que já está no aplicativo |
+|---|---|
+| 🖥️ Salão | Uso da janela secundária do JW Library e recuperação após alterações do shell/área de trabalho. |
+| 🔵 Zoom → Salão | Mostra os participantes no segundo monitor sem trocar o programa principal do OBS. |
+| 🎬 Automação | Texto do ano em repouso → **Palco**; mídia → **Mídias**; fim da mídia → **Palco**. |
+| 🎚️ OBS | Controle por WebSocket, mapeamento de cenas, preview e diagnóstico. |
+| 🚀 Iniciar reunião | Detecta/abre OBS, JW Library e Zoom e pode abrir diretamente um link normal de convite do Zoom. |
+| 🎙️ Áudio | Preparação de fontes de microfone/aplicativos e rota OBS → VB-CABLE → Zoom. A configuração física continua explícita. |
+| ⚙️ Assistente | Verifica o ambiente, ajuda a configurar o WebSocket e pode instalar OBS/Zoom usando WinGet com autorização. |
+| 🧪 Telemetria | Diagnóstico estruturado, sanitizado e desacoplado da operação. |
 
-**A saída física do Salão e o vídeo enviado ao Zoom são independentes.** Mostrar participantes na segunda tela não deve reenviar a imagem deles pela câmera virtual. O preview atual vem do OBS e não comprova sozinho o que aparece no monitor do Salão.
+### 🔒 Núcleo visual validado
 
-## Instalação atual — desenvolvimento
+O comportamento **JWL ↔ Zoom ↔ Salão** foi validado pelo operador em **21/09/2026**. Esse núcleo possui checkpoint e teste de integridade e não deve ser alterado para implementar recursos paralelos sem nova validação física.
 
-Ainda não há um instalador final aprovado neste roteiro. O procedimento abaixo exige Windows x64, Python **3.12 estável**, Git e acesso ao repositório. O app é apresentado como Meeting Assistant 3.0; a versão técnica atual do pacote é 0.4.2.
+---
 
-```powershell
-git clone --branch feature/meeting-launch-zoom-hall https://github.com/eduardoveiga-py/meeting-assistant.git
-cd meeting-assistant
-.\scripts\setup-dev.ps1
-.\scripts\run-dev.ps1
+## 📦 Instalação para quem nunca instalou Python
+
+**Você não precisa instalar Python, PySide6, OBS WebSocket ou qualquer biblioteca Python.**
+
+1. Abra a área de **Releases** do repositório.
+2. Baixe `MeetingAssistant-Setup-0.5.0.exe`.
+3. Execute o instalador e siga as etapas.
+4. Abra o **Meeting Assistant** pelo menu Iniciar ou pelo atalho criado.
+5. Na primeira abertura, use o **Assistente de instalação e configuração** para verificar o ambiente.
+
+### Aplicativos externos necessários
+
+O instalador não redistribui softwares de terceiros. Para a operação completa, instale:
+
+- **OBS Studio**
+- **Zoom para desktop**
+- **JW Library para Windows**
+- **VB-CABLE**, quando o áudio de mídia for enviado ao Zoom
+
+O assistente pode ajudar a instalar OBS e Zoom por WinGet, com autorização explícita. O JW Library deve ser instalado pela fonte oficial. O VB-CABLE é um driver externo e deve ser instalado pelo fabricante.
+
+📘 **Passo a passo:** [docs/installation.md](docs/installation.md)
+
+---
+
+## 🎧 Áudio para o Zoom
+
+O caminho usado nesta release é:
+
+```text
+JW Library / VLC / Chrome / Edge
+              ↓
+      Captura de áudio no OBS
+              ↓
+        Mixer / monitoramento
+              ↓
+          CABLE Input
+              ↓
+         CABLE Output
+              ↓
+             Zoom
 ```
 
-O script cria o ambiente virtual, instala dependências e executa testes. Se o PowerShell bloquear scripts, siga a política do computador antes de executá-los.
+No OBS, o dispositivo de monitoramento deve ser **CABLE Input (VB-Audio Virtual Cable)**. No Zoom, a entrada deve ser **CABLE Output**.
 
-Para atualizar uma instalação de desenvolvimento sem alterações locais, feche apenas o Meeting Assistant:
+A primeira validação feita nesta etapa confirmou que o áudio do **JW Library pode ser enviado pelo OBS usando VB-CABLE**. O aplicativo ainda trata essa configuração como uma etapa explícita do operador, porque a entrada física, mix-minus, retorno do Zoom e teste de escuta precisam ser confirmados no computador real.
 
-```powershell
-git pull --ff-only
-.\scripts\setup-dev.ps1
-.\scripts\run-dev.ps1
+Também evite capturar a mesma mídia duas vezes — por exemplo, pela captura do aplicativo e pelo `Desktop Audio` — porque isso pode produzir duplicação.
+
+📘 **Procedimento de áudio:** [docs/test-audio-shortcuts.md](docs/test-audio-shortcuts.md)
+
+---
+
+## 🧭 Primeiro uso
+
+Depois de instalar:
+
+```text
+1. Abrir Meeting Assistant
+2. Ajustes → salvar OBS e cenas
+3. Escolher a tela do Salão
+4. Verificar ambiente
+5. Preparar fontes do OBS
+6. Configurar CABLE Input / CABLE Output
+7. Testar voz + JWL + VLC/navegador
+8. Fazer o ciclo Zoom → Salão → JWL
 ```
 
-OBS Studio, Zoom e JW Library são aplicativos externos. Instale-os pelas fontes oficiais e siga o [guia](docs/operator-guide.md). A primeira configuração das fontes OBS ainda é manual.
+**Não faça o primeiro teste durante uma reunião pública.** Faça o ensaio com outro dispositivo conectado ao Zoom, preferencialmente com fones.
 
-## Preparação rápida
+---
 
-1. Configure o Windows para estender a área de trabalho e a saída secundária do JWL para o monitor do Salão.
-2. Habilite o servidor WebSocket do OBS e informe host, porta e senha em **Ajustes**.
-3. Mapeie **Fundo / Texto do Ano**, **Palco** e **Mídia** para as cenas existentes.
-4. No Zoom, habilite dois monitores antes de entrar na reunião. Selecione **OBS Virtual Camera** como câmera e inicie a câmera virtual no OBS.
-5. Clique em **Verificar** e teste a alternância antes da reunião.
+## 🧰 Atalhos da operação
 
-## Câmera IP e preparação do OBS — implementado, validação física pendente
+| Tecla | Ação |
+|---|---|
+| F1 | Ajuda |
+| F2 | Fundo / Texto do Ano |
+| F3 | Palco |
+| F4 | Mídia |
+| F5 | Zoom → Salão / voltar ao JWL |
+| F6 | Ativar / pausar automação |
+| F7 | Cena segura → Palco |
+| F8 | Iniciar reunião |
+| F9 | Verificar |
+| F10 | Ajustes |
 
-Em **Ajustes → Câmera IP — Palco**, informe IP, usuário e senha. O perfil inicial usa IP 10.0.0.40, RTSP 554, canal 1/fluxo principal. Usuário e senha começam vazios. **Salvar** apenas armazena os dados; **Salvar e preparar cenas / câmera no OBS** aplica a configuração com confirmação.
+Os atalhos são locais à janela do Meeting Assistant e não funcionam como atalhos globais do Windows.
 
-A preparação padroniza **Texto do Ano**, **Palco** e **Mídias**. Cenas mapeadas com nomes antigos são renomeadas quando não há conflito; fontes existentes são preservadas. A câmera recebe fonte de mídia própria e áudio silenciado. Isso não configura automaticamente as fontes de Texto do Ano e Mídias nem comprova recepção da câmera.
+---
 
-Quando aberto pelo Meeting Assistant, o OBS recebe os parâmetros para iniciar na bandeja com câmera virtual. Em Ajustes, há uma opção para criar o atalho de inicialização no login do Windows. OBS já aberto não é reiniciado. [Detalhes e limites](docs/obs-ip-camera.md).
+## 🏗️ Desenvolvimento
 
-## Texto do Ano e fontes OBS — pronto para teste físico
+O projeto usa Python 3.12 durante o desenvolvimento, mas a distribuição oficial é empacotada para Windows pelo GitHub Actions.
 
-Em **Ajustes → Texto do Ano, captura JWL e câmera virtual…**, capture o JWL visível na tela selecionada, confira prévia/ano e salve. A foto de apresentação não modifica a referência do detector. O app avisa sobre foto ausente, inválida ou de outro ano.
-
-A mesma tela prepara a captura da janela JWL em Mídias e verifica fontes/câmera virtual. A identificação precisa ser inequívoca; nunca é substituída por captura de monitor. **Iniciar reunião** solicita e confirma a câmera virtual, inclusive quando o OBS já está aberto.
-
-[Procedimento de teste](docs/yeartext-and-obs.md) · [Histórico de alterações](CHANGELOG.md)
-
-## Em preparação
-
-- Validar fisicamente a nova captura anual e as fontes do OBS no equipamento do Salão.
-- Atualizador com tela própria, consulta de Releases na inicialização e preservação dos dados.
-- Áudio de mídia e microfones para o Zoom sem reenviar o retorno remoto.
-- Ferramentas avançadas em Ajustes, guia ilustrado e instalador independente de Python instalado.
-
-Áudio integrado, atualizador, reorganização das ferramentas, tutorial ilustrado e instalador **ainda estão pendentes**. Consulte critérios e prioridades no [roteiro](docs/roadmap-after-hall-validation.md).
-
-## Desenvolvimento e qualidade
-
-```powershell
-.\.venv\Scripts\python.exe -m ruff check .
-.\.venv\Scripts\python.exe -m pytest
+```text
+src/meeting_assistant/
+├── core/       estado e coordenação
+├── services/   OBS, JWL, Zoom, áudio, diagnóstico e configuração
+├── ui/         interface PySide6
+└── resources/  ícones e recursos
 ```
 
-O CI executa Ruff e Pytest no Windows. `core/` guarda estado, `services/` integra aplicativos e `ui/` contém a interface. Leia [AGENTS.md](AGENTS.md) antes de alterar o núcleo validado.
+Para desenvolvimento:
 
-## Distribuição futura
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
+pytest
+ruff check .
+```
 
-A publicação do código e do instalador ocorrerá quando o responsável autorizar tornar o projeto público. Antes disso: testes em Windows sem Python, revisão das licenças das dependências, remoção de dados locais/segredos e Releases com versão, notas e checksum. Links privados de reunião, senhas, imagens locais e telemetria não devem integrar o pacote público.
+O build de distribuição usa **PyInstaller + Inno Setup** no Windows. O roteiro está em [packaging/README.md](packaging/README.md).
 
-Projeto independente, não oficial de JW Library, Zoom ou OBS.
+---
 
+## 🧭 O que vem depois
 
+A primeira release instalável não significa que todas as rotinas físicas estejam certificadas. As próximas prioridades são:
 
-## Novo lote em validação: áudio e atalhos
+1. ensaio do instalador em uma máquina Windows limpa;
+2. ensaio completo de áudio e confirmação de estéreo no Zoom;
+3. substituir a captura JWL por método alternativo quando uma máquina não fornecer áudio pela captura de processo;
+4. terminar a configuração física da câmera IP;
+5. criar atualizador seguro entre releases, preservando configurações;
+6. concluir tutorial ilustrado e matriz de aceitação para operação no Salão.
 
-Veja o [passo a passo e formulário de retorno](docs/test-audio-shortcuts.md).
-F1 mostra os atalhos locais. Em Ajustes ficam a configuração de áudio, Observar mídia
-e Calibrar Texto do Ano. O áudio exige VB-CABLE e teste real antes do uso em reunião.
+Veja o [roadmap detalhado](docs/roadmap-after-hall-validation.md).
+
+---
+
+## ℹ️ Avisos
+
+O Meeting Assistant é um projeto independente e não oficial do JW Library, Zoom ou OBS Studio. Nomes, marcas e aplicativos externos pertencem aos respectivos titulares.
+
+Arquivos de configuração podem conter informações privadas. Não publique `%APPDATA%\\MeetingAssistant\\settings.json` ou sessões de telemetria que contenham dados operacionais sem revisão.
