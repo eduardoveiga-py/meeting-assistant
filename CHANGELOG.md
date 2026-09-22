@@ -2,6 +2,8 @@
 
 ## 0.5.0 — primeira release instalável — 21/09/2026
 
+> Pipeline de distribuição Windows corrigido após o primeiro ensaio de compilação.
+
 ### Entrega
 
 - Primeira distribuição Windows empacotada, com runtime Python e bibliotecas Python incluídos.
