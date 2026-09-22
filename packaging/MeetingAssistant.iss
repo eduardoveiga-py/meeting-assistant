@@ -31,7 +31,7 @@ Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"
 Name: "desktopicon"; Description: "Criar atalho na área de trabalho"; GroupDescription: "Atalhos:"; Flags: unchecked
 
 [Files]
-Source: "{#SourcePath}..\dist\MeetingAssistant\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourcePath}..\dist\MeetingAssistant.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourcePath}..\README.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
 Source: "{#SourcePath}..\CHANGELOG.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
 Source: "{#SourcePath}..\docs\operator-guide.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
