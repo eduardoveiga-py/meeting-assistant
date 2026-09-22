@@ -1,65 +1,34 @@
 # Histórico de alterações
 
+## 0.5.0 — primeira release instalável — 21/09/2026
+
+### Entrega
+
+- Primeira distribuição Windows empacotada, com runtime Python e bibliotecas Python incluídos.
+- Instalador por usuário usando Inno Setup.
+- Build oficial no GitHub Actions com PyInstaller e checksum SHA-256.
+- README reorganizado com visão geral, instalação e operação para novos usuários.
+- Guia dedicado de instalação sem Python.
+
+### Áudio
+
+- Preparação de fontes de microfone e captura por aplicativo no OBS.
+- Rota operacional documentada: OBS → monitoramento → VB-CABLE → Zoom.
+- Validação manual registrada: JWL → OBS → VB-CABLE → Zoom funciona no ambiente de teste.
+- Captura por processo continua com limitações específicas por aplicativo; JWL pode exigir método alternativo em algumas máquinas.
+
+### Núcleo preservado
+
+- Mantida a referência validada de 21/09/2026 para JWL ↔ Zoom ↔ Salão.
+- Mantido o checkpoint original e o teste de integridade do núcleo visual.
+
+### Limitações conhecidas
+
+- OBS Studio, Zoom, JW Library e VB-CABLE são dependências externas.
+- O instalador não instala drivers de terceiros automaticamente.
+- A configuração de CABLE Input/CABLE Output e o teste de escuta continuam sendo etapas explícitas.
+- Câmera IP, áudio e instalador precisam de ensaio físico em uma máquina limpa antes de serem considerados certificados para uso em reunião.
+
 ## Não lançado — desenvolvimento após 21/09/2026
 
-### Novidades
-
-- Módulo separado de áudio para Zoom: preparação silenciada, seleção de entrada da mesa
-  e captura JWL/VLC/Chrome/Edge, barramento nas três cenas, ativação explícita e silêncio.
-  Roteamento CABLE Input/Output guiado; driver e escuta física ainda exigem teste do operador.
-- Atalhos F1–F10 locais, sem repetição automática nem interferência em diálogos/outros apps.
-- Observar mídia e Calibrar Texto do Ano movidos para Ajustes; controles diários preservados.
-- Roteiro separado de testes de interface, preparação de áudio e escuta remota.
-
-- Assistente unificado de configuração com revisão por versão no executável, diagnóstico,
-  instalação consentida OBS/Zoom via WinGet e preparação autenticada de WebSocket com backup.
-- Formulários de ajustes e foto/fontes integrados no assistente; ensaio real reservado para a Release.
-
-- Configuração de câmera IP para Palco e padronização de Texto do Ano, Palco e Mídias.
-- Opção de inicialização OBS na bandeja no login do Windows.
-- Captura e prévia da foto do Texto do Ano, confirmação manual do ano e gravação versionada.
-- Aviso de foto ausente, inválida ou de outro ano; aplicação pendente ao reconectar OBS.
-- Preparação da fonte de imagem e da captura específica da janela JWL.
-- Verificação de fontes e confirmação da câmera virtual, inclusive com OBS já aberto.
-
-### Melhorias
-
-- Documentação inicial, roteiro ampliado, guia de configuração e critérios de teste.
-- Fonte de captura JWL com correspondência exata; sem fallback para monitor/Zoom.
-- Referência do detector separada da foto de apresentação.
-
-### Correções e estabilidade preservada
-
-- Captura verifica a ordem das janelas a partir do HWND JWL já identificado, sem exigir
-  que a saída UWP apareça no EnumWindows. Percurso limitado, detecção de ciclos e diagnóstico.
-
-- Correção do guardião aprovada pelo operador nos testes 1/2/3: sem maximização
-  incondicional na abertura. Baseline atualizado para 02094d8 após confirmação; checkpoint preservado.
-- WorkerW/Progman tratados como superfícies internas do shell na prévia confirmada da foto.
-- Mensagem de aplicação ao OBS distingue arquivo existente de uma nova captura.
-
-- Retângulo informado pelo Explorer para a barra de tarefas não bloqueia mais a prévia
-  do Texto do Ano; confirmação visual continua obrigatória. Outras janelas ainda bloqueiam.
-
-- Verificação visual de sobreposição por ordem das janelas, substituindo teste de ponteiro
-  que pode ignorar janelas desabilitadas; diagnóstico identifica classe/retângulo do bloqueador.
-
-- Confirmação, botão de salvar e resultado da foto sempre visíveis, fora da rolagem.
-- Nova prévia identificada como não salva; falha de recaptura invalida a prévia anterior.
-- Captura recusa bordas expostas e registra retângulos de monitor, janela, cliente e DWM.
-- Investigação da faixa física do JWL pendente das novas medidas; guardiões preservados.
-
-- Núcleo de troca Zoom/JWL validado pelo operador, checkpoint e teste de integridade.
-- Escrita atômica da referência da foto, preservando a anterior em falha.
-- Aplicação repetida das fontes sem duplicação; não alternar câmera virtual já ativa.
-
-### Limitações e validação
-
-- Câmera IP, captura física, fonte JWL e comportamento nas instalações reais aguardam validação do operador.
-- Fonte de janela ambígua é recusada.
-- Áudio integrado, atalhos F1–F10, instalador, atualizador GitHub e tutorial ilustrado final estão pendentes.
-- Roteamento de áudio decidido: mesa e aplicativos no OBS → VB-CABLE → microfone Zoom,
-  excluindo retorno remoto e impedindo duplicação do áudio já presente na mesa.
-- Testes automatizados verificam regras e comandos; não certificam vídeo real.
-- Não há Release pública emitida por este documento.
-
+Consulte o histórico anterior desta versão no Git para detalhes de implementação, testes e telemetria.
