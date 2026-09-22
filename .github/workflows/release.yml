@@ -32,7 +32,7 @@ jobs:
         shell: pwsh
         run: |
           pyinstaller --clean --noconfirm packaging/MeetingAssistant.spec
-          if (-not (Test-Path "dist/MeetingAssistant/MeetingAssistant.exe")) { throw "Executável não foi criado." }
+          if (-not (Test-Path "dist/MeetingAssistant.exe")) { throw "Executável não foi criado." }
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup -y --no-progress
