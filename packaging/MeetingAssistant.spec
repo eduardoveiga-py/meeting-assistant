@@ -3,8 +3,8 @@ from PyInstaller.utils.hooks import collect_data_files
 datas = collect_data_files("meeting_assistant.resources")
 
 a = Analysis(
-    ["src/meeting_assistant/main.py"],
-    pathex=["src"],
+    ["../src/meeting_assistant/main.py"],
+    pathex=["../src"],
     binaries=[],
     datas=datas,
     hiddenimports=["comtypes", "comtypes.client", "pythoncom", "pywintypes"],
