@@ -11,9 +11,9 @@ LABELS = (
     "Mídia",
     "Zoom → Salão / voltar ao JWL",
     "Ativar / pausar automação",
-    "Cena segura → Palco",
+    "Contingência → Palco ou Texto do Ano",
     "Iniciar reunião",
-    "Verificar",
+    "Operação: preparar / resolver",
     "Ajustes",
 )
 

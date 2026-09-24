@@ -332,7 +332,7 @@ class OperatorDialog(QDialog):
                 for device in result["devices"]:
                     if device.get("itemEnabled", True):
                         self.camera_choices.addItem(device["itemName"], device["itemValue"])
-                self.status.setText("Selecione o dispositivo e aplique. Fonte USB ainda não habilitada.")
+                self.status.setText("Dispositivos listados. Selecione e aplique para alterar a câmera.")
             else:
                 pending = replace(
                     self.owner.settings, camera_source_name=result["source"], scene_speaker="Palco"
