@@ -22,6 +22,28 @@
 
 ---
 
+## 📸 Conheça o aplicativo
+
+Capturas da versão 0.6.0 em modo de simulação.
+
+### Painel do operador
+
+Controle da apresentação, automação, microfone do Zoom e preview do OBS em uma única janela.
+
+<p align="center">
+  <img src="docs/screenshots/painel-principal.png" width="470" alt="Painel do Meeting Assistant com Texto do Ano, Palco, Mídia, contingência e controle do microfone do Zoom">
+</p>
+
+### Assistente de instalação e configuração
+
+Configuração por etapas, com abas para ajustes, preparação e foto e fontes.
+
+<p align="center">
+  <img src="docs/screenshots/configuracao-inicial.png" width="850" alt="Assistente de configuração do Meeting Assistant no tema escuro, com abas legíveis e ajustes de saída do salão">
+</p>
+
+---
+
 ## ✨ O que esta versão entrega
 
 | Área | O que já está no aplicativo |
