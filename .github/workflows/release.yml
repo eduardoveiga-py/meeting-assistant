@@ -3,6 +3,7 @@ name: Windows Release
 on:
   workflow_dispatch:
   push:
+    branches: ["release/0.6.0"]
     tags:
       - "v*.*.*"
 
@@ -60,19 +61,41 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/release/0.6.0'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = $env:GITHUB_REF_NAME
+          $version = python -c "from importlib.metadata import version; print(version('meeting-assistant'))"
+          $tag = "v$version"
+          if ($env:GITHUB_REF -like 'refs/heads/*' -and $env:GITHUB_REF_NAME -ne "release/$version") {
+            throw "Branch e versão do pacote não correspondem."
+          }
           $notes = @"
-          ## Meeting Assistant $tag
-          Primeira compilação instalável para Windows 10/11 x64.
-          O instalador inclui o runtime Python e as bibliotecas Python necessárias para o Meeting Assistant.
-          OBS Studio, Zoom, JW Library e VB-CABLE continuam sendo componentes externos.
-          O núcleo JWL ↔ Zoom ↔ Salão foi validado pelo operador em 21/09/2026 e está protegido por checkpoint.
-          O instalador e o áudio integrado ainda precisam de ensaio em máquina limpa antes de serem considerados certificados para uso em reunião.
+          ## Meeting Assistant $tag — avaliação
+          Pré-release para validar as melhorias no equipamento real. A versão estável de retorno continua sendo 0.5.1.
+
+          - Abas com contraste no tema escuro; fechamento do assistente unificado e formulário incorporado não modal.
+          - Preview leve 480×270, até 20 FPS, independente dos comandos OBS e sem acumular quadros atrasados.
+          - Texto do Ano substitui Fundo. Contingência usa Palco quando a câmera é verificável ou Texto do Ano diante de falha/dúvida.
+          - Câmeras USB/placa de captura, rede por URL ou fonte existente, sempre em Palco.
+          - Botão destacado para seu microfone Zoom, com consulta e confirmação de estado.
+          - Painel Operação com preparação, recuperação por sintoma, medidores OBS, encerramento assistido, perfis sem credenciais e treinamento.
+          - Atalhos globais opcionais; seleção manual de cenas pausa a automação.
+
+          Faça backup privado de %APPDATA%\MeetingAssistant e da coleção/perfil OBS antes de avaliar.
+          Restauração: checkpoint/stable-v0.5.1-before-operator-improvements e instalador da release v0.5.1.
+          Núcleo JWL ↔ Zoom ↔ Salão preservado. Windows limpo continua fora do escopo.
+          Testar no equipamento: fechar pelo X, fluidez do preview, microfone Zoom, câmera desligada e retorno ao JWL.
+          UIA Zoom depende dos controles acessíveis em português/inglês. Fontes sem informação de saúde usam Texto do Ano.
+          Medidores e preview OBS não comprovam a recepção remota. A taxa real do preview depende do equipamento.
+          Pesquisa de download/importação no JWL incluída no repositório; download automático ainda não implementado.
           "@
           $notes | Out-File -FilePath release-notes.md -Encoding utf8
-          gh release create $tag release/* --title "Meeting Assistant $tag" --notes-file release-notes.md --verify-tag
+          if ($env:GITHUB_REF -like 'refs/tags/*') {
+            gh release create $tag release/* --title "Meeting Assistant $tag" --notes-file release-notes.md --verify-tag --prerelease --latest=false
+          } else {
+            gh release create $tag release/* --title "Meeting Assistant $tag" --notes-file release-notes.md --target $env:GITHUB_SHA --prerelease --latest=false
+          }
+          if ($LASTEXITCODE -ne 0) { throw "Publicação da release falhou." }
+
