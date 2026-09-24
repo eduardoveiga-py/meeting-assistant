@@ -24,9 +24,27 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+          pip install "pyinstaller==6.16.0"
 
       - name: Ruff
         run: ruff check .
 
       - name: Pytest
         run: pytest
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build and smoke-test packaged app
+        shell: pwsh
+        run: ./scripts/build-windows.ps1
+
+      - name: Upload reviewed build
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeetingAssistant-CI-Windows
+          path: |
+            release/*.exe
+            dist/smoke-test.json
+          if-no-files-found: error
+          retention-days: 14

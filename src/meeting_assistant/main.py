@@ -7,7 +7,7 @@ from importlib.resources import as_file, files
 
 from PySide6.QtCore import QLoggingCategory, Qt, QTimer
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.display_service import DisplayService, resolve_hall_display
@@ -68,6 +68,7 @@ def main() -> int:
     settings = settings_service.load()
     telemetry = TelemetryService(
         enabled=settings.telemetry_enabled,
+        sync_enabled=settings.telemetry_sync_enabled,
         repo_url=settings.telemetry_repo_url,
         screenshots_enabled=settings.telemetry_screenshots,
     )
@@ -176,7 +177,7 @@ def main() -> int:
     window.set_telemetry_session(telemetry.session_id)
     window.set_telemetry_status(
         False,
-        "Telemetria aguardando a primeira sincronização em segundo plano.",
+        telemetry.status_message,
     )
     telemetry.sync_status_changed.connect(window.set_telemetry_status)
 
@@ -403,6 +404,10 @@ def main() -> int:
     app.aboutToQuit.connect(telemetry.stop)
 
     window.show()
+    if settings_service.recovery_message:
+        QTimer.singleShot(
+            0, lambda: QMessageBox.warning(window, "Ajustes recuperados", settings_service.recovery_message)
+        )
     telemetry.event("ui_shown", session_id=telemetry.session_id)
     display_service.start()
     jwl_service.start()

@@ -27,15 +27,17 @@ except ImportError:  # pragma: no cover - dependency is installed in production
     mss = None
 
 
-DEFAULT_DIAGNOSTICS_REPO = (
-    "https://github.com/eduardoveiga-py/meeting-assistant-diagnostics.git"
-)
 _SENSITIVE_KEY = re.compile(
     r"(password|passwd|pwd|secret|token|authorization|cookie|api[_-]?key)",
     re.IGNORECASE,
 )
 _ZOOM_PWD = re.compile(r"([?&]pwd=)[^&#\s]+", re.IGNORECASE)
 _ZOOM_MEETING = re.compile(r"(/j/|confno=)\d{6,}", re.IGNORECASE)
+_URL_CREDENTIALS = re.compile(r"(\b[a-z][a-z0-9+.-]*://)[^\s/@]+@", re.IGNORECASE)
+_TEXT_SECRET = re.compile(
+    r"((?:password|passwd|pwd|secret|token|api[_-]?key)\s*[=:]\s*)[^\s&,;]+", re.IGNORECASE
+)
+_BEARER = re.compile(r"\bBearer\s+[^\s,;]+", re.IGNORECASE)
 
 
 def utc_now() -> str:
@@ -55,6 +57,9 @@ def sanitize_text(value: str) -> str:
         text = text.replace(user_profile.replace("\\", "/"), "%USERPROFILE%")
     text = _ZOOM_PWD.sub(r"\1[REDACTED]", text)
     text = _ZOOM_MEETING.sub(r"\1[REDACTED]", text)
+    text = _URL_CREDENTIALS.sub(r"\1[REDACTED]@", text)
+    text = _TEXT_SECRET.sub(r"\1[REDACTED]", text)
+    text = _BEARER.sub("Bearer [REDACTED]", text)
     return text
 
 
@@ -121,7 +126,8 @@ class TelemetryService(QObject):
         self,
         *,
         enabled: bool,
-        repo_url: str = DEFAULT_DIAGNOSTICS_REPO,
+        repo_url: str = "",
+        sync_enabled: bool = False,
         screenshots_enabled: bool = False,
         sync_interval_seconds: float = 15.0,
         root: Path | None = None,
@@ -139,11 +145,17 @@ class TelemetryService(QObject):
         self.screenshots_path = self.session_path / "screenshots"
 
         self.enabled = bool(enabled)
-        self.repo_url = repo_url.strip() or DEFAULT_DIAGNOSTICS_REPO
+        self.repo_url = repo_url.strip()
+        self.sync_enabled = bool(sync_enabled and self.repo_url)
         self.screenshots_enabled = bool(screenshots_enabled)
+        self.status_message = "Diagnóstico local ativo; envio automático desativado."
+        if self.sync_enabled:
+            self.status_message = "Diagnóstico local ativo; aguardando sincronização opcional."
+        if not self.enabled:
+            self.status_message = "Diagnóstico desativado."
         self.sync_interval = max(8.0, sync_interval_seconds)
 
-        self._queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+        self._queue: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=2048)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._dirty = False
@@ -154,8 +166,20 @@ class TelemetryService(QObject):
         self._old_threading_excepthook = None
 
     def start(self) -> None:
-        if not self.enabled:
+        if not self.enabled or (self._thread and self._thread.is_alive()):
             return
+        try:
+            self._start()
+        except Exception:
+            self._disable_after_failure()
+            self.restore_exception_hooks()
+
+    def _disable_after_failure(self) -> None:
+        self.enabled = False
+        self.status_message = "Diagnóstico indisponível nesta sessão; a operação pode continuar."
+        self.sync_status_changed.emit(False, self.status_message)
+
+    def _start(self) -> None:
         self.session_path.mkdir(parents=True, exist_ok=True)
         self.screenshots_path.mkdir(parents=True, exist_ok=True)
         self._write_json(
@@ -172,7 +196,7 @@ class TelemetryService(QObject):
         self._write_summary("running")
         self.install_exception_hooks()
         self._thread = threading.Thread(
-            target=self._worker,
+            target=self._worker_guarded,
             name="MeetingAssistant-Telemetry",
             daemon=True,
         )
@@ -180,14 +204,21 @@ class TelemetryService(QObject):
         self.event("app_started", app_version=_app_version())
 
     def stop(self) -> None:
-        if not self.enabled:
-            return
-        self.event("app_stopping")
-        self._queue.put(("finalize", None))
+        if self.enabled:
+            self.event("app_stopping")
         self._stop.set()
         if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=8.0)
+            self._thread.join(timeout=2.0)
         self.restore_exception_hooks()
+
+    def _enqueue(self, command: str, payload: Any = None) -> None:
+        if not self.enabled or self._stop.is_set():
+            return
+        try:
+            self._queue.put_nowait((command, payload))
+        except queue.Full:
+            # Diagnostics must never block the operator or grow without bound.
+            pass
 
     def event(self, name: str, *, severity: str = "info", **data: Any) -> None:
         if not self.enabled:
@@ -199,15 +230,15 @@ class TelemetryService(QObject):
             "severity": str(severity),
             "data": sanitize_value(data),
         }
-        self._queue.put(("event", payload))
+        self._enqueue("event", payload)
 
     def request_sync(self) -> None:
-        if self.enabled:
-            self._queue.put(("sync", None))
+        if self.sync_enabled:
+            self._enqueue("sync")
 
     def capture_screenshot(self, reason: str) -> None:
         if self.enabled and self.screenshots_enabled:
-            self._queue.put(("screenshot", sanitize_text(reason)))
+            self._enqueue("screenshot", sanitize_text(reason))
 
     def install_exception_hooks(self) -> None:
         if not self.enabled:
@@ -257,6 +288,12 @@ class TelemetryService(QObject):
         if self._old_threading_excepthook is not None:
             threading.excepthook = self._old_threading_excepthook
 
+    def _worker_guarded(self) -> None:
+        try:
+            self._worker()
+        except Exception:
+            self._disable_after_failure()
+
     def _worker(self) -> None:
         next_sync = time.monotonic() + self.sync_interval
         finalizing = False
@@ -289,7 +326,7 @@ class TelemetryService(QObject):
                 break
 
             if self._stop.is_set() and self._queue.empty() and not finalizing:
-                self._write_summary("interrupted")
+                self._write_summary("completed")
                 self._sync_best_effort()
                 break
 
@@ -370,7 +407,7 @@ class TelemetryService(QObject):
             )
 
     def _sync_best_effort(self) -> None:
-        if not self._dirty:
+        if not self.sync_enabled or not self._dirty:
             return
         try:
             git = find_git()
@@ -381,13 +418,12 @@ class TelemetryService(QObject):
             self._git_commit_and_push(git)
             self._last_sync_error = None
             self._dirty = False
-            self.sync_status_changed.emit(True, f"Telemetria sincronizada • {self.session_id}")
+            self.status_message = f"Telemetria sincronizada • {self.session_id}"
+            self.sync_status_changed.emit(True, self.status_message)
         except Exception as exc:  # noqa: BLE001 - sync failure is non-fatal by design
             self._last_sync_error = sanitize_text(repr(exc))
-            self.sync_status_changed.emit(
-                False,
-                f"Telemetria mantida localmente • {self._last_sync_error}",
-            )
+            self.status_message = "Diagnóstico mantido localmente; envio não concluído."
+            self.sync_status_changed.emit(False, self.status_message)
 
     def _ensure_repo(self, git: Path) -> None:
         git_dir = self.repo_path / ".git"
@@ -406,6 +442,9 @@ class TelemetryService(QObject):
 
         # Keep identity/configuration local to the diagnostics clone. Re-applying
         # these values is cheap and also repairs a partially initialized clone.
+        origin = self._run_git(git, ["remote", "get-url", "origin"], cwd=self.repo_path, capture=True).strip()
+        if origin != self.repo_url:
+            raise RuntimeError("Destino alterado; clone anterior preservado. Use a exportação local.")
         self._run_git(
             git,
             ["config", "user.name", "Meeting Assistant Diagnostics"],

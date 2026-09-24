@@ -26,31 +26,32 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          pip install .
-          pip install "pyinstaller>=6,<7"
-      - name: Build executable
+          pip install ".[dev]"
+          pip install "pyinstaller==6.16.0"
+      - name: Validate code and release version
         shell: pwsh
         run: |
-          pyinstaller --clean --noconfirm packaging/MeetingAssistant.spec
-          if (-not (Test-Path "dist/MeetingAssistant/MeetingAssistant.exe")) { throw "Executável não foi criado." }
+          ruff check .
+          if ($LASTEXITCODE -ne 0) { throw "Ruff falhou." }
+          pytest
+          if ($LASTEXITCODE -ne 0) { throw "Testes falharam." }
+          $version = python -c "from importlib.metadata import version; print(version('meeting-assistant'))"
+          if ($env:GITHUB_REF -like 'refs/tags/*' -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Tag e versão do pacote não correspondem."
+          }
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup -y --no-progress
-      - name: Build installer
+      - name: Build and smoke-test packaged app
         shell: pwsh
-        run: |
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { throw "Inno Setup não foi encontrado." }
-          New-Item -ItemType Directory -Force release | Out-Null
-          & $iscc "packaging/MeetingAssistant.iss"
-          if ($LASTEXITCODE -ne 0) { throw "Inno Setup falhou com código $LASTEXITCODE." }
+        run: ./scripts/build-windows.ps1
       - name: Generate checksums
         shell: pwsh
         run: |
-          Get-ChildItem release -File | ForEach-Object {
+          Get-ChildItem release -Filter '*.exe' -File | ForEach-Object {
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-            "$hash  $($_.Name)" | Out-File -FilePath "release/SHA256SUMS.txt" -Encoding ascii -Append
-          }
+            "$hash  $($_.Name)"
+          } | Set-Content -Path "release/SHA256SUMS.txt" -Encoding ascii
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:

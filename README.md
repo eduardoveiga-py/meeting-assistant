@@ -35,6 +35,24 @@
 | ⚙️ Assistente | Verifica o ambiente, ajuda a configurar o WebSocket e pode instalar OBS/Zoom usando WinGet com autorização. |
 | 🧪 Telemetria | Diagnóstico estruturado, sanitizado e desacoplado da operação. |
 
+### Diagnóstico e recuperação
+
+O diagnóstico é local por padrão e não exige Git nem acesso à internet. Em Ajustes,
+use **Exportar última sessão para revisão** para gerar um ZIP textual; screenshots,
+configurações e histórico Git ficam fora desse arquivo. Revise os textos antes de compartilhar.
+
+Sincronização automática é opcional e exige habilitar a opção específica, informar
+um repositório e ter Git/autenticação disponíveis. Essa opção começa desativada também
+na migração de configurações antigas. Confirme a privacidade do destino antes de ativá-la.
+Screenshots, se habilitados separadamente, capturam todos os monitores e podem conter dados pessoais.
+
+Configurações inválidas são recuperadas seletivamente e o arquivo original recebe
+um backup local `settings.json.invalid-<identificador>.bak`. Esse backup pode conter
+credenciais; não o inclua em um diagnóstico compartilhado. Falhas ao iniciar ou gravar
+diagnóstico não impedem o uso da reunião.
+
+Pesquisa e plano de conclusão: [comparação técnica de 24/09/2026](docs/comparative-review-2026-09-24.md).
+
 ### 🔒 Núcleo visual validado
 
 O comportamento **JWL ↔ Zoom ↔ Salão** foi validado pelo operador em **21/09/2026**. Esse núcleo possui checkpoint e teste de integridade e não deve ser alterado para implementar recursos paralelos sem nova validação física.
