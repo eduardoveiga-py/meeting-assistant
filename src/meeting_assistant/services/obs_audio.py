@@ -162,7 +162,7 @@ def activate(client, data):
     scenes = tuple(dict.fromkeys(data.get("scenes", [])))
     existing = {s["sceneName"] for s in call(client, "GetSceneList")["scenes"]}
     if len(scenes) != 3 or BUS in scenes or not set(scenes).issubset(existing):
-        raise ValueError("Configure as três cenas distintas de Fundo, Palco e Mídias antes de ativar.")
+        raise ValueError("Configure as três cenas distintas de Texto do Ano, Palco e Mídias antes de ativar.")
     bus_items = items(client, BUS)
     if {x["sourceName"] for x in bus_items} != set(SOURCES) or len(bus_items) != len(SOURCES):
         raise ValueError("A cena de áudio foi modificada. Revise as fontes antes de ativar.")
@@ -224,3 +224,4 @@ def run_audio_task(client, action, data):
     if action == "mute":
         return mute_managed(client)
     raise ValueError("Operação de áudio desconhecida.")
+

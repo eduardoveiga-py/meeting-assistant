@@ -6,14 +6,14 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 LABELS = (
     "Ajuda de atalhos",
-    "Fundo / Texto do Ano",
+    "Texto do Ano",
     "Palco",
     "Mídia",
     "Zoom → Salão / voltar ao JWL",
     "Ativar / pausar automação",
-    "Cena segura → Palco",
+    "Contingência → Palco ou Texto do Ano",
     "Iniciar reunião",
-    "Verificar",
+    "Operação: preparar / resolver",
     "Ajustes",
 )
 
@@ -49,3 +49,4 @@ class MainWindowShortcuts:
             + "\n\nFuncionam somente com esta tela em foco. "
             "No notebook, pode ser necessário Fn + F1…F10.",
         )
+

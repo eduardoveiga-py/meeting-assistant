@@ -12,7 +12,7 @@ from typing import Any
 
 import obsws_python as obs
 from obsws_python.error import OBSSDKRequestError
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 from websocket import WebSocketTimeoutException
 
 from meeting_assistant.services.obs_hall_setup import (
@@ -134,9 +134,11 @@ class ObsController(QObject):
     scene_changed = Signal(str)
     preview_changed = Signal(bytes)
     preview_error = Signal(str)
+    preview_age = Signal(float)
     error = Signal(str)
     setup_finished = Signal(bool, str)
     hall_task_finished = Signal(str, bool, str)
+    operator_finished = Signal(str, bool, object)
     audio_task_finished = Signal(str, str, bool, object)
 
     def __init__(self, poll_interval: float = 0.5, preview_interval: float = 0.15) -> None:
@@ -156,9 +158,24 @@ class ObsController(QObject):
         self._last_preview_error: str | None = None
         self._virtual_deadline = 0.0
         self._next_virtual_check = 0.0
+        from meeting_assistant.services.preview_stream import PreviewStream
+
+        self._preview_stream = PreviewStream()
+        from meeting_assistant.services.audio_levels import AudioLevels
+
+        self.audio_levels = AudioLevels()
+        self._preview_last = 0.0
+        self._preview_delivery = QTimer(self)
+        self._preview_delivery.setInterval(50)
+        self._preview_delivery.timeout.connect(self._deliver_preview)
 
     def start(self, config: ObsConnectionConfig) -> None:
         self._config = config
+        self.audio_levels.config = config
+        self._preview_stream.config = config
+        self._preview_stream.start()
+        self.audio_levels.start()
+        self._preview_delivery.start()
         if self._thread and self._thread.is_alive():
             self.reconfigure(config)
             return
@@ -171,6 +188,8 @@ class ObsController(QObject):
         self._thread.start()
 
     def reconfigure(self, config: ObsConnectionConfig) -> None:
+        self.audio_levels.config = config
+        self._preview_stream.config = config
         self._commands.put(("configure", config))
 
     def set_program_scene(self, scene_name: str) -> None:
@@ -210,6 +229,36 @@ class ObsController(QObject):
                            "silencie o microfone no Zoom antes de tentar novamente."
             })
 
+    def operator_task(self, action, data=None):
+        self._commands.put(("operator", (action, data)))
+
+    def _handle_operator(self, action, data):
+        from meeting_assistant.services.stage_camera import contingency, list_sources, prepare_camera
+
+        try:
+            if self._client is None:
+                raise ValueError("OBS desconectado. Abra o OBS e confira a conexão.")
+            if action == "contingency":
+                result = contingency(self._client, data)
+                self._refresh_current_scene()
+            elif action == "camera_list":
+                result = list_sources(self._client)
+            elif action == "camera_prepare":
+                result = prepare_camera(self._client, data["mode"], data["value"])
+                self._refresh_scene_list()
+            elif action == "stop_virtual":
+                self._client.send("StopVirtualCam", raw=True)
+                if self._client.send("GetVirtualCamStatus", raw=True)["outputActive"]:
+                    raise ValueError("OBS não confirmou a câmera virtual desligada.")
+                result = "Câmera virtual desligada. Encerre a reunião diretamente no Zoom."
+            else:
+                raise ValueError("Ação desconhecida.")
+            self.operator_finished.emit(action, True, result)
+        except ValueError as exc:
+            self.operator_finished.emit(action, False, str(exc))
+        except Exception:
+            self.operator_finished.emit(action, False, "Ação não confirmada. Confira o OBS.")
+
     def ensure_virtual_camera(self) -> None:
         self._commands.put(("virtual_camera", None))
 
@@ -219,7 +268,17 @@ class ObsController(QObject):
     def refresh_preview(self) -> None:
         self._commands.put(("preview", None))
 
+    def _deliver_preview(self):
+        frame = self._preview_stream.take()
+        if frame is not None:
+            self._preview_last, data = frame
+            self.preview_changed.emit(data)
+        self.preview_age.emit(time.monotonic() - self._preview_last if self._preview_last else -1)
+
     def stop(self) -> None:
+        self._preview_delivery.stop()
+        self._preview_stream.stop()
+        self.audio_levels.stop()
         self._stop_event.set()
         self._commands.put(("stop", None))
         if self._thread and self._thread.is_alive():
@@ -249,6 +308,8 @@ class ObsController(QObject):
                     self._handle_prepare_stage(payload)
                 elif command == "hall_task":
                     self._handle_hall_task(*payload)
+                elif command == "operator":
+                    self._handle_operator(*payload)
                 elif command == "audio_task":
                     self._handle_audio_task(*payload)
                 elif command == "virtual_camera":
@@ -297,7 +358,7 @@ class ObsController(QObject):
                 next_poll = now + self._poll_interval
 
             if self._client is not None and now >= next_preview:
-                self._refresh_preview()
+                self._preview_stream.set_scene(self._last_scene)
                 if self._client is None:
                     next_reconnect = time.monotonic() + 2.0
                 next_preview = now + self._preview_interval
@@ -353,6 +414,7 @@ class ObsController(QObject):
         scene = extract_current_scene(payload)
         if scene and scene != self._last_scene:
             self._last_scene = scene
+            self._preview_stream.set_scene(scene)
             self.scene_changed.emit(scene)
 
     def _refresh_preview(self) -> None:
@@ -468,6 +530,7 @@ class ObsController(QObject):
         client = self._client
         self._client = None
         self._last_scene = None
+        self._preview_stream.set_scene(None)
         self._last_scenes = []
         self._last_preview_error = None
         if client is None:
@@ -493,3 +556,4 @@ class ObsController(QObject):
         if "timed out" in lowered or "timeout" in lowered:
             return "Tempo esgotado ao conectar ao OBS WebSocket."
         return f"OBS WebSocket desconectado: {text or type(exc).__name__}"
+

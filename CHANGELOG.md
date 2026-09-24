@@ -1,6 +1,20 @@
 # Histórico de alterações
 
-## 0.5.1 — preparada, ainda não publicada
+## 0.6.0 — em avaliação
+
+- Checkpoint da release estável 0.5.1 antes das mudanças.
+- Contraste de abas e fechamento unificado do assistente; formulário incorporado não modal.
+- Preview 480×270 independente dos comandos, até 20 FPS e descarte de quadros atrasados.
+- Texto do Ano substitui Fundo; painel separa preview OBS de recepção remota.
+- Contingência verifica a fonte e usa Texto do Ano diante de falha ou estado inconclusivo.
+- Câmeras de rede, USB/captura e fontes existentes vinculadas a Palco.
+- Controle do próprio microfone Zoom por acessibilidade, com confirmação de estado.
+- Painel de preparação, recuperação, medidores, passagem de operador e encerramento assistido.
+- Perfis sem credenciais, consulta de versões, treinamento isolado e atalhos globais opcionais.
+- Pesquisa de download por idioma com importação assistida no JWL, sem player próprio.
+- Novas integrações aguardam aceite físico; núcleo protegido permanece intacto.
+
+## 0.5.1 — publicada em 24/09/2026
 
 - Pré-verificação separa instalação, conexão, configuração e confirmação do operador.
 - Falhas parciais de consulta preservam resultados obtidos; erros não expõem credenciais.
