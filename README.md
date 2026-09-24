@@ -179,16 +179,15 @@ O build de distribuição usa **PyInstaller + Inno Setup** no Windows. O roteiro
 
 ## 🧭 O que vem depois
 
-A primeira release instalável não significa que todas as rotinas físicas estejam certificadas. As próximas prioridades são:
+O responsável confirmou áudio e câmera IP no equipamento atual em 24/09/2026. Para encerrar o aceite operacional da próxima versão:
 
-1. ensaio do instalador em uma máquina Windows limpa;
-2. ensaio completo de áudio e confirmação de estéreo no Zoom;
-3. substituir a captura JWL por método alternativo quando uma máquina não fornecer áudio pela captura de processo;
-4. terminar a configuração física da câmera IP;
-5. criar atualizador seguro entre releases, preservando configurações;
-6. concluir tutorial ilustrado e matriz de aceitação para operação no Salão.
+1. executar e registrar os cenários de reinício de OBS/Zoom, reconexão de monitor e abertura durante vídeo;
+2. conferir atualização e retorno de versão no equipamento habitual;
+3. publicar a versão preparada após o aceite correspondente.
 
-Veja o [roadmap detalhado](docs/roadmap-after-hall-validation.md).
+O [guia de recuperação](docs/recovery-and-updates.md) contém procedimentos e resultados esperados. O ensaio completo em Windows limpo está fora desta entrega por decisão do responsável. Atualizador automático e tutorial ilustrado são melhorias futuras; o procedimento atual de atualização é manual.
+
+O [roadmap histórico](docs/roadmap-after-hall-validation.md) preserva o planejamento anterior; para o estado atual, use o registro de recuperação acima.
 
 ---
 
