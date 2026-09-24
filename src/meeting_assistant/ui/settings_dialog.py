@@ -50,7 +50,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.prepare_obs_requested = False
         self.setWindowTitle("Ajustes do Meeting Assistant")
-        self.setModal(True)
+        self.setModal(not embedded)
         self.setMinimumSize(360, 240)
         self.resize(580, 680)
 
@@ -119,6 +119,9 @@ class SettingsDialog(QDialog):
             selected_index = self.hall_display_combo.count() - 1
         self.hall_display_combo.setCurrentIndex(max(0, selected_index))
 
+        self.global_hotkeys_check = QCheckBox("Atalhos globais Ctrl+Alt+F2/F3/F4/F5/F7")
+        self.global_hotkeys_check.setChecked(settings.global_shortcuts)
+        output_form.addRow(self.global_hotkeys_check)
         output_form.addRow("Modo", self.simulation_check)
         output_form.addRow("Monitor do Salão", self.hall_display_combo)
 
@@ -251,7 +254,7 @@ class SettingsDialog(QDialog):
         self.media_combo = self._scene_combo(settings.scene_media, available_scenes)
         self.zoom_combo = self._scene_combo(settings.scene_zoom, available_scenes)
 
-        scenes_form.addRow("Fundo", self.background_combo)
+        scenes_form.addRow("Texto do Ano", self.background_combo)
         scenes_form.addRow("Palco", self.speaker_combo)
         scenes_form.addRow("Mídia", self.media_combo)
         scenes_form.addRow("Zoom → Salão", self.zoom_combo)
@@ -328,6 +331,7 @@ class SettingsDialog(QDialog):
         return combo
 
     def apply_to(self, settings: AppSettings) -> None:
+        settings.global_shortcuts = self.global_hotkeys_check.isChecked()
         settings.camera_ip = self.camera_ip_edit.text().strip()
         settings.camera_username = self.camera_user_edit.text().strip()
         settings.camera_password = self.camera_password_edit.text()

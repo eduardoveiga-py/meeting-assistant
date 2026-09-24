@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from threading import Thread
 
-from PySide6.QtCore import QThread, QUrl, Signal
+from PySide6.QtCore import QObject, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -26,12 +27,21 @@ from meeting_assistant.ui.settings_dialog import SettingsDialog
 from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
-class SetupWorker(QThread):
+class SetupWorker(QObject):
     result = Signal(bool, object)
+    finished = Signal()
 
     def __init__(self, operation, parent):
         super().__init__(parent)
         self.operation = operation
+        self.thread = None
+
+    def isRunning(self):
+        return self.thread is not None and self.thread.is_alive()
+
+    def start(self):
+        self.thread = Thread(target=self.run, daemon=True, name="Setup operation")
+        self.thread.start()
 
     def run(self):
         try:
@@ -43,6 +53,8 @@ class SetupWorker(QThread):
             self.result.emit(
                 False, "Não foi possível concluir. Verifique conexão, permissões e tente novamente."
             )
+        finally:
+            self.finished.emit()
 
 
 class SetupAssistantDialog(QDialog):
@@ -51,6 +63,7 @@ class SetupAssistantDialog(QDialog):
         self.owner = owner
         self.worker = None
         self._completion = None
+        self._close_pending = False
         self.setWindowTitle("Assistente de instalação e configuração")
         self.resize(660, 700)
         self.setMinimumSize(360, 280)
@@ -176,6 +189,8 @@ class SetupAssistantDialog(QDialog):
             action.setEnabled(True)
         self.editor.setEnabled(True)
         self.allow.setChecked(False)
+        if self._close_pending:
+            self.done(QDialog.Rejected)
 
     def _result(self, ok, value):
         if isinstance(value, list):
@@ -284,13 +299,11 @@ class SetupAssistantDialog(QDialog):
 
     def reject(self):
         if self.worker is not None and self.worker.isRunning():
-            self.status.setText("Aguarde o término da operação antes de fechar esta janela.")
+            self._close_pending = True
+            self.status.setText("Fechamento solicitado; aguardando a operação terminar.")
             return
-        super().reject()
+        self.done(QDialog.Rejected)
 
     def closeEvent(self, event):
-        if self.worker is not None and self.worker.isRunning():
-            event.ignore()
-            return
-        super().closeEvent(event)
-
+        event.ignore()
+        self.reject()

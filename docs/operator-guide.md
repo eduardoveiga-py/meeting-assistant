@@ -1,6 +1,8 @@
+> Para as mudanças da 0.6.0 em avaliação, consulte [operação assistida](operator-improvements-0.6.md).
+
 # Guia rápido do operador — 0.5.1
 
-Use o instalador publicado conforme [Instalação](installation.md). A versão 0.5.1 está preparada no código; confira a versão disponível em Releases antes de baixar.
+Use o instalador publicado conforme [Instalação](installation.md). A versão estável 0.5.1 está publicada em Releases.
 
 Antes da reunião: confira tela estendida, JWL, OBS, Zoom e a saída recebida. Para atualizar ou resolver falhas, consulte [recuperação, matriz e retorno de versão](recovery-and-updates.md).
 

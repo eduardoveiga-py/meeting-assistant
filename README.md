@@ -9,7 +9,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Python-runtime%20incluído-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python runtime incluído">
-  <img src="https://img.shields.io/badge/Release-0.5.0-22C55E?style=for-the-badge" alt="Release 0.5.0">
+  <img src="https://img.shields.io/badge/Release-0.5.1-22C55E?style=for-the-badge" alt="Release 0.5.1">
   <img src="https://img.shields.io/badge/Status-primeira%20release%20instalável-F59E0B?style=for-the-badge" alt="Primeira release instalável">
 </p>
 
@@ -64,7 +64,7 @@ O comportamento **JWL ↔ Zoom ↔ Salão** foi validado pelo operador em **21/0
 **Você não precisa instalar Python, PySide6, OBS WebSocket ou qualquer biblioteca Python.**
 
 1. Abra a área de **Releases** do repositório.
-2. Baixe `MeetingAssistant-Setup-0.5.0.exe`.
+2. Baixe `MeetingAssistant-Setup-0.5.1.exe`.
 3. Execute o instalador e siga as etapas.
 4. Abra o **Meeting Assistant** pelo menu Iniciar ou pelo atalho criado.
 5. Na primeira abertura, use o **Assistente de instalação e configuração** para verificar o ambiente.
@@ -136,7 +136,7 @@ Depois de instalar:
 | Tecla | Ação |
 |---|---|
 | F1 | Ajuda |
-| F2 | Fundo / Texto do Ano |
+| F2 | Texto do Ano |
 | F3 | Palco |
 | F4 | Mídia |
 | F5 | Zoom → Salão / voltar ao JWL |
@@ -183,7 +183,7 @@ O responsável confirmou áudio e câmera IP no equipamento atual em 24/09/2026.
 
 1. executar e registrar os cenários de reinício de OBS/Zoom, reconexão de monitor e abertura durante vídeo;
 2. conferir atualização e retorno de versão no equipamento habitual;
-3. publicar a versão preparada após o aceite correspondente.
+3. validar as novas integrações descritas no guia da 0.6.0 antes de adotá-las.
 
 O [guia de recuperação](docs/recovery-and-updates.md) contém procedimentos e resultados esperados. O ensaio completo em Windows limpo está fora desta entrega por decisão do responsável. Atualizador automático e tutorial ilustrado são melhorias futuras; o procedimento atual de atualização é manual.
 
@@ -197,6 +197,9 @@ O Meeting Assistant é um projeto independente e não oficial do JW Library, Zoo
 
 Arquivos de configuração podem conter informações privadas. Não publique `%APPDATA%\\MeetingAssistant\\settings.json` ou sessões de telemetria que contenham dados operacionais sem revisão.
 
-## Preparação da versão 0.5.1
+## Evolução 0.6.0 em avaliação
 
-A versão 0.5.1 está preparada no código; a versão publicada indicada acima continua sendo a 0.5.0 até uma nova release. Consulte o [guia rápido](docs/operator-guide.md) e a [matriz de recuperação e atualização](docs/recovery-and-updates.md). Áudio e câmera IP foram confirmados pelo responsável no equipamento atual em 24/09/2026.
+A release estável publicada é a **0.5.1**. As melhorias de operação da 0.6.0 estão descritas em
+[operação assistida](docs/operator-improvements-0.6.md), com checkpoint de restauração e roteiro de aceite.
+A [pesquisa de mídias e JW Library](docs/jwl-media-import-research.md) explica a importação assistida proposta,
+sem criar player próprio nem alterar o banco do JWL.

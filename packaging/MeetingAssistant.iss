@@ -39,6 +39,7 @@ Source: "{#SourcePath}..\CHANGELOG.md"; DestDir: "{app}\documentation"; Flags: i
 Source: "{#SourcePath}..\docs\operator-guide.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
 Source: "{#SourcePath}..\docs\installation.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
 Source: "{#SourcePath}..\docs\recovery-and-updates.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
+Source: "{#SourcePath}..\docs\operator-improvements-0.6.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

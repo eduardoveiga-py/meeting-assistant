@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import time
+from dataclasses import replace
+
 from PySide6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
@@ -97,10 +100,10 @@ class MainWindow(QMainWindow):
         from meeting_assistant.ui.shortcuts import MainWindowShortcuts
 
         self._shortcuts = MainWindowShortcuts(self, [
-            lambda: self._select_mode(OperatingMode.BACKGROUND),
-            lambda: self._select_mode(OperatingMode.SPEAKER),
-            lambda: self._select_mode(OperatingMode.MEDIA),
-            lambda: self._select_mode(OperatingMode.ZOOM),
+            lambda: self._manual_select(OperatingMode.BACKGROUND),
+            lambda: self._manual_select(OperatingMode.SPEAKER),
+            lambda: self._manual_select(OperatingMode.MEDIA),
+            lambda: self._manual_select(OperatingMode.ZOOM),
             self._toggle_automation, self._activate_safe_scene,
             self._start_meeting, self._show_diagnostics, self._show_settings,
         ])
@@ -118,6 +121,23 @@ class MainWindow(QMainWindow):
         self._yeartext_timer.timeout.connect(self._refresh_yeartext_notice)
         self._yeartext_timer.start()
         self._refresh_yeartext_notice()
+        from meeting_assistant.services.zoom_audio import ZoomAudio
+
+        self.zoom_audio = ZoomAudio(self)
+        self.zoom_audio.result.connect(self._zoom_audio_result)
+        self._zoom_audio_state = "unknown"
+        self._zoom_audio_seen = 0.0
+        self._operator_timer = QTimer(self)
+        self._operator_timer.setInterval(3000)
+        self._operator_timer.timeout.connect(self._operator_tick)
+        from meeting_assistant.services.global_hotkeys import GlobalHotkeys
+
+        self.global_keys = GlobalHotkeys(self)
+        self.global_keys.pressed.connect(self._global_key)
+        self.global_keys.status.connect(self.automation_status.setToolTip)
+        self._operator_timer.start()
+        self.obs.preview_age.connect(self._preview_age)
+        self.obs.operator_finished.connect(self._operator_result)
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -174,14 +194,14 @@ class MainWindow(QMainWindow):
         controls.setContentsMargins(10, 9, 10, 10)
         controls.setSpacing(4)
 
-        controls.addWidget(self._section_label("SAÍDA DO SALÃO"))
+        controls.addWidget(self._section_label("CONTROLE DA APRESENTAÇÃO"))
 
         mode_grid = QGridLayout()
         mode_grid.setHorizontalSpacing(6)
         mode_grid.setVerticalSpacing(6)
         self.mode_buttons: dict[OperatingMode, QPushButton] = {}
         button_specs = [
-            (OperatingMode.BACKGROUND, "📖 Fundo", 0, 0),
+            (OperatingMode.BACKGROUND, "📖 Texto do Ano", 0, 0),
             (OperatingMode.SPEAKER, "🎤 Palco", 0, 1),
             (OperatingMode.MEDIA, "🎥 Mídia", 1, 0),
             (OperatingMode.ZOOM, "💻 Zoom → Salão", 1, 1),
@@ -189,7 +209,7 @@ class MainWindow(QMainWindow):
         for mode, text, row, col in button_specs:
             button = QPushButton(text)
             button.setCheckable(True)
-            button.clicked.connect(lambda checked=False, m=mode: self._select_mode(m))
+            button.clicked.connect(lambda checked=False, m=mode: self._manual_select(m))
             self.mode_buttons[mode] = button
             mode_grid.addWidget(button, row, col)
         controls.addLayout(mode_grid)
@@ -205,11 +225,17 @@ class MainWindow(QMainWindow):
         self.automation_status.setWordWrap(True)
         controls.addWidget(self.automation_status)
 
-        panic = QPushButton("🛟 Cena segura → Palco")
+        panic = QPushButton("🛟 Contingência")
         panic.setObjectName("DangerButton")
+        panic.setToolTip("Pausa automação; câmera disponível: Palco. Falha ou dúvida: Texto do Ano.")
         panic.clicked.connect(self._activate_safe_scene)
         automation_row.addWidget(panic, 1)
 
+        self.zoom_mic_button = QPushButton("🎙 Microfone Zoom · verificar")
+        self.zoom_mic_button.setObjectName("ZoomMic")
+        self.zoom_mic_button.setToolTip("Controla seu microfone no Zoom; não silencia participantes.")
+        self.zoom_mic_button.clicked.connect(self._zoom_microphone)
+        controls.addWidget(self.zoom_mic_button)
         controls.addSpacing(2)
         controls.addWidget(self._section_label("SISTEMA"))
 
@@ -222,7 +248,7 @@ class MainWindow(QMainWindow):
 
         system_grid = QGridLayout()
         system_grid.setHorizontalSpacing(6)
-        diagnostics = QPushButton("🩺 Verificar")
+        diagnostics = QPushButton("🩺 Operação")
         diagnostics.clicked.connect(self._show_diagnostics)
         settings_button = QPushButton("⚙️ Ajustes")
         settings_button.clicked.connect(self._show_settings)
@@ -236,7 +262,7 @@ class MainWindow(QMainWindow):
         self.jwl_probe_button.hide()
 
         controls.addSpacing(2)
-        controls.addWidget(self._section_label("RETORNO — SALÃO"))
+        controls.addWidget(self._section_label("PREVIEW DO OBS — NÃO É RETORNO REMOTO"))
 
         preview_row = QHBoxLayout()
         self.preview = QLabel("Conectando ao OBS…\n16:9")
@@ -253,7 +279,7 @@ class MainWindow(QMainWindow):
         controls.addLayout(preview_row, 1)
 
         self.zoom_output_label = QLabel(
-            "Zoom recebe: OBS Virtual Camera • transições feitas pelo OBS"
+            "Envio previsto: OBS Virtual Camera • confira a recepção no Zoom"
         )
         self.zoom_output_label.setObjectName("ZoomOutputLabel")
         self.zoom_output_label.setAlignment(Qt.AlignCenter)
@@ -311,6 +337,8 @@ class MainWindow(QMainWindow):
     def _section_label(self, text: str) -> QLabel:
         label = QLabel(text)
         label.setObjectName("SectionTitle")
+        label.setWordWrap(True)
+        label.setMinimumWidth(0)
         return label
 
     def _select_mode(self, mode: OperatingMode) -> None:
@@ -376,7 +404,74 @@ class MainWindow(QMainWindow):
             self.state.automation_enabled = False
             self._set_automation_ui(False)
             self.automation_enabled_changed.emit(False)
-        self._select_mode(OperatingMode.SPEAKER)
+        if self.zoom_hall.active:
+            self.zoom_hall.restore_jwl()
+        self.obs.operator_task("contingency", replace(self.settings))
+
+    def _preview_age(self, age):
+        if age < 0:
+            text = "Preview aguardando imagem • recepção remota não verificada"
+        elif age > 1:
+            text = f"Preview atrasado {age:.0f}s • não indica a fluidez recebida no Zoom"
+        else:
+            text = "Preview OBS 480×270 · até 20 FPS • confira a recepção no Zoom"
+        self.zoom_output_label.setText(text)
+
+    def _manual_select(self, mode):
+        if mode is not OperatingMode.ZOOM and self.state.automation_enabled:
+            self._toggle_automation()
+            self.automation_status.setText("Controle manual. Use Ativar automação para retomar.")
+        self._select_mode(mode)
+
+    def _global_key(self, key):
+        from PySide6.QtWidgets import QApplication
+
+        if QApplication.activeModalWidget() is not None:
+            return
+        modes = {2: OperatingMode.BACKGROUND, 3: OperatingMode.SPEAKER,
+                 4: OperatingMode.MEDIA, 5: OperatingMode.ZOOM}
+        if key == 7:
+            self._activate_safe_scene()
+        elif key in modes:
+            self._manual_select(modes[key])
+
+    def closeEvent(self, event):
+        self._operator_timer.stop()
+        self.global_keys.set_enabled(False)
+        super().closeEvent(event)
+
+    def _operator_tick(self):
+        self.global_keys.set_enabled(self.settings.global_shortcuts)
+        visible = self.isVisible() and not self.isMinimized()
+        if hasattr(self.obs, "_preview_stream"):
+            self.obs._preview_stream.visible = visible
+        if time.monotonic() - self._zoom_audio_seen > 5:
+            self._zoom_audio_state = "unknown"
+            self.zoom_mic_button.setText("🎙 Microfone Zoom · verificar")
+            self.zoom_mic_button.setProperty("state", "unknown")
+            self._repolish(self.zoom_mic_button)
+        self.zoom_audio.request()
+
+    def _zoom_microphone(self):
+        state = self._zoom_audio_state if time.monotonic() - self._zoom_audio_seen <= 5 else "unknown"
+        action = {"live": "mute", "muted": "unmute"}.get(state, "inspect")
+        self.zoom_mic_button.setText("🎙 Microfone Zoom · verificando…")
+        self.zoom_audio.request(action)
+
+    def _zoom_audio_result(self, state, message):
+        self._zoom_audio_state = state
+        self._zoom_audio_seen = time.monotonic()
+        self.zoom_mic_button.setText({
+            "live": "🎙 Microfone Zoom aberto · Silenciar",
+            "muted": "🔇 Microfone Zoom mudo · Ativar",
+        }.get(state, "🎙 Microfone Zoom · não confirmado"))
+        self.zoom_mic_button.setProperty("state", state)
+        self.zoom_mic_button.setToolTip(message)
+        self._repolish(self.zoom_mic_button)
+
+    def _operator_result(self, action, ok, result):
+        if action == "contingency":
+            self.automation_status.setText(str(result))
 
     def _set_automation_ui(self, enabled: bool) -> None:
         if enabled:
@@ -426,6 +521,8 @@ class MainWindow(QMainWindow):
         )
 
     def _on_obs_connected(self, connected: bool, message: str) -> None:
+        if not connected:
+            self.remote_confirmation = "pendente após desconexão OBS"
         self.obs_connected = connected
         if connected:
             current = self.yeartext_store.current()
@@ -461,7 +558,7 @@ class MainWindow(QMainWindow):
         if mode is not None and not self.zoom_hall.active:
             self.state.set_mode(mode)
         self._refresh_mode()
-        self._start_preview_fade()
+        # Do not animate opacity over incoming video frames.
         self.obs.refresh_preview()
 
     def _start_preview_fade(self) -> None:
@@ -499,7 +596,7 @@ class MainWindow(QMainWindow):
         )
         self.preview.setPixmap(scaled)
         self.preview.setToolTip(
-            f"Preview 640×360 do OBS Program • {self.current_obs_scene or 'cena atual'}"
+            f"Preview leve do OBS Program • {self.current_obs_scene or 'cena atual'}"
         )
 
     def _on_obs_preview_error(self, message: str) -> None:
@@ -662,7 +759,7 @@ class MainWindow(QMainWindow):
 
         button.setText("💻 Zoom → Salão")
         self.zoom_output_label.setText(
-            "Zoom recebe: OBS Virtual Camera • transições feitas pelo OBS"
+            "Envio previsto: OBS Virtual Camera • confira a recepção no Zoom"
         )
         if self.current_obs_scene:
             mode = self._mode_for_scene(self.current_obs_scene)
@@ -732,6 +829,7 @@ class MainWindow(QMainWindow):
             (self.settings.scene_background, self.settings.scene_speaker,
              self.settings.scene_media) = STANDARD_SCENES
             self.settings.obs_standard_scenes = True
+            self.settings.camera_source_name = "Meeting Assistant - Câmera IP"
             self.settings_service.save(self.settings)
         if self._setup_assistant is None:
             QMessageBox.information(self, "Preparação OBS", message)
@@ -745,6 +843,9 @@ class MainWindow(QMainWindow):
             pending.obs_start_at_logon and pending.obs_executable != self.settings.obs_executable
         ):
             configure_obs_logon(pending.obs_start_at_logon, pending.obs_executable)
+        from meeting_assistant.services.setup_assistant import validate_settings
+
+        validate_settings(pending)
         previous_obs_config = self._obs_config()
         self.settings_service.save(pending)
         for field in fields(pending):
@@ -808,6 +909,13 @@ class MainWindow(QMainWindow):
             self.zoom_output_label.setText(message + " • Selecione OBS Virtual Camera no Zoom.")
 
     def _show_diagnostics(self) -> None:
+        from meeting_assistant.ui.operator_dialog import OperatorDialog
+
+        dialog = OperatorDialog(self)
+        dialog.exec()
+        dialog.deleteLater()
+
+    def _legacy_diagnostics(self) -> None:
         display_lines = "\n".join(
             f"• {'Principal' if display.primary else 'Secundária'}: "
             f"{display.name} • {display.resolution} • {display.x},{display.y}"
@@ -827,7 +935,7 @@ class MainWindow(QMainWindow):
             return
 
         configured = {
-            "Fundo": self.settings.scene_background,
+            "Texto do Ano": self.settings.scene_background,
             "Palco": self.settings.scene_speaker,
             "Mídia": self.settings.scene_media,
         }
@@ -903,7 +1011,7 @@ class MainWindow(QMainWindow):
             button.setChecked(mode == actual_mode)
 
         readable = {
-            OperatingMode.BACKGROUND: "Fundo",
+            OperatingMode.BACKGROUND: "Texto do Ano",
             OperatingMode.SPEAKER: "Palco",
             OperatingMode.MEDIA: "Mídia",
             OperatingMode.ZOOM: "Zoom → Salão",
@@ -945,6 +1053,15 @@ class MainWindow(QMainWindow):
     def _apply_style(self) -> None:
         self.setStyleSheet(
             """
+            QTabWidget::pane { border: 1px solid #46546a; background: #11151c; }
+            QTabBar::tab { background: #222c3b; color: #edf2fa; padding: 8px 10px; }
+            QTabBar::tab:selected { background: #174a70; color: #ffffff; border-bottom: 3px solid #66c8ff; }
+            QTabBar::tab:hover { background: #31465c; }
+            QTabBar::tab:disabled { background: #1e2530; color: #9ca9b9; }
+            QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid #8da1bb;
+                                   background: #1c2530; border-radius: 3px; }
+            QCheckBox::indicator:checked { background: #2b92d2; border: 2px solid #b5e4ff; }
+            QLineEdit { border: 1px solid #46546a; padding: 3px; border-radius: 3px; }
             QMainWindow, QWidget {
                 background: #111318;
                 color: #f2f4f8;
@@ -1049,6 +1166,9 @@ class MainWindow(QMainWindow):
                 color: #8b95a3;
                 background: #1c222b;
             }
+            QPushButton#ZoomMic { background: #174a70; border: 2px solid #4da6de; padding: 8px; }
+            QPushButton#ZoomMic[state='live'] { background: #612c31; border-color: #f09b9b; }
+            QPushButton#ZoomMic[state='muted'] { background: #16452d; border-color: #70c797; }
             QPushButton#DangerButton {
                 background: #4a2528;
                 border-color: #6b3036;
