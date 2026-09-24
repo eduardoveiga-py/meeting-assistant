@@ -1,12 +1,10 @@
-# Guia do operador — versão de desenvolvimento
+# Guia rápido do operador — 0.5.1
 
-Este guia descreve o que existe hoje. O tutorial ilustrado completo será produzido após estabilizar a interface, com imagens reais e passos numerados de instalação, configuração, uso, testes e solução de problemas. A nova captura anual e preparação das fontes estão implementadas para teste físico. Áudio, atualizador e instalador permanecem no [roteiro](roadmap-after-hall-validation.md).
+Use o instalador publicado conforme [Instalação](installation.md). A versão 0.5.1 está preparada no código; confira a versão disponível em Releases antes de baixar.
 
-## Instalar e abrir
+Antes da reunião: confira tela estendida, JWL, OBS, Zoom e a saída recebida. Para atualizar ou resolver falhas, consulte [recuperação, matriz e retorno de versão](recovery-and-updates.md).
 
-Use os comandos do [README](../README.md) para preparar o ambiente de desenvolvimento. Aplicativos externos: [OBS Studio](https://obsproject.com/), [Zoom](https://zoom.us/download) e [JW Library](https://www.jw.org/pt/ajuda-online/jw-library/).
-
-Configurações do app ficam em `%APPDATA%\MeetingAssistant\settings.json`. Feche o app antes de copiar esse arquivo como backup; ele pode conter informações privadas, portanto não o publique.
+As configurações ficam em `%APPDATA%\MeetingAssistant`. Faça backup com o app fechado; essa pasta pode conter dados privados.
 
 ## Configurar o ambiente
 
@@ -16,7 +14,7 @@ Configurações do app ficam em `%APPDATA%\MeetingAssistant\settings.json`. Fech
 4. Configure as cenas e fontes do ambiente: **Texto do Ano** com a foto, **Palco** com a câmera e **Mídias** com a captura adequada do JWL. Mapeie os nomes reais no app.
 5. Habilite dois monitores no Zoom antes de entrar na reunião. As duas janelas precisam existir para Zoom → Salão.
 6. Iniciar reunião solicita e verifica a câmera virtual, inclusive com OBS aberto. Também há botão para isso na tela de Texto do Ano/fontes OBS. Selecione OBS Virtual Camera no Zoom; ativação no OBS não prova seleção no Zoom.
-7. Configure o áudio separadamente. O retorno dos participantes não deve compor o áudio enviado de volta ao Zoom; a solução integrada ainda está pendente.
+7. Use o assistente de áudio e confira o roteamento. O retorno dos participantes não deve compor o áudio enviado de volta ao Zoom. Áudio e câmera IP foram confirmados pelo responsável no equipamento atual em 24/09/2026.
 
 ## Operar
 
@@ -45,7 +43,7 @@ O preview atual é obtido do OBS. Para confirmar a troca física, olhe também p
 | Sintoma | Conferência inicial |
 | --- | --- |
 | OBS desconectado | OBS aberto, servidor WebSocket habilitado, host/porta/senha iguais |
-| Cena não encontrada | Nome e mapeamento em Ajustes; hoje a criação é manual |
+| Cena não encontrada | Nome e mapeamento em Ajustes; o assistente pode criar cenas padrão, preservando as existentes |
 | Câmera ausente no Zoom | Iniciar câmera virtual no OBS e selecionar OBS Virtual Camera no Zoom |
 | Janela secundária Zoom ausente | Dois monitores habilitados antes da reunião; não fechar manualmente a janela secundária |
 | JWL não retorna | Registrar sessão/horário e verificar monitor físico; não considerar só o preview como evidência |
@@ -54,20 +52,27 @@ O preview atual é obtido do OBS. Para confirmar a troca física, olhe também p
 | Áudio duplicado/eco | Conferir captura de retorno Zoom e roteamento da mesa; evitar que retorno componha envio |
 | JWL fecha ao abrir | Verificar se também ocorre fora do app e registrar erro do Windows; não atribuir automaticamente à troca de telas |
 
-## Tutorial ilustrado final — conteúdo obrigatório
+## Entender a pré-verificação
 
-Capturas reais da instalação limpa e primeiro uso; seleção de monitor; fontes/cenas OBS; câmera virtual; áudio; criação/atualização da foto anual; operação dos botões; encerramento; matriz de testes; erros comuns; atualização, backup e recuperação. Cada figura terá legenda, ação e resultado esperado, sem credenciais ou nomes de participantes.
+No assistente de instalação e configuração, aba **Preparar**, use **Verificar ambiente novamente**. O botão **Verificar / F9** da tela principal continua sendo o diagnóstico rápido existente.
+
+- **INSTALAÇÃO:** aplicativo detectado no computador; não significa que está aberto.
+- **CONEXÃO:** resposta ao teste naquele momento; câmera virtual ativa não prova seleção no Zoom.
+- **CONFIGURAÇÃO:** cena existe, link foi preenchido ou foto foi salva; não certifica o conteúdo transmitido.
+- **NÃO VERIFICADO:** a consulta não obteve evidência. Corrija a conexão e execute novamente.
+- **OPERADOR:** marque apenas após observar o equipamento real. As caixas começam desmarcadas a cada abertura e não alteram a automação. Desmarque e repita o teste após mudar dispositivos ou roteamento.
 
 ## Encerrar e atualizar
 
-O encerramento assistido está planejado. Por enquanto, confirme o fim da reunião e encerre os aplicativos conforme a rotina do operador. Para atualizar o app, feche apenas ele e siga o README. Não modifique o núcleo protegido para acomodar outras funções.
+O encerramento assistido está planejado. Por enquanto, confirme o fim da reunião e encerre os aplicativos conforme a rotina do operador. Para atualizar o app, siga o procedimento de [backup, atualização e retorno](recovery-and-updates.md). Não modifique o núcleo protegido para acomodar outras funções.
 
 ## Configuração da câmera IP
 
-A nova configuração em Ajustes, os nomes padrão das cenas e o início do OBS na bandeja estão descritos em [Câmera IP e OBS](obs-ip-camera.md). Implementação entregue; teste físico ainda pendente. Salvar os campos não acessa a câmera; aplicar a preparação pode iniciar a recepção no OBS.
+A nova configuração em Ajustes, os nomes padrão das cenas e o início do OBS na bandeja estão descritos em [Câmera IP e OBS](obs-ip-camera.md). Funcionamento no equipamento atual confirmado pelo responsável em 24/09/2026. Salvar os campos não acessa a câmera; aplicar a preparação pode iniciar a recepção no OBS.
 
 
 ## Foto do Texto do Ano e fontes
 
 Siga o [passo a passo de captura e teste](yeartext-and-obs.md). A imagem só é salva após confirmação do operador. A gravação não altera a calibração do sensor. A verificação de fontes informa configuração, não valida sozinha o conteúdo mostrado aos participantes.
+
 

@@ -15,6 +15,7 @@ import psutil
 
 from meeting_assistant.services.meeting_launcher import zoom_join_uri
 from meeting_assistant.services.obs_setup import find_obs_executable
+from meeting_assistant.services.preflight import Check, inspect_obs
 
 PACKAGES = {"OBS": "OBSProject.OBSStudio", "Zoom": "Zoom.Zoom"}
 SCHEMA = 1
@@ -133,58 +134,42 @@ def install_application(app):
 
 def inspect_environment(settings):
     """Worker-only: bounded disk/process/OBS probes; never logs passwords or URLs."""
-    rows = []
-    rows.append(("OBS instalado", find_obs_executable(settings.obs_executable) is not None))
+    rows = [Check("INSTALAÇÃO", "OBS detectado", find_obs_executable(settings.obs_executable) is not None)]
     candidates = [
-        Path(os.environ.get(env, "")) / tail
+        Path(os.environ[env]) / tail
         for env, tail in (
             ("APPDATA", "Zoom/bin/Zoom.exe"),
             ("LOCALAPPDATA", "Zoom/bin/Zoom.exe"),
             ("LOCALAPPDATA", "Programs/Zoom/bin/Zoom.exe"),
             ("ProgramFiles", "Zoom/bin/Zoom.exe"),
         )
+        if os.environ.get(env)
     ]
     if settings.zoom_executable:
         candidates = [Path(settings.zoom_executable)]
-    rows.append(("Zoom instalado", any(p.is_file() for p in candidates)))
-    jwl = False
+    rows.append(Check("INSTALAÇÃO", "Zoom detectado", any(p.is_file() for p in candidates)))
+    jwl = None
     if os.name == "nt":
-        result = subprocess.run(
-            [
-                "powershell.exe",
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "Get-AppxPackage -Name WatchtowerBibleandTractSo.45909CDBADF3C | "
-                "Select-Object -ExpandProperty Name",
-            ],
-            capture_output=True,
-            timeout=20,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-        jwl = result.returncode == 0 and b"Watchtower" in result.stdout
-    rows.append(("JW Library instalado", jwl))
-    rows.append(("Link Zoom preenchido", bool(settings.zoom_join_url)))
+        try:
+            result = subprocess.run(
+                [
+                    "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                    "Get-AppxPackage -Name WatchtowerBibleandTractSo.45909CDBADF3C | "
+                    "Select-Object -ExpandProperty Name",
+                ],
+                capture_output=True, timeout=20, creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+            if result.returncode == 0:
+                jwl = b"Watchtower" in result.stdout
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    rows.append(Check("INSTALAÇÃO", "JW Library detectado", jwl))
+    rows.append(Check(
+        "CONFIGURAÇÃO", "Link Zoom preenchido (entrada não testada)", bool(settings.zoom_join_url)
+    ))
     import obsws_python as obs
 
-    client = None
-    try:
-        client = obs.ReqClient(
-            host=settings.obs_host, port=settings.obs_port, password=settings.obs_password, timeout=3
-        )
-        client.send("GetVersion", raw=True)
-        rows.append(("WebSocket conectado e autenticado", True))
-        names = {r["sceneName"] for r in client.send("GetSceneList", raw=True)["scenes"]}
-        for name in (settings.scene_background, settings.scene_speaker, settings.scene_media):
-            rows.append((f"Cena {name}", name in names))
-        rows.append(
-            ("Câmera virtual ativa", bool(client.send("GetVirtualCamStatus", raw=True)["outputActive"]))
-        )
-    except Exception:
-        rows.append(("WebSocket: conferir OBS aberto, endereço, porta e senha", False))
-    finally:
-        if client is not None:
-            client.disconnect()
+    rows.extend(inspect_obs(settings, obs.ReqClient))
     return rows
 
 
@@ -207,3 +192,4 @@ def create_standard_scenes(settings):
         return "Cenas padrão confirmadas. Fontes e câmera ainda precisam ser preparadas e testadas."
     finally:
         client.disconnect()
+

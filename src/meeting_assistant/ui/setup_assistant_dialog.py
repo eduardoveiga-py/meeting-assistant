@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 from meeting_assistant.services import setup_assistant as service
 from meeting_assistant.services.display_service import resolve_hall_display
 from meeting_assistant.services.obs_setup import STANDARD_SCENES, camera_url
+from meeting_assistant.services.preflight import Check
 from meeting_assistant.ui.hall_setup_dialog import HallSetupDialog
 from meeting_assistant.ui.settings_dialog import SettingsDialog
 from meeting_assistant.ui.window_geometry import ScreenFitController
@@ -74,6 +75,17 @@ class SetupAssistantDialog(QDialog):
         self.checks.setReadOnly(True)
         self.checks.setMinimumHeight(100)
         layout.addWidget(self.checks)
+        self.manual_checks = []
+        for label in (
+            "Áudio e câmera IP conferidos no equipamento atual",
+            "Duas janelas Zoom e retorno ao JWL conferidos",
+        ):
+            checkbox = QCheckBox(label)
+            checkbox.setToolTip("Confirmação do operador nesta sessão; não é um teste automático.")
+            checkbox.toggled.connect(self._render_checks)
+            self.manual_checks.append(checkbox)
+            layout.addWidget(checkbox)
+        self._check_rows = []
         self.allow = QCheckBox("Autorizo a ação e os termos de instalação.")
         self.allow.setToolTip(
             "WinGet mantém a verificação de integridade. UAC/instalador podem abrir janelas do Windows."
@@ -170,20 +182,27 @@ class SetupAssistantDialog(QDialog):
             display = resolve_hall_display(
                 self.owner.displays.snapshot(), self.owner.settings.hall_display_key
             )
-            value += [
-                ("Tela do Salão conectada", display is not None),
-                ("Foto do Texto do Ano salva", self.owner.yeartext_store.current() is not None),
+            self._check_rows = value + [
+                Check("CONEXÃO", "Tela do Salão conectada", display is not None),
+                Check(
+                    "CONFIGURAÇÃO", "Foto do Texto do Ano salva",
+                    self.owner.yeartext_store.current() is not None,
+                ),
             ]
-            self.checks.setPlainText(
-                "\n".join(("OK · " if status else "PENDENTE · ") + name for name, status in value)
-                + "\nMANUAL · Câmera, áudio, duas janelas Zoom e retorno JWL precisam de ensaio real."
-            )
+            self._render_checks()
             self.status.setText("Verificação concluída. Pendências aparecem na aba Preparar.")
         else:
             self.status.setText(str(value))
         if ok and self._completion:
             self._completion()
         self._completion = None
+
+    def _render_checks(self):
+        manual = [
+            "OPERADOR · " + ("CONFIRMADO" if check.isChecked() else "NÃO CONFIRMADO") + " · " + check.text()
+            for check in self.manual_checks
+        ]
+        self.checks.setPlainText("\n".join([row.render() for row in self._check_rows] + manual))
 
     def _inspect(self):
         settings = replace(self.owner.settings)
@@ -274,3 +293,4 @@ class SetupAssistantDialog(QDialog):
             event.ignore()
             return
         super().closeEvent(event)
+

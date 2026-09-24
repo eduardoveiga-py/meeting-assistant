@@ -91,6 +91,13 @@ def test_assistant_embeds_forms_and_does_not_install_on_open(tmp_path, monkeypat
         assert dialog._save()
         assert owner.settings.obs_password == 'test'
         assert dialog.isVisible()
+        dialog._result(True, [])
+        assert 'OPERADOR · NÃO CONFIRMADO' in dialog.checks.toPlainText()
+        dialog.manual_checks[0].setChecked(True)
+        assert 'OPERADOR · CONFIRMADO · Áudio' in dialog.checks.toPlainText()
+        assert not dialog.manual_checks[1].isChecked()
+
     finally:
         dialog.close()
         owner.close()
+

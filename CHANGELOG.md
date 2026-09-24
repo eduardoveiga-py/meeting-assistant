@@ -1,6 +1,11 @@
 # Histórico de alterações
 
-## Não publicado — confiabilidade e distribuição
+## 0.5.1 — preparada, ainda não publicada
+
+- Pré-verificação separa instalação, conexão, configuração e confirmação do operador.
+- Falhas parciais de consulta preservam resultados obtidos; erros não expõem credenciais.
+- Guia curto de operação, matriz de recuperação e atualização/retorno de versão.
+- Áudio e câmera IP no equipamento atual confirmados pelo responsável em 24/09/2026.
 
 - Diagnóstico local por padrão, sincronização opcional e exportação textual para revisão.
 - Falhas de disco no diagnóstico isoladas da operação e fila de eventos limitada.
