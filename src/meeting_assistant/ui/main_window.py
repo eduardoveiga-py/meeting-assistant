@@ -404,11 +404,10 @@ class MainWindow(QMainWindow):
         )
 
     def set_telemetry_status(self, ok: bool, message: str) -> None:
-        state = "sincronizada" if ok else "local"
         session_id = self.telemetry_session_id or "sessão atual"
         self.footer.setText(
             "OBS é a fonte de verdade • Zoom → Salão é local • "
-            f"Telemetria {state}: {session_id}"
+            f"{message} • {session_id}"
         )
         self.footer.setToolTip(message)
 

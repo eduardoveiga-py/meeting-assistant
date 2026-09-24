@@ -2,7 +2,9 @@
 #define MyAppPublisher "Meeting Assistant"
 #define MyAppURL "https://github.com/eduardoveiga-py/meeting-assistant"
 #define MyAppExeName "MeetingAssistant.exe"
-#define MyAppVersion "0.5.0"
+#ifndef MyAppVersion
+  #error MyAppVersion must be supplied by scripts/build-windows.ps1
+#endif
 
 [Setup]
 AppId={{E23B3DD7-1D83-4BD0-AF6E-1A5E27DD98F1}

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
@@ -7,6 +9,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGroupBox,
@@ -194,8 +197,10 @@ class SettingsDialog(QDialog):
         telemetry_group = QGroupBox("Diagnóstico automático")
         telemetry_form = QFormLayout(telemetry_group)
 
-        self.telemetry_check = QCheckBox("Enviar telemetria técnica automaticamente")
+        self.telemetry_check = QCheckBox("Gravar diagnóstico técnico localmente")
         self.telemetry_check.setChecked(settings.telemetry_enabled)
+        self.telemetry_sync_check = QCheckBox("Sincronizar com repositório (opcional)")
+        self.telemetry_sync_check.setChecked(settings.telemetry_sync_enabled)
         self.telemetry_screenshots_check = QCheckBox(
             "Incluir screenshots em eventos importantes"
         )
@@ -206,13 +211,18 @@ class SettingsDialog(QDialog):
         )
 
         telemetry_form.addRow("", self.telemetry_check)
+        telemetry_form.addRow("", self.telemetry_sync_check)
         telemetry_form.addRow("", self.telemetry_screenshots_check)
-        telemetry_form.addRow("Repositório privado", self.telemetry_repo_edit)
+        telemetry_form.addRow("Repositório de destino", self.telemetry_repo_edit)
+        export_button = QPushButton("Exportar última sessão para revisão…")
+        export_button.clicked.connect(self._export_diagnostics)
+        telemetry_form.addRow(export_button)
 
         telemetry_hint = QLabel(
-            "A telemetria é gravada primeiro em %LOCALAPPDATA% e sincronizada em "
-            "segundo plano. Falhas de Git/rede não afetam a reunião. "
-            "Senhas, tokens e o parâmetro pwd do Zoom são removidos antes do envio. "
+            "O diagnóstico fica local por padrão. Envio opcional exige Git, acesso ao destino e "
+            "verificação da privacidade do repositório pelo operador. "
+            "Screenshots capturam todos os monitores e podem conter dados pessoais; "
+            "não entram na exportação ZIP. A remoção automática de segredos não substitui a revisão. "
             "Alterações desta seção valem no próximo reinício."
         )
         telemetry_hint.setWordWrap(True)
@@ -289,6 +299,25 @@ class SettingsDialog(QDialog):
             self.prepare_obs_requested = True
             self.accept()
 
+    def _export_diagnostics(self) -> None:
+        from meeting_assistant.services.diagnostics_export import export_latest_session
+
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Exportar diagnóstico para revisão", "diagnostico-meeting-assistant.zip", "ZIP (*.zip)"
+        )
+        if not filename:
+            return
+        try:
+            export_latest_session(Path(filename))
+        except (OSError, ValueError):
+            QMessageBox.warning(
+                self, "Diagnóstico", "Não foi possível exportar. Confira sessão e pasta de destino."
+            )
+            return
+        QMessageBox.information(
+            self, "Diagnóstico exportado", "Arquivo salvo localmente. Revise os textos antes de compartilhar."
+        )
+
     @staticmethod
     def _scene_combo(current: str, available_scenes: list[str]) -> QComboBox:
         combo = QComboBox()
@@ -317,6 +346,6 @@ class SettingsDialog(QDialog):
         settings.obs_executable = self.obs_executable_edit.text().strip()
         settings.zoom_executable = self.zoom_executable_edit.text().strip()
         settings.telemetry_enabled = self.telemetry_check.isChecked()
+        settings.telemetry_sync_enabled = self.telemetry_sync_check.isChecked()
         settings.telemetry_screenshots = self.telemetry_screenshots_check.isChecked()
         settings.telemetry_repo_url = self.telemetry_repo_edit.text().strip()
-

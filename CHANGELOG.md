@@ -1,5 +1,14 @@
 # Histórico de alterações
 
+## Não publicado — confiabilidade e distribuição
+
+- Diagnóstico local por padrão, sincronização opcional e exportação textual para revisão.
+- Falhas de disco no diagnóstico isoladas da operação e fila de eventos limitada.
+- Recuperação de configurações inválidas com preservação do original e aviso ao operador.
+- Empacotamento em pasta consistente, metadados de versão e teste do executável no CI/release.
+- Pesquisa comparativa e critérios objetivos para concluir a versão operacional.
+- Núcleo validado JWL ↔ Zoom ↔ Salão e seus fingerprints preservados.
+
 ## 0.5.0 — primeira release instalável — 21/09/2026
 
 ### Entrega

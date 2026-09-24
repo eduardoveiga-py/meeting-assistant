@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, fields
+from hashlib import sha256
 from json import dumps, loads
 from os import environ
 from pathlib import Path
@@ -32,8 +33,9 @@ class AppSettings:
     obs_executable: str = ""
     zoom_executable: str = ""
     telemetry_enabled: bool = True
+    telemetry_sync_enabled: bool = False
     telemetry_screenshots: bool = False
-    telemetry_repo_url: str = "https://github.com/eduardoveiga-py/meeting-assistant-diagnostics.git"
+    telemetry_repo_url: str = ""
 
 
 class SettingsService:
@@ -44,19 +46,66 @@ class SettingsService:
         else:
             default_path = Path.home() / ".meeting-assistant" / "settings.json"
         self.path = path or default_path
+        self.recovery_message = ""
+        self._pending_backup: tuple[Path, bytes] | None = None
+
+    def _preserve_invalid(self, raw: bytes) -> None:
+        backup = self.path.with_name(f"{self.path.name}.invalid-{sha256(raw).hexdigest()[:12]}.bak")
+        self._pending_backup = (backup, raw)
+        try:
+            if not backup.exists():
+                backup.write_bytes(raw)
+            self._pending_backup = None
+            self.recovery_message = (
+                "Ajustes inválidos recuperados; o arquivo original foi preservado em backup."
+            )
+        except OSError:
+            self.recovery_message = (
+                "Ajustes inválidos recuperados em memória; não foi possível criar o backup."
+            )
 
     def load(self) -> AppSettings:
+        self.recovery_message = ""
         if not self.path.exists():
             return AppSettings()
         try:
-            data = loads(self.path.read_text(encoding="utf-8"))
+            raw = self.path.read_bytes()
+        except OSError:
+            self.recovery_message = "Não foi possível ler os ajustes; usando valores padrão nesta sessão."
+            return AppSettings()
+        try:
+            data = loads(raw.decode("utf-8-sig"))
             if not isinstance(data, dict):
-                return AppSettings()
+                raise ValueError("Settings must be an object")
 
             legacy_display_settings = "display_settings_version" not in data
-            known_fields = {field.name for field in fields(AppSettings)}
-            filtered = {key: value for key, value in data.items() if key in known_fields}
+            defaults = AppSettings()
+            filtered = {}
+            invalid = False
+            for field in fields(AppSettings):
+                if field.name not in data:
+                    continue
+                value = data[field.name]
+                default = getattr(defaults, field.name)
+                valid = type(value) is type(default)
+                if valid and field.name in {"obs_port", "camera_rtsp_port"}:
+                    valid = 1 <= value <= 65535
+                if valid and field.name == "display_settings_version":
+                    valid = value >= 1
+                if valid and field.name in {"obs_host", "scene_background", "scene_speaker", "scene_media"}:
+                    valid = bool(value.strip())
+                if valid:
+                    filtered[field.name] = value
+                else:
+                    invalid = True
             settings = AppSettings(**filtered)
+            scene_fields = ("scene_background", "scene_speaker", "scene_media")
+            if len({getattr(settings, name) for name in scene_fields}) != 3:
+                invalid = True
+                for name in scene_fields:
+                    setattr(settings, name, getattr(defaults, name))
+            if invalid:
+                self._preserve_invalid(raw)
             if legacy_display_settings:
                 # simulation=True used to be a historical default, not an explicit
                 # operator choice. Migrate once to the new physical-output default.
@@ -64,10 +113,16 @@ class SettingsService:
                 settings.simulation_enabled = False
                 settings.hall_display_key = ""
             return settings
-        except (OSError, TypeError, ValueError):
+        except (UnicodeError, TypeError, ValueError):
+            self._preserve_invalid(raw)
             return AppSettings()
 
     def save(self, settings: AppSettings) -> None:
+        if self._pending_backup is not None:
+            backup, raw = self._pending_backup
+            if not backup.exists():
+                backup.write_bytes(raw)
+            self._pending_backup = None
         settings.display_settings_version = DISPLAY_SETTINGS_VERSION
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = self.path.with_suffix(".tmp")
@@ -76,4 +131,3 @@ class SettingsService:
             encoding="utf-8",
         )
         temp_path.replace(self.path)
-
