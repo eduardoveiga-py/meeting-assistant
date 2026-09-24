@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -112,8 +112,10 @@ class OperatorDialog(QDialog):
             ("URL de rede RTSP / SRT / HTTP", "network"),
         ]:
             self.camera_mode.addItem(label, key)
+        camera.addWidget(QLabel("Tipo de câmera"))
         camera.addWidget(self.camera_mode)
         self.camera_choices = QComboBox()
+        camera.addWidget(QLabel("Fonte OBS ou dispositivo USB"))
         camera.addWidget(self.camera_choices)
         self.camera_url = QLineEdit()
         self.camera_url.setEchoMode(QLineEdit.Password)
@@ -124,6 +126,8 @@ class OperatorDialog(QDialog):
         self.camera_notice = QLabel("Fontes existentes preservam seu áudio. Confira o mixer antes de usar.")
         self.camera_notice.setWordWrap(True)
         camera.addWidget(self.camera_notice)
+        self.camera_mode.currentIndexChanged.connect(self.camera_mode_changed)
+        self.camera_mode_changed()
         end = self.page("Encerrar / Suporte")
         self.button(end, "Pausar automação", self.pause)
         self.button(end, "Silenciar meu microfone Zoom", lambda: owner.zoom_audio.request("mute"))
@@ -167,6 +171,7 @@ class OperatorDialog(QDialog):
         scroll = QScrollArea()
         body = QWidget()
         layout = QVBoxLayout(body)
+        layout.setAlignment(Qt.AlignTop)
         scroll.setWidget(body)
         scroll.setWidgetResizable(True)
         self.tabs.addTab(scroll, name)
@@ -276,9 +281,21 @@ class OperatorDialog(QDialog):
         if self.maintenance():
             self.owner._open_setup_assistant()
 
+    def camera_mode_changed(self):
+        mode = self.camera_mode.currentData()
+        self.camera_choices.clear()
+        self.camera_choices.setEnabled(mode != "network")
+        self.camera_url.setVisible(mode == "network")
+        self.camera_notice.setText(
+            "Fontes existentes preservam seu áudio; confira o mixer."
+            if mode == "existing"
+            else "Fontes criadas pelo app têm áudio silenciado. Confira a imagem no OBS."
+        )
+
     def list_cameras(self):
         if self.maintenance() and not self.obs_pending:
             self.obs_pending = True
+            self.camera_mode.setEnabled(False)
             if self.camera_mode.currentData() == "usb":
                 self.owner.obs.operator_task("camera_prepare", {"mode": "usb", "value": ""})
             else:
@@ -296,11 +313,13 @@ class OperatorDialog(QDialog):
             self.status.setText("Palco está mapeada a outro modo. Corrija os nomes nos ajustes primeiro.")
             return
         self.obs_pending = True
+        self.camera_mode.setEnabled(False)
         self.owner.obs.operator_task("camera_prepare", {"mode": mode, "value": value})
 
     def obs_result(self, action, ok, result):
         if action in {"camera_prepare", "camera_list"}:
             self.obs_pending = False
+            self.camera_mode.setEnabled(True)
         if not ok:
             self.status.setText(str(result))
         elif action == "camera_list":

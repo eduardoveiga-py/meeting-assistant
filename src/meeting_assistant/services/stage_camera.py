@@ -79,9 +79,22 @@ def prepare_camera(client, mode, value):
             raise ValueError("Selecione uma fonte existente no OBS.")
         kind, config = None, None
     elif mode == "usb":
-        name, kind, config = USB_SOURCE, "dshow_input", {"video_device_id": value}
+        name, kind, config = (
+            USB_SOURCE,
+            "dshow_input",
+            {"video_device_id": value, "deactivate_when_not_showing": False},
+        )
     elif mode == "network":
-        if urlsplit(value).scheme.lower() not in {"rtsp", "rtsps", "http", "https", "srt", "rtmp", "rtmps"}:
+        parsed = urlsplit(value)
+        if not parsed.hostname or parsed.scheme.lower() not in {
+            "rtsp",
+            "rtsps",
+            "http",
+            "https",
+            "srt",
+            "rtmp",
+            "rtmps",
+        }:
             raise ValueError("Use uma URL RTSP, HTTP, SRT ou RTMP válida.")
         name, kind = STREAM_SOURCE, "ffmpeg_source"
         config = {
