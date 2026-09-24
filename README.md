@@ -197,3 +197,7 @@ Veja o [roadmap detalhado](docs/roadmap-after-hall-validation.md).
 O Meeting Assistant é um projeto independente e não oficial do JW Library, Zoom ou OBS Studio. Nomes, marcas e aplicativos externos pertencem aos respectivos titulares.
 
 Arquivos de configuração podem conter informações privadas. Não publique `%APPDATA%\\MeetingAssistant\\settings.json` ou sessões de telemetria que contenham dados operacionais sem revisão.
+
+## Preparação da versão 0.5.1
+
+A versão 0.5.1 está preparada no código; a versão publicada indicada acima continua sendo a 0.5.0 até uma nova release. Consulte o [guia rápido](docs/operator-guide.md) e a [matriz de recuperação e atualização](docs/recovery-and-updates.md). Áudio e câmera IP foram confirmados pelo responsável no equipamento atual em 24/09/2026.
