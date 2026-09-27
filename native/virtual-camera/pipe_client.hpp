@@ -2,6 +2,8 @@
 #include <windows.h>
 #include <vector>
 #include <cstring>
+#include <chrono>
+#include <thread>
 #include "protocol.hpp"
 namespace ma {
 // All I/O has a deadline, including a server that connects but never replies.
@@ -45,10 +47,13 @@ inline bool read_frame(std::vector<uint8_t>& pixels) {
 inline HRESULT copy_frame(BYTE* target, DWORD length, LONG pitch) {
     if (!target || pitch < static_cast<LONG>(width)
         || length < static_cast<uint64_t>(pitch) * (height + height / 2)) return E_INVALIDARG;
-    static thread_local ULONGLONG next = 0;
-    auto now = GetTickCount64();
-    if (next > now && next - now < 100) Sleep(static_cast<DWORD>(next - now));
-    next = GetTickCount64() + 33;
+    using Clock = std::chrono::steady_clock;
+    static thread_local Clock::time_point next{};
+    const auto period = std::chrono::nanoseconds(1000000000 / 30);
+    const auto now = Clock::now();
+    if (next > now) std::this_thread::sleep_until(next);
+    else if (now - next > period) next = now;
+    next += period;
     std::vector<uint8_t> frame;
     const bool valid = read_frame(frame);
     for (uint32_t row = 0; row < height + height / 2; ++row) {

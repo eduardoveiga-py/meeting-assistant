@@ -165,3 +165,61 @@ def test_live_camera_does_not_compete_with_diagnostic_frame_consumer(monkeypatch
     dialog.host = actual_host
     dialog.stop_requested = True
     dialog.reject()
+
+
+def test_metrics_distinguish_bridge_from_slow_preview_and_reset():
+    from meeting_assistant.services.video_metrics import VideoMetrics
+
+    metrics = VideoMetrics()
+    # Bridge produces 30 fps while the diagnostic consumer displays only 2 fps.
+    for i in range(5):
+        bridge, preview = metrics.observe(i / 2, i * 15, rendered=True)
+    assert bridge == 30.0 and preview == 2.0
+    assert metrics.observe(2.1, 0, rendered=True) == (0.0, 0.0)
+    # Repeated reads of the same frame are not new displayed frames.
+    for i in range(1, 11):
+        bridge, preview = metrics.observe(2.1 + i / 10, 0, rendered=True)
+    assert bridge == preview == 0.0
+
+
+def test_user_stop_is_not_lost_during_frame_read(monkeypatch):
+    dialog = VirtualCameraDialog()
+    dialog.worker = Mock()
+    dialog.send("T")
+    assert dialog.pending_command == "T"
+    send = Mock()
+    monkeypatch.setattr(dialog, "send", send)
+    dialog.worker_finished()
+    send.assert_called_once_with("T")
+    dialog.stop_requested = True
+    dialog.reject()
+
+
+def test_fast_preview_timer_does_not_restart_for_every_frame(monkeypatch):
+    from meeting_assistant.services.virtual_camera import FrameStatus
+
+    dialog = VirtualCameraDialog()
+    timer = Mock()
+    timer.interval.return_value = 33
+    timer.isActive.return_value = True
+    dialog.timer = timer
+    dialog.result("F", FrameStatus(True, True, 30, 1000), None, "")
+    timer.start.assert_not_called()
+    assert dialog.last_diagnostic["diagnostic_revision"] == 2
+    dialog.stop_requested = True
+    dialog.reject()
+
+
+def test_error_clears_success_and_retries_at_low_rate():
+    from meeting_assistant.services.virtual_camera import FrameStatus
+
+    dialog = VirtualCameraDialog()
+    dialog.result("F", FrameStatus(True, True, 30, 1000), None, "")
+    dialog.result("F", None, None, "OBS fechado")
+    assert dialog.last_diagnostic["bridge"] is None
+    assert dialog.last_diagnostic["transport_errors"] == 1
+    assert dialog.last_diagnostic["bridge_fps"] == 0.0
+    assert dialog.timer.interval() == 1000
+    assert dialog.timer.isActive()
+    dialog.stop_requested = True
+    dialog.reject()

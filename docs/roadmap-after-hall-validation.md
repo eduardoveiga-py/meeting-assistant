@@ -210,3 +210,12 @@ Entregue em código: ponte NV12 720p, controles explícitos, timeout/quadros obs
 prévia de diagnóstico e adaptação do exemplo Microsoft. Build no CI e validação física são
 etapas distintas; [roteiro de teste](test-virtual-camera.md). Assinatura/instalador integrado,
 Windows ARM64 e múltiplas sessões permanecem pendentes.
+
+
+Atualização 27/09 — câmera, revisão 2:
+- Confirmado pelo operador no Windows 10/OBS 32.2.2: ponte, cenas, parar/reiniciar.
+- Correção de fluidez e diagnóstico separados implementados; aguardar reteste físico.
+- Empacotamento de teste inclui hashes verificados e identificação da revisão.
+- Próximo gate: Windows 11, instalação do provedor, enumeração no WhatsApp, vídeo contínuo,
+  retomada e encerramento de sessão. Depois, integrar ciclo de vida permanente e instalador
+  principal; atualmente fechar a tela experimental encerra o teste.

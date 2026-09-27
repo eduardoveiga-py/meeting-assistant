@@ -24,6 +24,7 @@ $native = Join-Path $repo 'native\virtual-camera'
 $cmakeBuild = Join-Path $BuildRoot 'cmake'
 Run-Native cmake @('-S', $native, '-B', $cmakeBuild, '-A', 'x64', "-DOBS_HEADERS=$obs")
 Run-Native cmake @('--build', $cmakeBuild, '--config', 'Release')
+Run-Native ctest @('--test-dir', $cmakeBuild, '-C', 'Release', '--output-on-failure')
 Run-Native python @((Join-Path $repo 'scripts\prepare-camera-source.py'), $ms, $native)
 $sample = Join-Path $ms 'Samples\VirtualCamera'
 $project = Join-Path $sample 'VirtualCameraMediaSource\VirtualCameraMediaSource.vcxproj'
@@ -38,5 +39,7 @@ Copy-Item (Join-Path $ms 'LICENSE') (Join-Path $out 'LICENSE-Microsoft.txt')
 Copy-Item (Join-Path $obs 'COPYING') (Join-Path $out 'LICENSE-OBS.txt')
 Copy-Item (Join-Path $repo 'scripts\install-video-native.ps1') $out
 Copy-Item (Join-Path $repo 'docs\test-virtual-camera.md') $out
+$revision = & git -C $repo rev-parse HEAD
+@{ revision = $revision.Trim(); protocol = 1; video_revision = 2; target_fps = 30; width = 1280; height = 720 } | ConvertTo-Json | Set-Content (Join-Path $out 'BUILD-INFO.json')
 Get-ChildItem $out -File | Get-FileHash -Algorithm SHA256 | Select-Object Hash,@{Name='File';Expression={Split-Path $_.Path -Leaf}} | ConvertTo-Json | Set-Content (Join-Path $out 'SHA256SUMS.json')
 Write-Host "Test package: $out"

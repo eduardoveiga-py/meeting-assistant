@@ -1,5 +1,16 @@
 # Histórico de alterações
 
+## Não lançado — fluidez e diagnóstico de vídeo, 27/09/2026
+
+- Cadência da ponte baseada no timestamp OBS; elimina limitador de 32 ms em relógio de baixa resolução.
+- Prévia com alvo de 30 fps, conversão fora da interface, sem fila de quadros atrasados.
+- Diagnóstico diferencia FPS da ponte e da prévia, contabiliza erros e limpa estado obsoleto.
+- Parada durante leitura é enfileirada; reconexão não inicia o envio automaticamente.
+- Provedor Windows 11 usa cadência monotônica; requer validação física no WhatsApp.
+- Pacote inclui revisão/commit e verifica hashes antes de instalar os binários.
+- Testes nativos de 24/29,97/30/60 fps, pausa e reinício do timestamp.
+- Operador validou troca de cenas e parar/reiniciar na versão anterior; fluidez corrigida aguardando reteste.
+
 ## Não lançado — câmera própria, 27/09/2026
 
 - Plugin separado de saída Program OBS em NV12 720p e transporte local com timeout.

@@ -12,12 +12,13 @@ from PySide6.QtCore import QProcess, QSize, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QSizePolicy, QVBoxLayout
 
+from meeting_assistant.services.video_metrics import VideoMetrics
 from meeting_assistant.services.virtual_camera import FRAME_BYTES, HEIGHT, WIDTH, camera_support, request
 from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
 class VideoRequest(QThread):
-    result = Signal(str, object, bytes, str)
+    result = Signal(str, object, object, str)
 
     def __init__(self, command, parent=None):
         super().__init__(parent)
@@ -26,7 +27,8 @@ class VideoRequest(QThread):
     def run(self):
         try:
             status, pixels = request(self.command)
-            self.result.emit(self.command, status, pixels, "")
+            image = frame_image(pixels) if pixels else None
+            self.result.emit(self.command, status, image, "")
         except (OSError, ValueError) as exc:
             self.result.emit(self.command, None, b"", str(exc))
         except Exception:
@@ -48,6 +50,9 @@ def frame_image(pixels):
         for plane, rows, offset in ((0, HEIGHT, 0), (1, HEIGHT // 2, WIDTH * HEIGHT)):
             stride = frame.bytesPerLine(plane)
             view = frame.bits(plane)
+            if stride == WIDTH:
+                view[: rows * WIDTH] = pixels[offset : offset + rows * WIDTH]
+                continue
             for row in range(rows):
                 view[row * stride : row * stride + WIDTH] = pixels[
                     offset + row * WIDTH : offset + (row + 1) * WIDTH
@@ -66,10 +71,15 @@ class VirtualCameraDialog(QDialog):
         self.worker = None
         self.closing = False
         self.stop_requested = False
-        self.last_sequence = None
-        self.last_time = None
+        self.pending_command = None
+        self.metrics = VideoMetrics()
         self.last_diagnostic = {
             "protocol": 1,
+            "diagnostic_revision": 2,
+            "target_fps": 30,
+            "bridge_fps": 0.0,
+            "preview_fps": 0.0,
+            "transport_errors": 0,
             "platform": platform.system(),
             "release": platform.release(),
             "camera_approved_in_whatsapp": False,
@@ -126,48 +136,53 @@ class VirtualCameraDialog(QDialog):
         close.clicked.connect(self.reject)
         root.addWidget(close)
         self.timer = QTimer(self)
-        self.timer.setInterval(500)
+        self.timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self.timer.setInterval(33)
         self.timer.timeout.connect(self.poll)
         self._screen_fit = ScreenFitController(self)
 
     def poll(self):
         # Keep the diagnostic consumer from competing with the camera for frames.
-        command = "I" if self.host.state() != QProcess.ProcessState.NotRunning else "F"
+        if self.closing or self.worker is not None:
+            return
+        camera_running = self.host.state() != QProcess.ProcessState.NotRunning
+        command = "I" if camera_running else "F"
+        self.timer.setInterval(500 if camera_running else 33)
         self.send(command)
 
     def send(self, command):
         if self.worker is not None:
+            if command != "F":
+                self.pending_command = command
             return
+        if command in ("S", "T"):
+            self.metrics.reset()
         self.worker = VideoRequest(command, self)
         self.worker.result.connect(self.result)
         self.worker.finished.connect(self.worker_finished)
-        for button in self.controls:
-            button.setEnabled(False)
         self.worker.start()
 
     def result(self, command, status, pixels, error):
         if error:
             self.status.setText(error)
             self.last_diagnostic["last_error"] = error
+            self.last_diagnostic["transport_errors"] += 1
+            self.last_diagnostic["bridge"] = None
+            self.metrics.reset()
+            self.last_diagnostic.update(observed_fps=0.0, bridge_fps=0.0, preview_fps=0.0)
+            if not self.closing:
+                self.timer.start(1000)  # Retry without flooding errors or blocking the UI.
             self.preview.clear()
             self.preview.setText("Sem quadro confirmado")
             return
         self.last_diagnostic.pop("last_error", None)
         self.last_diagnostic["bridge"] = status.diagnostic()
         now = time.monotonic()
-        fps = 0.0
-        if self.last_sequence is not None and now > self.last_time and status.sequence >= self.last_sequence:
-            fps = (status.sequence - self.last_sequence) / (now - self.last_time)
-        self.last_sequence, self.last_time = status.sequence, now
-        self.last_diagnostic["observed_fps"] = round(fps, 1)
-        self.status.setText(
-            f"Envio: {'ligado' if status.enabled else 'desligado'} • "
-            f"quadro: {status.sequence} • taxa observada: {fps:.1f}/s • "
-            f"{'vídeo recente' if status.fresh else 'sem vídeo recente'}"
-        )
-        if pixels:
+        camera_running = self.host.state() != QProcess.ProcessState.NotRunning
+        displayed = False
+        if pixels is not None and not camera_running and pixels:
             try:
-                image = frame_image(pixels)
+                image = frame_image(pixels) if isinstance(pixels, bytes) else pixels
                 self.preview.setPixmap(
                     QPixmap.fromImage(image).scaled(
                         self.preview.size(),
@@ -175,13 +190,35 @@ class VirtualCameraDialog(QDialog):
                         Qt.TransformationMode.SmoothTransformation,
                     )
                 )
+                displayed = True
             except ValueError as exc:
                 self.status.setText(str(exc))
         elif not status.fresh:
             self.preview.clear()
             self.preview.setText("Sem vídeo recente — câmera deve fornecer preto")
-        if command == "S" or status.enabled:
-            self.timer.start()
+        if status.enabled and status.fresh:
+            bridge_fps, preview_fps = self.metrics.observe(now, status.sequence, displayed)
+        else:
+            self.metrics.reset()
+            bridge_fps = preview_fps = 0.0
+        self.last_diagnostic.update(
+            observed_fps=bridge_fps,
+            bridge_fps=bridge_fps,
+            preview_fps=preview_fps,
+            preview_paused_for_camera=camera_running,
+        )
+        preview_text = "pausada (câmera em uso)" if camera_running else f"{preview_fps:.1f} fps"
+        self.status.setText(
+            f"Envio: {'ligado' if status.enabled else 'desligado'} • quadro: {status.sequence}\n"
+            f"Ponte: {bridge_fps:.1f} fps • Prévia: {preview_text} • "
+            f"{'vídeo recente' if status.fresh else 'sem vídeo recente'}"
+        )
+        if not self.closing and (command == "S" or status.enabled):
+            interval = 500 if camera_running else 33
+            if self.timer.interval() != interval:
+                self.timer.setInterval(interval)
+            if not self.timer.isActive():
+                self.timer.start()
         if command == "T":
             self.timer.stop()
 
@@ -191,7 +228,11 @@ class VirtualCameraDialog(QDialog):
         for button in self.controls:
             button.setEnabled(True)
         if self.closing:
+            self.pending_command = None
             self.reject()
+        elif self.pending_command is not None:
+            command, self.pending_command = self.pending_command, None
+            self.send(command)
 
     def toggle_camera(self):
         if self.host.state() != QProcess.ProcessState.NotRunning:

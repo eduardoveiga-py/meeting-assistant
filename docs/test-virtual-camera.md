@@ -32,10 +32,11 @@ git pull --ff-only
 .\scripts\setup-dev.ps1
 ```
 
-No GitHub do projeto, abra **Actions → Video native prototype → execução verde `8c325cc` (protocolo 1 deste lote) → Artifacts → meeting-assistant-video-prototype-x64**. Baixe e extraia em uma pasta.
-O pacote nativo `8c325cc` é compatível com os ajustes de diagnóstico Python deste lote.
+No GitHub do projeto, abra **Actions → Video native prototype → execução verde mais recente com a correção de fluidez (`video_revision: 2` em `BUILD-INFO.json`) → Artifacts → meeting-assistant-video-prototype-x64**. Baixe e extraia em uma pasta.
+O pacote antigo `8c325cc` mantém o protocolo compatível, mas não contém a correção de cadência. Atualize app e DLL da ponte para este teste.
 Não use pacotes de outro protocolo.
 O pacote contém DLL da ponte, EXE de controle, DLL do provedor, licenças, hashes e script.
+`BUILD-INFO.json` identifica o commit e a revisão do vídeo. O instalador confere os hashes dos binários antes de copiar.
 `SHA256SUMS.json` detecta corrupção; não substitui assinatura/autenticidade da origem.
 
 ## 2. Instalar somente a ponte no Windows 10
@@ -44,6 +45,7 @@ Fora de uma reunião, feche OBS antes de instalar. No PowerShell **como administ
 entre na pasta extraída e execute:
 
 ```powershell
+Unblock-File -LiteralPath .\install-video-native.ps1
 .\install-video-native.ps1 -Component Bridge
 ```
 
@@ -150,3 +152,46 @@ Build nativo aprovado no GitHub Actions em 27/09/2026, execução 36338601067, c
 8c325cc: ponte, host e DLL Microsoft adaptada compilados; artefato publicado.
 O CI do app aprovou 215 testes no Windows antes do teste adicional de tamanho da prévia.
 Nenhum desses resultados certifica reconhecimento pelo WhatsApp ou operação física.
+
+
+## Correção de fluidez — revisão 2
+
+Em 27/09 o operador confirmou no Windows 10: ponte carregada no OBS 32.2.2,
+transições de cena corretas e parada/reinício do envio funcionando. A prévia era pouco
+fluida; diagnóstico da ponte indicou 16,9 fps. Esses testes validam a versão anterior
+funcionalmente, não aprovam a fluidez da nova versão nem a câmera Windows 11.
+
+Mudanças isoladas:
+- Cadência da ponte usa timestamps OBS em nanossegundos; GetTickCount64 permanece
+  apenas para verificar se o quadro é recente. O filtro anterior de 32 ms poderia
+  descartar quadros devido à resolução do relógio do Windows.
+- Prévia passa de 500 ms para alvo de 33 ms, sem acumular pedidos quando o anterior
+  ainda está em andamento. Conversão NV12 ocorre no worker; cópia de planos contíguos
+  usa uma operação por plano. A tela principal e os guardiões não mudam.
+- Medições separadas numa janela de aproximadamente dois segundos: `bridge_fps`
+  (quadros produzidos) e `preview_fps` (quadros distintos apresentados). `observed_fps`
+  continua como alias de `bridge_fps`; não mede a entrega ao WhatsApp.
+- Com câmera própria ativa, prévia interna pausa e status é consultado a cada 500 ms.
+- Parar durante leitura fica pendente para execução logo após a leitura; erro de
+  transporte limpa a imagem anterior e tenta reconectar, sem iniciar envio sozinho.
+- Provedor nativo agenda quadros com relógio monotônico de alta resolução, sem somar
+  o tempo de processamento a cada período. A validação real ainda exige Windows 11.
+
+Após atualizar app E plugin (OBS fechado durante a cópia), abra um vídeo com movimento
+no Program e observe por 30 segundos. Copie o diagnóstico durante a reprodução.
+Esperado, com OBS a 30 fps e máquina sem sobrecarga: ponte próxima de 30 e prévia
+próxima desse valor. Não é garantia: quedas reais do OBS/CPU/transporte continuam possíveis.
+Repita parar/iniciar e trocas de cena. Feche OBS com a tela de teste aberta: deve limpar
+a imagem e continuar responsiva. Reabra OBS e clique Iniciar envio; não deve retomar sozinho.
+
+Retorno:
+```text
+Ponte (fps):
+Prévia (fps):
+Vídeo fluido:
+Parar/iniciar:
+Fechar/reabrir OBS:
+Diagnóstico JSON:
+```
+Se o script continuar bloqueado após Unblock-File, envie `Get-ExecutionPolicy -List`.
+Não é necessário alterar a política global para este roteiro.

@@ -10,6 +10,7 @@
 #include <cstring>
 #include <string>
 #include "protocol.hpp"
+#include "frame_clock.hpp"
 namespace {
 std::atomic<bool> active{false};
 HANDLE quit = nullptr;
@@ -17,6 +18,7 @@ std::thread frame_thread, control_thread;
 std::mutex frame_mutex;
 std::vector<uint8_t> pixels(ma::bytes);
 ma::Header state;
+ma::FrameClock frame_clock;
 decltype(&obs_add_raw_video_callback) add_video = nullptr;
 decltype(&obs_remove_raw_video_callback) remove_video = nullptr;
 
@@ -26,7 +28,7 @@ void video(void*, video_data* frame) {
     std::unique_lock<std::mutex> lock(frame_mutex, std::try_to_lock);
     if (!lock) return; // Never wait for an IPC consumer on the rendering callback.
     const auto now = GetTickCount64();
-    if (state.tick_ms && now - state.tick_ms < 32) return; // At most ~30 fps.
+    if (!frame_clock.accept(frame->timestamp)) return;
     for (uint32_t y = 0; y < ma::height; ++y)
         memcpy(pixels.data() + y * ma::width, frame->data[0] + y * frame->linesize[0], ma::width);
     for (uint32_t y = 0; y < ma::height / 2; ++y)
@@ -37,7 +39,7 @@ void video(void*, video_data* frame) {
 }
 void start() {
     if (active.exchange(true)) return;
-    { std::lock_guard<std::mutex> lock(frame_mutex); state.tick_ms = 0; state.sequence = 0; }
+    { std::lock_guard<std::mutex> lock(frame_mutex); state.tick_ms = 0; state.sequence = 0; frame_clock = ma::FrameClock{}; }
     video_scale_info conversion{};
     conversion.format = VIDEO_FORMAT_NV12;
     conversion.width = ma::width; conversion.height = ma::height;

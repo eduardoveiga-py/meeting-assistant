@@ -6,6 +6,16 @@ $ErrorActionPreference = 'Stop'
 if (-not [Environment]::Is64BitProcess) { throw 'Use PowerShell x64.' }
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $admin) { throw 'Open PowerShell as administrator for this explicit installation step.' }
+function Assert-PackageFile([string]$Name) {
+    $manifestPath = Join-Path $PSScriptRoot 'SHA256SUMS.json'
+    if (-not (Test-Path $manifestPath)) { throw 'SHA256SUMS.json missing. Extract the complete artifact.' }
+    $entries = @(Get-Content -Raw $manifestPath | ConvertFrom-Json | Where-Object { $_.File -eq $Name })
+    $source = Join-Path $PSScriptRoot $Name
+    if ($entries.Count -ne 1 -or -not (Test-Path $source)) { throw "Artifact incomplete: $Name" }
+    if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $entries[0].Hash) {
+        throw "Artifact checksum mismatch: $Name. Download and extract again."
+    }
+}
 $cameraRoot = Join-Path $env:ProgramFiles 'MeetingAssistant\VirtualCamera'
 $clsid = 'HKLM:\SOFTWARE\Classes\CLSID\{5108191D-9AD8-44F5-B760-7A35D433A427}'
 if ($Component -in @('Bridge','RemoveBridge')) {
@@ -17,6 +27,7 @@ if ($Component -in @('Bridge','RemoveBridge')) {
     } else {
         $source = Join-Path $PSScriptRoot 'meeting-assistant-bridge.dll'
         if (-not (Test-Path $source)) { throw 'Run this script from the compiled artifact folder.' }
+        Assert-PackageFile 'meeting-assistant-bridge.dll'
         if (Test-Path $target) { Copy-Item $target "$target.backup-$(Get-Date -Format yyyyMMddHHmmss)" }
         Copy-Item $source $target -Force
     }
@@ -31,7 +42,7 @@ if ($Component -eq 'RemoveCamera') {
     exit
 }
 foreach ($name in @('MeetingAssistantMediaSource.dll','meeting-assistant-camera.exe')) {
-    if (-not (Test-Path (Join-Path $PSScriptRoot $name))) { throw "Compiled artifact missing: $name" }
+    Assert-PackageFile $name
 }
 New-Item -ItemType Directory -Force $cameraRoot | Out-Null
 foreach ($name in @('MeetingAssistantMediaSource.dll','meeting-assistant-camera.exe')) {

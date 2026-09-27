@@ -15,3 +15,8 @@ target_compile_definitions(meeting-assistant-bridge PRIVATE NOMINMAX WIN32_LEAN_
 target_link_libraries(meeting-assistant-bridge PRIVATE advapi32)
 add_executable(meeting-assistant-camera camera_host.cpp)
 target_compile_definitions(meeting-assistant-camera PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(frame-clock-test frame_clock_test.cpp)
+  add_test(NAME frame-clock COMMAND frame-clock-test)
+endif()
