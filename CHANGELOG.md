@@ -1,5 +1,11 @@
 # Histórico de alterações
 
+## Não lançado — instalador de vídeo / PowerShell 5.1, 27/09/2026
+
+- Corrigida enumeração do manifesto JSON que podia causar falso erro de SHA256 no Windows PowerShell 5.1.
+- Modo `-VerifyOnly` verifica integridade sem instalar nem exigir administrador.
+- Build verifica pacote válido e rejeição de corrupção, duplicidade e arquivos ausentes em PowerShell 5.1 e 7.
+
 ## Não lançado — fluidez e diagnóstico de vídeo, 27/09/2026
 
 - Cadência da ponte baseada no timestamp OBS; elimina limitador de 32 ms em relógio de baixa resolução.

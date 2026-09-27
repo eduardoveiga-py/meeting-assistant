@@ -1,21 +1,39 @@
 param(
     [ValidateSet('Bridge','Camera','RemoveCamera','RemoveBridge')][string]$Component = 'Bridge',
-    [string]$ObsDirectory = "$env:ProgramFiles\obs-studio"
+    [string]$ObsDirectory = "$env:ProgramFiles\obs-studio",
+    [switch]$VerifyOnly
 )
 $ErrorActionPreference = 'Stop'
-if (-not [Environment]::Is64BitProcess) { throw 'Use PowerShell x64.' }
-$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $admin) { throw 'Open PowerShell as administrator for this explicit installation step.' }
 function Assert-PackageFile([string]$Name) {
     $manifestPath = Join-Path $PSScriptRoot 'SHA256SUMS.json'
     if (-not (Test-Path $manifestPath)) { throw 'SHA256SUMS.json missing. Extract the complete artifact.' }
-    $entries = @(Get-Content -Raw $manifestPath | ConvertFrom-Json | Where-Object { $_.File -eq $Name })
+    # Windows PowerShell 5.1 emits the JSON array as one pipeline object.
+    # Store it first so the next pipeline enumerates each manifest entry.
+    $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+    $entries = @($manifest | Where-Object { $_.File -eq $Name })
     $source = Join-Path $PSScriptRoot $Name
     if ($entries.Count -ne 1 -or -not (Test-Path $source)) { throw "Artifact incomplete: $Name" }
-    if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $entries[0].Hash) {
-        throw "Artifact checksum mismatch: $Name. Download and extract again."
+    $expected = $entries[0].Hash
+    if ($expected -isnot [string] -or $expected -notmatch '^[0-9a-fA-F]{64}$') {
+        throw "Invalid SHA256 manifest entry: $Name"
+    }
+    $actual = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
+    if ($actual -ne $expected) {
+        throw "Artifact checksum mismatch: $Name. Expected: $expected. Actual: $actual. Download and extract again."
     }
 }
+if ($VerifyOnly) {
+    if ($Component -eq 'Bridge') { Assert-PackageFile 'meeting-assistant-bridge.dll' }
+    elseif ($Component -eq 'Camera') {
+        Assert-PackageFile 'MeetingAssistantMediaSource.dll'
+        Assert-PackageFile 'meeting-assistant-camera.exe'
+    } else { throw 'VerifyOnly requires Bridge or Camera.' }
+    Write-Host "Package integrity OK ($Component). No files installed. PowerShell $($PSVersionTable.PSVersion)"
+    return
+}
+if (-not [Environment]::Is64BitProcess) { throw 'Use PowerShell x64.' }
+$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $admin) { throw 'Open PowerShell as administrator for this explicit installation step.' }
 $cameraRoot = Join-Path $env:ProgramFiles 'MeetingAssistant\VirtualCamera'
 $clsid = 'HKLM:\SOFTWARE\Classes\CLSID\{5108191D-9AD8-44F5-B760-7A35D433A427}'
 if ($Component -in @('Bridge','RemoveBridge')) {

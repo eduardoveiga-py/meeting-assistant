@@ -42,4 +42,6 @@ Copy-Item (Join-Path $repo 'docs\test-virtual-camera.md') $out
 $revision = & git -C $repo rev-parse HEAD
 @{ revision = $revision.Trim(); protocol = 1; video_revision = 2; target_fps = 30; width = 1280; height = 720 } | ConvertTo-Json | Set-Content (Join-Path $out 'BUILD-INFO.json')
 Get-ChildItem $out -File | Get-FileHash -Algorithm SHA256 | Select-Object Hash,@{Name='File';Expression={Split-Path $_.Path -Leaf}} | ConvertTo-Json | Set-Content (Join-Path $out 'SHA256SUMS.json')
+Run-Native powershell.exe @('-NoProfile', '-NonInteractive', '-File', (Join-Path $repo 'scripts\test-video-package.ps1'), '-PackageDirectory', $out)
+Run-Native pwsh @('-NoProfile', '-NonInteractive', '-File', (Join-Path $repo 'scripts\test-video-package.ps1'), '-PackageDirectory', $out)
 Write-Host "Test package: $out"

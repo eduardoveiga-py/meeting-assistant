@@ -46,6 +46,7 @@ entre na pasta extraída e execute:
 
 ```powershell
 Unblock-File -LiteralPath .\install-video-native.ps1
+.\install-video-native.ps1 -Component Bridge -VerifyOnly
 .\install-video-native.ps1 -Component Bridge
 ```
 
@@ -195,3 +196,14 @@ Diagnóstico JSON:
 ```
 Se o script continuar bloqueado após Unblock-File, envie `Get-ExecutionPolicy -List`.
 Não é necessário alterar a política global para este roteiro.
+
+
+### Instalador e Windows PowerShell 5.1
+
+A leitura do manifesto separa a conversão JSON da seleção de entrada para funcionar
+no PowerShell 5.1 e 7. A validação anterior podia comparar o hash da DLL com toda a lista
+de hashes no 5.1 e recusar um pacote válido. A proteção SHA256 foi preservada.
+`-VerifyOnly` verifica os arquivos do componente sem instalar, sem alterar o OBS e sem
+exigir administrador. O build testa o pacote em ambos os shells: pacote válido deve
+passar; arquivo adulterado, arquivo ausente, entrada duplicada e manifesto ausente devem
+ser recusados. Uma divergência real informa hash esperado e calculado.
