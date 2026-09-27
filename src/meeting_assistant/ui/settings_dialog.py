@@ -30,6 +30,7 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
 class SettingsDialog(QDialog):
+    virtual_camera_requested = Signal()
     audio_setup_requested = Signal()
     observe_requested = Signal()
     calibrate_requested = Signal()
@@ -78,6 +79,7 @@ class SettingsDialog(QDialog):
             tools_layout = QVBoxLayout(tools_group)
             for text, signal in (
                 ("Áudio da mesa e das mídias → Zoom…", self.audio_setup_requested),
+                ("Câmera própria / ponte OBS (experimental)…", self.virtual_camera_requested),
                 ("Observar mídia no JW Library (20 s)", self.observe_requested),
                 ("Calibrar Texto do Ano", self.calibrate_requested),
             ):
@@ -319,4 +321,5 @@ class SettingsDialog(QDialog):
         settings.telemetry_enabled = self.telemetry_check.isChecked()
         settings.telemetry_screenshots = self.telemetry_screenshots_check.isChecked()
         settings.telemetry_repo_url = self.telemetry_repo_edit.text().strip()
+
 

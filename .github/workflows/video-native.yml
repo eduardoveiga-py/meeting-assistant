@@ -1,0 +1,27 @@
+name: Video native prototype
+on:
+  push:
+    branches: ['feature/**']
+    paths: ['native/**', 'scripts/*video*', 'scripts/prepare-camera-source.py', '.github/workflows/video-native.yml']
+  pull_request:
+    paths: ['native/**', 'scripts/*video*', 'scripts/prepare-camera-source.py', '.github/workflows/video-native.yml']
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: microsoft/setup-msbuild@v2
+      - uses: NuGet/setup-nuget@v2
+      - name: Build bridge and Windows 11 provider
+        shell: pwsh
+        run: ./scripts/build-video-native.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meeting-assistant-video-prototype-x64
+          path: build/video-native/package/
+          if-no-files-found: error

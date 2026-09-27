@@ -677,6 +677,13 @@ class MainWindow(QMainWindow):
     def _on_obs_error(self, message: str) -> None:
         self.mode_label.setText(message)
 
+    def _open_virtual_camera(self, parent=None) -> None:
+        from meeting_assistant.ui.virtual_camera_dialog import VirtualCameraDialog
+
+        dialog = VirtualCameraDialog(parent or self)
+        dialog.exec()
+        dialog.deleteLater()
+
     def _open_audio_setup(self, parent=None) -> None:
         from meeting_assistant.ui.audio_setup_dialog import AudioSetupDialog
 
@@ -688,6 +695,7 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self.settings, self.obs_scenes, self)
         dialog.hall_setup_requested.connect(lambda: self._open_hall_setup(dialog))
         dialog.audio_setup_requested.connect(lambda: self._open_audio_setup(dialog))
+        dialog.virtual_camera_requested.connect(lambda: self._open_virtual_camera(dialog))
         dialog.observe_requested.connect(
             lambda: (dialog.reject(), QTimer.singleShot(0, self._start_jwl_probe))
         )
@@ -1063,3 +1071,4 @@ class MainWindow(QMainWindow):
             }
             """
         )
+
