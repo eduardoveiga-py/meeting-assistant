@@ -1,5 +1,13 @@
 # Histórico de alterações
 
+## Não lançado — câmera própria, 27/09/2026
+
+- Plugin separado de saída Program OBS em NV12 720p e transporte local com timeout.
+- Tela experimental com prévia, diagnóstico copiável e bloqueio da câmera própria no Windows 10.
+- Provedor Windows 11 baseado no exemplo MIT Microsoft, com CLSID próprio e câmera de sessão.
+- Build nativo reproduzível em commits fixos; scripts explícitos de instalação e remoção.
+- Núcleo de telas preservado; ensaio Windows 11/WhatsApp e distribuição final ainda pendentes.
+
 ## 0.5.0 — primeira release instalável — 21/09/2026
 
 ### Entrega
@@ -32,3 +40,4 @@
 ## Não lançado — desenvolvimento após 21/09/2026
 
 Consulte o histórico anterior desta versão no Git para detalhes de implementação, testes e telemetria.
+

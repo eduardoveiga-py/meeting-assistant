@@ -179,3 +179,11 @@ Veja o [roadmap detalhado](docs/roadmap-after-hall-validation.md).
 O Meeting Assistant é um projeto independente e não oficial do JW Library, Zoom ou OBS Studio. Nomes, marcas e aplicativos externos pertencem aos respectivos titulares.
 
 Arquivos de configuração podem conter informações privadas. Não publique `%APPDATA%\\MeetingAssistant\\settings.json` ou sessões de telemetria que contenham dados operacionais sem revisão.
+
+
+## Câmera própria para WhatsApp — protótipo separado
+
+Em desenvolvimento: ponte do Program OBS e câmera Windows 11, sem alterar a saída
+JWL/Zoom validada. Windows 10 permite testar somente a ponte/diagnóstico.
+Veja [binários de teste, instalação, diagnóstico e remoção](docs/test-virtual-camera.md).
+Esta função não faz parte da Release 0.5.0 e ainda não tem aprovação física no WhatsApp.

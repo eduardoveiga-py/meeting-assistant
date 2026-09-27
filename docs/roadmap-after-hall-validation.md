@@ -196,3 +196,17 @@ Referências: [captura por aplicativo OBS](https://obsproject.com/kb/application
 [VB-CABLE](https://vb-audio.com/Cable/),
 [RegisterHotKey](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey),
 [WinGet install](https://learn.microsoft.com/en-us/windows/package-manager/winget/install).
+
+
+## Câmera própria para WhatsApp — 27/09/2026
+
+Autorizado desenvolver com testes locais no Windows 10, uso efetivo previsto em Windows 11.
+Módulos separados: ponte Program OBS, transporte local, provedor de câmera e controles/diagnóstico.
+O transporte nativo usa named pipe local com ACL para atender o serviço de câmera fora da sessão
+OBS; Python não transporta o vídeo da câmera. Prova de compatibilidade WhatsApp continua sendo
+um gate obrigatório antes de Release. Não substituir a câmera OBS usada no Zoom neste lote.
+
+Entregue em código: ponte NV12 720p, controles explícitos, timeout/quadros obsoletos,
+prévia de diagnóstico e adaptação do exemplo Microsoft. Build no CI e validação física são
+etapas distintas; [roteiro de teste](test-virtual-camera.md). Assinatura/instalador integrado,
+Windows ARM64 e múltiplas sessões permanecem pendentes.

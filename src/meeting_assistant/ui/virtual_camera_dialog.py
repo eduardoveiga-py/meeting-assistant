@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QProcess, QSize, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QSizePolicy, QVBoxLayout
 
 from meeting_assistant.services.virtual_camera import FRAME_BYTES, HEIGHT, WIDTH, camera_support, request
 from meeting_assistant.ui.window_geometry import ScreenFitController
@@ -91,6 +91,7 @@ class VirtualCameraDialog(QDialog):
         self.preview = QLabel("Sem quadro confirmado do Program do OBS")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setMinimumSize(0, 100)
+        self.preview.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         root.addWidget(self.preview, 1)
         self.status = QLabel("Instale o plugin de teste no OBS e clique em Verificar.")
         self.status.setWordWrap(True)

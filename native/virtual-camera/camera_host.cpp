@@ -4,6 +4,7 @@
 #include <mfvirtualcamera.h>
 #include <wrl/client.h>
 #include <iostream>
+#include <string>
 #pragma comment(lib, "mfplat.lib")
 #pragma comment(lib, "mfsensorgroup.lib")
 #pragma comment(lib, "ole32.lib")
