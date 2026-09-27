@@ -223,3 +223,37 @@ def test_error_clears_success_and_retries_at_low_rate():
     assert dialog.timer.isActive()
     dialog.stop_requested = True
     dialog.reject()
+
+
+def test_preview_reuses_decoder_thread_and_closes_cleanly(monkeypatch, qt_application):
+    import threading
+    import time
+
+    from meeting_assistant.services.virtual_camera import FrameStatus
+
+    threads, commands = set(), []
+    pixels = bytes([16]) * (WIDTH * HEIGHT) + bytes([128]) * (WIDTH * HEIGHT // 2)
+
+    def backend(command):
+        threads.add(threading.get_ident())
+        commands.append(command)
+        return FrameStatus(command != "T", command != "T", len(commands), 1000), (
+            pixels if command == "F" else b""
+        )
+
+    monkeypatch.setattr("meeting_assistant.ui.virtual_camera_dialog.request", backend)
+    dialog = VirtualCameraDialog()
+    dialog.send("S")
+    deadline = time.monotonic() + 3
+    while commands.count("F") < 12 and time.monotonic() < deadline:
+        qt_application.processEvents()
+        time.sleep(0.003)
+    dialog.reject()
+    deadline = time.monotonic() + 3
+    while dialog.transport is not None and time.monotonic() < deadline:
+        qt_application.processEvents()
+        time.sleep(0.003)
+    assert commands.count("F") >= 12
+    assert len(threads) == 1
+    assert commands[-1] == "T"
+    assert dialog.transport is None and dialog.worker is None

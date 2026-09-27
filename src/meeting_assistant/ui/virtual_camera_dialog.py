@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import threading
 import time
 from pathlib import Path
 
@@ -19,20 +20,42 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 
 class VideoRequest(QThread):
     result = Signal(str, object, object, str)
+    command_finished = Signal()
 
-    def __init__(self, command, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.command = command
+        self.condition = threading.Condition()
+        self.command = None
+        self.stopping = False
+
+    def submit(self, command):
+        with self.condition:
+            self.command = command
+            self.condition.notify()
+
+    def shutdown(self):
+        with self.condition:
+            self.stopping = True
+            self.condition.notify()
+        self.wait()  # Called only after the last bounded request has finished.
 
     def run(self):
-        try:
-            status, pixels = request(self.command)
-            image = frame_image(pixels) if pixels else None
-            self.result.emit(self.command, status, image, "")
-        except (OSError, ValueError) as exc:
-            self.result.emit(self.command, None, b"", str(exc))
-        except Exception:
-            self.result.emit(self.command, None, b"", "Falha no diagnóstico de vídeo.")
+        # Keep one decoding thread/context for the dialog lifetime, not one per frame.
+        while True:
+            with self.condition:
+                self.condition.wait_for(lambda: self.command is not None or self.stopping)
+                if self.stopping:
+                    return
+                command, self.command = self.command, None
+            try:
+                status, pixels = request(command)
+                image = frame_image(pixels) if pixels else None
+                self.result.emit(command, status, image, "")
+            except (OSError, ValueError) as exc:
+                self.result.emit(command, None, None, str(exc))
+            except Exception:
+                self.result.emit(command, None, None, "Falha no diagnóstico de vídeo.")
+            self.command_finished.emit()
 
 
 def frame_image(pixels):
@@ -69,6 +92,7 @@ class VirtualCameraDialog(QDialog):
         self.resize(560, 600)
         self.setMinimumSize(360, 300)
         self.worker = None
+        self.transport = None
         self.closing = False
         self.stop_requested = False
         self.pending_command = None
@@ -157,10 +181,13 @@ class VirtualCameraDialog(QDialog):
             return
         if command in ("S", "T"):
             self.metrics.reset()
-        self.worker = VideoRequest(command, self)
-        self.worker.result.connect(self.result)
-        self.worker.finished.connect(self.worker_finished)
-        self.worker.start()
+        if self.transport is None:
+            self.transport = VideoRequest(self)
+            self.transport.result.connect(self.result)
+            self.transport.command_finished.connect(self.worker_finished)
+            self.transport.start()
+        self.worker = self.transport
+        self.transport.submit(command)
 
     def result(self, command, status, pixels, error):
         if error:
@@ -223,7 +250,6 @@ class VirtualCameraDialog(QDialog):
             self.timer.stop()
 
     def worker_finished(self):
-        self.worker.deleteLater()
         self.worker = None
         for button in self.controls:
             button.setEnabled(True)
@@ -296,4 +322,8 @@ class VirtualCameraDialog(QDialog):
             if not self.host.waitForFinished(1500):
                 self.host.kill()
                 self.host.waitForFinished(500)
+        if self.transport is not None:
+            self.transport.shutdown()
+            self.transport.deleteLater()
+            self.transport = None
         super().reject()
