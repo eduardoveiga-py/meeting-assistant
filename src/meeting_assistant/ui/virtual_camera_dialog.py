@@ -91,6 +91,7 @@ class VirtualCameraDialog(QDialog):
         root.addWidget(title)
         self.preview = QLabel("Sem quadro confirmado do Program do OBS")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview.setWordWrap(True)
         self.preview.setMinimumSize(0, 100)
         self.preview.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         root.addWidget(self.preview, 1)
@@ -126,8 +127,13 @@ class VirtualCameraDialog(QDialog):
         root.addWidget(close)
         self.timer = QTimer(self)
         self.timer.setInterval(500)
-        self.timer.timeout.connect(lambda: self.send("F"))
+        self.timer.timeout.connect(self.poll)
         self._screen_fit = ScreenFitController(self)
+
+    def poll(self):
+        # Keep the diagnostic consumer from competing with the camera for frames.
+        command = "I" if self.host.state() != QProcess.ProcessState.NotRunning else "F"
+        self.send(command)
 
     def send(self, command):
         if self.worker is not None:
@@ -219,6 +225,10 @@ class VirtualCameraDialog(QDialog):
                     "Windows confirmou a câmera. Selecione Meeting Assistant no WhatsApp."
                 )
                 self.camera_button.setText("Parar câmera própria")
+                self.preview.clear()
+                self.preview.setText(
+                    "Câmera em uso: confira a imagem no WhatsApp. Diagnóstico continua ativo."
+                )
             elif text.startswith("CAMERA_ERROR"):
                 self.camera_state.setText(text + " — confira instalação e permissões de câmera do Windows.")
 

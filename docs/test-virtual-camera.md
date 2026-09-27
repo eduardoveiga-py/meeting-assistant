@@ -89,7 +89,8 @@ Só após aprovar a ponte no computador de destino:
    ` .\install-video-native.ps1 -Component Camera `.
 2. Abra OBS e app; entre na tela experimental e inicie o envio.
 3. Clique **Iniciar câmera própria**. Aguarde “Windows confirmou a câmera”. Isso confirma
-   apenas a API; ainda não significa que WhatsApp a reconheceu.
+   apenas a API; ainda não significa que WhatsApp a reconheceu. Durante o uso da câmera,
+   a prévia interna pausa para não disputar quadros; o contador/diagnóstico continuam ativos.
 4. Nas permissões de câmera do Windows, permita acesso aos aplicativos necessários.
 5. Abra a seleção de câmera do WhatsApp e procure **Meeting Assistant** (o Windows pode
    acrescentar um sufixo de câmera virtual). Se não listar, reabra o WhatsApp uma vez.

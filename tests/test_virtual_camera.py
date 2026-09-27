@@ -122,7 +122,7 @@ def test_preview_frame_does_not_expand_dialog(qt_application):
     qt_application.processEvents()
     before = dialog.size()
     pixels = bytes([16]) * (WIDTH * HEIGHT) + bytes([128]) * (WIDTH * HEIGHT // 2)
-    dialog.result('F', FrameStatus(True, True, 30, 1000), pixels, '')
+    dialog.result("F", FrameStatus(True, True, 30, 1000), pixels, "")
     qt_application.processEvents()
     assert dialog.width() == before.width()
     assert dialog.height() == before.height()
@@ -135,13 +135,33 @@ def test_camera_error_survives_process_exit_and_partial_output():
     dialog = VirtualCameraDialog()
     actual_host = dialog.host
     fake = Mock()
-    fake.readAllStandardOutput.side_effect = [b'CAMERA_ER', b'ROR 0x80070005\n']
+    fake.readAllStandardOutput.side_effect = [b"CAMERA_ER", b"ROR 0x80070005\n"]
     dialog.host = fake
     dialog.host_output()
-    assert 'camera_api' not in dialog.last_diagnostic
+    assert "camera_api" not in dialog.last_diagnostic
     dialog.host_output()
     dialog.host_finished(3)
-    assert '0x80070005' in dialog.camera_state.text()
+    assert "0x80070005" in dialog.camera_state.text()
+    dialog.host = actual_host
+    dialog.stop_requested = True
+    dialog.reject()
+
+
+def test_live_camera_does_not_compete_with_diagnostic_frame_consumer(monkeypatch):
+    from PySide6.QtCore import QProcess
+
+    dialog = VirtualCameraDialog()
+    actual_host = dialog.host
+    fake = Mock()
+    fake.state.return_value = QProcess.ProcessState.Running
+    dialog.host = fake
+    send = Mock()
+    monkeypatch.setattr(dialog, "send", send)
+    dialog.poll()
+    send.assert_called_once_with("I")
+    fake.state.return_value = QProcess.ProcessState.NotRunning
+    dialog.poll()
+    assert send.call_args.args == ("F",)
     dialog.host = actual_host
     dialog.stop_requested = True
     dialog.reject()
