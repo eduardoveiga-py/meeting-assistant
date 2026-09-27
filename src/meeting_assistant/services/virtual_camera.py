@@ -110,7 +110,11 @@ class WindowsPipe:
             getattr(self.k, name).restype = restype
         self.handle = self.k.CreateFileW(path, 0xC0000000, 0, None, 3, 0x40000000, None)
         if self.handle == ctypes.c_void_p(-1).value:
-            raise OSError("Ponte OBS indisponível ou ocupada. Confira plugin, OBS e mesma sessão de usuário.")
+            code = ctypes.get_last_error()
+            raise OSError(
+                f"Ponte OBS indisponível ou ocupada (Windows {code}). "
+                "Confira plugin, OBS e mesma sessão de usuário."
+            )
 
     def transfer(self, size, data=None):
         from ctypes import wintypes as w

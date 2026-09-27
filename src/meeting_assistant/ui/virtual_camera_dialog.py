@@ -75,6 +75,7 @@ class VirtualCameraDialog(QDialog):
             "camera_approved_in_whatsapp": False,
         }
         self.supported, support = camera_support()
+        self.host_buffer = ""
         self.host = QProcess(self)
         self.host.readyReadStandardOutput.connect(self.host_output)
         self.host.finished.connect(self.host_finished)
@@ -204,20 +205,30 @@ class VirtualCameraDialog(QDialog):
             )
             return
         self.camera_state.setText("Aguardando confirmação da API do Windows…")
+        self.host_buffer = ""
         self.host.start(str(executable), [])
 
     def host_output(self):
-        text = bytes(self.host.readAllStandardOutput()).decode("utf-8", errors="replace").strip()
-        self.last_diagnostic["camera_api"] = text[:200]
-        if "CAMERA_STARTED" in text:
-            self.camera_state.setText("Windows confirmou a câmera. Selecione Meeting Assistant no WhatsApp.")
-            self.camera_button.setText("Parar câmera própria")
-        elif "CAMERA_ERROR" in text:
-            self.camera_state.setText(text + " — confira instalação e permissões de câmera do Windows.")
+        self.host_buffer += bytes(self.host.readAllStandardOutput()).decode("utf-8", errors="replace")
+        while "\n" in self.host_buffer:
+            text, self.host_buffer = self.host_buffer.split("\n", 1)
+            text = text.strip()[:200]
+            self.last_diagnostic["camera_api"] = text
+            if text == "CAMERA_STARTED":
+                self.camera_state.setText(
+                    "Windows confirmou a câmera. Selecione Meeting Assistant no WhatsApp."
+                )
+                self.camera_button.setText("Parar câmera própria")
+            elif text.startswith("CAMERA_ERROR"):
+                self.camera_state.setText(text + " — confira instalação e permissões de câmera do Windows.")
 
-    def host_finished(self, *_):
+    def host_finished(self, exit_code=0, *_):
         self.camera_button.setText("Iniciar câmera própria (Windows 11)")
-        self.camera_state.setText("Processo da câmera encerrado. OBS/Zoom não foram encerrados.")
+        if exit_code:
+            error = self.last_diagnostic.get("camera_api", "Falha ao iniciar componente nativo")
+            self.camera_state.setText(f"{error} • saída {exit_code}. Copie o diagnóstico.")
+        else:
+            self.camera_state.setText("Processo da câmera encerrado. OBS/Zoom não foram encerrados.")
 
     def reject(self):
         self.timer.stop()

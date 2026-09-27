@@ -32,9 +32,9 @@ git pull --ff-only
 .\scripts\setup-dev.ps1
 ```
 
-No GitHub do projeto, abra **Actions → Video native prototype → execução verde do commit
-instalado → Artifacts → meeting-assistant-video-prototype-x64**. Baixe e extraia em uma pasta.
-Se a execução não estiver verde, não use um pacote antigo como se fosse deste commit.
+No GitHub do projeto, abra **Actions → Video native prototype → execução verde `8c325cc` (protocolo 1 deste lote) → Artifacts → meeting-assistant-video-prototype-x64**. Baixe e extraia em uma pasta.
+O pacote nativo `8c325cc` é compatível com os ajustes de diagnóstico Python deste lote.
+Não use pacotes de outro protocolo.
 O pacote contém DLL da ponte, EXE de controle, DLL do provedor, licenças, hashes e script.
 `SHA256SUMS.json` detecta corrupção; não substitui assinatura/autenticidade da origem.
 
@@ -69,7 +69,7 @@ Abra OBS e inicie o app normalmente:
 5. No OBS, troque cenas e reproduza um vídeo com movimento. Confira que a prévia corresponde
    ao **Program**. Se usar modo estúdio, mudar só Preview não deve mudar esta saída.
 6. Confira orientação, proporção e cores. Este protótipo tem saída fixa 16:9; valide usando
-   um Program 16:9. Outros formatos precisam de tratamento de proporção antes da Release.
+   um Program SDR 16:9. Pare o envio antes de alterar resolução/fps no OBS. Outros formatos precisam de tratamento de proporção antes da Release.
 7. Clique **Parar envio de vídeo**: status desligado, imagem anterior removida. Reinicie e teste.
 8. Feche OBS durante o teste: deve aparecer indisponível/sem quadro, sem travar o app.
    Reabra OBS e clique Iniciar novamente. O plugin sempre inicia com envio desligado.
@@ -142,3 +142,10 @@ correspondentes. O provedor adapta Microsoft Windows-Camera sob MIT e preserva s
 Fontes ficam fixadas em `fcd1910...` (OBS) e `626f8b1...` (Microsoft) no script de build.
 Revisão de distribuição/licenças, assinatura, instalador integrado, preview independente,
 múltiplas sessões, desempenho real e aprovação WhatsApp continuam pendentes.
+
+## Evidência de desenvolvimento
+
+Build nativo aprovado no GitHub Actions em 27/09/2026, execução 36338601067, commit
+8c325cc: ponte, host e DLL Microsoft adaptada compilados; artefato publicado.
+O CI do app aprovou 215 testes no Windows antes do teste adicional de tamanho da prévia.
+Nenhum desses resultados certifica reconhecimento pelo WhatsApp ou operação física.

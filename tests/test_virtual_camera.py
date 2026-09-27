@@ -111,3 +111,37 @@ def test_close_while_reading_still_queues_stop(monkeypatch):
     send.assert_called_once_with("T")
     assert dialog.stop_requested
     dialog.reject()
+
+
+def test_preview_frame_does_not_expand_dialog(qt_application):
+    from meeting_assistant.services.virtual_camera import FrameStatus
+
+    dialog = VirtualCameraDialog()
+    dialog.show()
+    fit_window(dialog, QRect(0, 0, 800, 560))
+    qt_application.processEvents()
+    before = dialog.size()
+    pixels = bytes([16]) * (WIDTH * HEIGHT) + bytes([128]) * (WIDTH * HEIGHT // 2)
+    dialog.result('F', FrameStatus(True, True, 30, 1000), pixels, '')
+    qt_application.processEvents()
+    assert dialog.width() == before.width()
+    assert dialog.height() == before.height()
+    assert dialog.rect().contains(dialog.camera_button.geometry())
+    dialog.stop_requested = True
+    dialog.reject()
+
+
+def test_camera_error_survives_process_exit_and_partial_output():
+    dialog = VirtualCameraDialog()
+    actual_host = dialog.host
+    fake = Mock()
+    fake.readAllStandardOutput.side_effect = [b'CAMERA_ER', b'ROR 0x80070005\n']
+    dialog.host = fake
+    dialog.host_output()
+    assert 'camera_api' not in dialog.last_diagnostic
+    dialog.host_output()
+    dialog.host_finished(3)
+    assert '0x80070005' in dialog.camera_state.text()
+    dialog.host = actual_host
+    dialog.stop_requested = True
+    dialog.reject()
