@@ -25,6 +25,11 @@ foreach ($name in @('SimpleMediaSource.dll','SimpleMediaSourceDriver.dll','Simpl
     if (-not $file) { throw "Missing driver package file: $name" }
     Copy-Item $file.FullName $out
 }
+$probeBuild = Join-Path $build 'probe'
+Run cmake @('-S', $PSScriptRoot, '-B', $probeBuild, '-A', 'x64')
+Run cmake @('--build', $probeBuild, '--config', 'Release')
+Copy-Item (Join-Path $probeBuild 'Release\meeting-assistant-source-probe.exe') $out
+Run (Join-Path $out 'meeting-assistant-source-probe.exe') @((Join-Path $out 'SimpleMediaSource.dll'))
 Copy-Item (Join-Path $source 'LICENSE') (Join-Path $out 'LICENSE-Microsoft.txt')
 Copy-Item (Join-Path $PSScriptRoot 'README.md') $out
 Copy-Item (Join-Path $PSScriptRoot 'preflight.ps1') $out

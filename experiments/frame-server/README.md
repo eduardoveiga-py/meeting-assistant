@@ -33,9 +33,13 @@ PowerShell na pasta extraída:
 
 ```powershell
 .\preflight.ps1
+.\meeting-assistant-source-probe.exe "$PWD\SimpleMediaSource.dll"
 ```
 
 `secure_boot: null` significa consulta indisponível/sem permissão, não desativado.
+O executável testa carregamento e ativação da fonte MF dentro do próprio processo.
+`source_activated: true` não comprova que a câmera está registrada ou disponível
+no WhatsApp. Este teste ajuda a identificar dependências ausentes no Windows 10.
 Não há instalação automática. O relatório contém build, arquitetura e estado
 observável da assinatura/Secure Boot, sem serial ou identificação do computador.
 
