@@ -71,3 +71,43 @@ Com app/OBS/WhatsApp/Zoom fechados, execute o instalador como administrador:
 
 Remove apenas o registro do Compat; mantém arquivos que algum cliente ainda possa ter carregado.
 A câmera OBS e a câmera moderna têm identidades diferentes e não são removidas.
+
+## Reconhecida no OBS, ausente no WhatsApp (teste real de 27/09/2026)
+
+Windows 10, WhatsApp Desktop 2.2637.100.0 x64: o operador confirmou
+`COMPAT_REGISTERED ... HRESULT=0x0` e presença no OBS, mas ausência no WhatsApp.
+Isso valida carregamento/registro DirectShow, **não** compatibilidade WhatsApp.
+A ponte OBS foi observada em aproximadamente 30 fps. Reinstalar o mesmo
+componente não resolve uma diferença entre caminhos de enumeração.
+
+O pacote inclui `meeting-assistant-camera-inventory.exe`, executável portátil
+x64 e somente leitura. Na pasta extraída, sem privilégios de administrador:
+
+```powershell
+.\meeting-assistant-camera-inventory.exe
+```
+
+Enviar o JSON completo. Ele compara os nomes retornados pelo enumerador
+DirectShow e por `MFEnumDeviceSources` (Media Foundation). Não abre streams,
+não muda o registro, não captura imagens/áudio e não envia o relatório à rede.
+Não inclui IDs de dispositivos, números de série ou caminhos de hardware.
+`ok: false` é erro de consulta, não ausência de câmeras. Uma lista vazia com
+`ok: true` é uma enumeração concluída sem dispositivos. Presença na lista não
+comprova que o WhatsApp use aquela API nem que a câmera entregue vídeo nele.
+
+Interpretação:
+- Compat apenas em DirectShow e NDI também em MF: evidência de que precisamos
+  de outro caminho de exposição para clientes MF, em vez de ajustes de FPS.
+- Compat presente em ambos: investigar filtros e ativação do aplicativo.
+- NDI apenas em DirectShow: a hipótese de diferença DS/MF não basta para
+  explicar o resultado; comparar interfaces e formatos aceitos.
+
+Referências e limites de arquitetura:
+- [Enumeração MF](https://learn.microsoft.com/en-us/windows/win32/medfound/enumerating-video-capture-devices).
+- [MFCreateVirtualCamera](https://learn.microsoft.com/en-us/windows/win32/api/mfvirtualcamera/nf-mfvirtualcamera-mfcreatevirtualcamera): caminho moderno Windows 11, ainda sem teste físico neste projeto.
+- [Frame Server Custom Media Source](https://learn.microsoft.com/en-us/windows-hardware/drivers/stream/frame-server-custom-media-source): inclui pacote de driver/stub e requisitos de certificação; não se obtém apenas registrando a DLL DirectShow.
+- [NDI Webcam Input](https://docs.ndi.video/all/using-ndi/ndi-tools/ndi-tools-for-windows/webcam-input): alternativa já reconhecida neste ambiente. Não pressupomos que seu driver ou implementação sejam redistribuíveis.
+
+Decisão pendente do inventário: manter Compat para clientes DirectShow; para
+WhatsApp no Windows 10, avaliar integração com a saída NDI já validada ou um
+backend de driver com distribuição adequada. Não anunciar suporte universal.

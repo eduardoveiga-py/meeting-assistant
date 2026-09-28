@@ -305,3 +305,20 @@ def test_closing_compat_gate_precedes_async_shutdown(monkeypatch):
     dialog.worker = None
     dialog.stop_requested = True
     dialog.reject()
+
+
+def test_camera_preview_recovers_from_stale_frame_without_false_black_message():
+    from meeting_assistant.services.virtual_camera import FrameStatus
+
+    dialog = VirtualCameraDialog()
+    dialog.compat_gate = Mock()
+    dialog.result("I", FrameStatus(True, False, 1, 0), None, "")
+    assert "Sem vídeo recente" in dialog.preview.text()
+    dialog.result("I", FrameStatus(True, True, 2, 1000), None, "")
+    assert "Prévia pausada" in dialog.preview.text()
+    assert "Sem vídeo recente" not in dialog.preview.text()
+    assert dialog.last_diagnostic["bridge"]["fresh"] is True
+    dialog.compat_gate.close()
+    dialog.compat_gate = None
+    dialog.stop_requested = True
+    dialog.reject()

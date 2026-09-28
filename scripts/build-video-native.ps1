@@ -38,6 +38,8 @@ Copy-Item (Join-Path $cmakeBuild 'Release\meeting-assistant-bridge.dll') $out
 Copy-Item (Join-Path $cmakeBuild 'Release\meeting-assistant-camera.exe') $out
 Copy-Item (Join-Path $cmakeBuild 'Release\meeting-assistant-compat.dll') $out
 Copy-Item (Join-Path $cmakeBuild 'Release\meeting-assistant-compat-check.exe') $out
+Copy-Item (Join-Path $cmakeBuild 'Release\meeting-assistant-camera-inventory.exe') $out
+Run-Native powershell.exe @('-NoProfile', '-NonInteractive', '-File', (Join-Path $repo 'scripts\test-camera-inventory.ps1'), '-Executable', (Join-Path $out 'meeting-assistant-camera-inventory.exe'))
 Copy-Item (Join-Path $dshow 'COPYING') (Join-Path $out 'LICENSE-libdshowcapture.txt')
 Copy-Item (Join-Path $repo 'docs\test-compat-camera.md') $out
 # Include corresponding sources for the LGPL component and our integration.

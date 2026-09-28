@@ -44,3 +44,8 @@ if(BUILD_TESTING)
   add_test(NAME compat-com COMMAND meeting-assistant-compat-check $<TARGET_FILE:meeting-assistant-compat>)
   set_tests_properties(compat-com PROPERTIES TIMEOUT 15)
 endif()
+
+# Portable diagnostic: compares API enumeration without loading capture filters.
+add_executable(meeting-assistant-camera-inventory "${COMPAT_DIR}/inventory.cpp")
+target_compile_definitions(meeting-assistant-camera-inventory PRIVATE UNICODE _UNICODE NOMINMAX)
+target_link_libraries(meeting-assistant-camera-inventory PRIVATE ole32 oleaut32 strmiids mf mfplat mfuuid)

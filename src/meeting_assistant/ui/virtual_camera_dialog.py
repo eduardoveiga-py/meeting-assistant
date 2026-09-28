@@ -231,6 +231,12 @@ class VirtualCameraDialog(QDialog):
                 displayed = True
             except ValueError as exc:
                 self.status.setText(str(exc))
+        elif camera_running and status.enabled and status.fresh:
+            self.preview.clear()
+            self.preview.setText(
+                "Prévia pausada: vídeo recente na ponte OBS. "
+                "Confira o reconhecimento e a imagem no aplicativo de chamada."
+            )
         elif not status.fresh:
             self.preview.clear()
             self.preview.setText("Sem vídeo recente — câmera deve fornecer preto")
