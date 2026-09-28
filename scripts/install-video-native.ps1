@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Bridge','Camera','RemoveCamera','RemoveBridge')][string]$Component = 'Bridge',
+    [ValidateSet('Bridge','Camera','Compat','RemoveCamera','RemoveBridge','RemoveCompat')][string]$Component = 'Bridge',
     [string]$ObsDirectory = "$env:ProgramFiles\obs-studio",
     [switch]$VerifyOnly
 )
@@ -27,7 +27,10 @@ if ($VerifyOnly) {
     elseif ($Component -eq 'Camera') {
         Assert-PackageFile 'MeetingAssistantMediaSource.dll'
         Assert-PackageFile 'meeting-assistant-camera.exe'
-    } else { throw 'VerifyOnly requires Bridge or Camera.' }
+    } elseif ($Component -eq 'Compat') {
+        Assert-PackageFile 'meeting-assistant-compat.dll'
+        Assert-PackageFile 'meeting-assistant-compat-check.exe'
+    } else { throw 'VerifyOnly requires Bridge, Camera or Compat.' }
     Write-Host "Package integrity OK ($Component). No files installed. PowerShell $($PSVersionTable.PSVersion)"
     return
 }
@@ -50,6 +53,34 @@ if ($Component -in @('Bridge','RemoveBridge')) {
         Copy-Item $source $target -Force
     }
     Write-Host 'Bridge step complete. Restart OBS and verify in Meeting Assistant.'
+    exit
+}
+if ($Component -in @('Compat','RemoveCompat')) {
+    if ([Environment]::OSVersion.Version.Build -lt 19041) { throw 'Compatibility prototype requires Windows 10 2004+ x64.' }
+    if (Get-Process WhatsApp,Zoom,obs64 -ErrorAction SilentlyContinue) { throw 'Close WhatsApp, Zoom and OBS before installing/removing the compatibility camera.' }
+    $compatRoot = Join-Path $env:ProgramFiles 'MeetingAssistant\CompatCamera'
+    $target = Join-Path $compatRoot 'meeting-assistant-compat.dll'
+    $regsvr = Join-Path $env:WINDIR 'System32\regsvr32.exe'
+    if ($Component -eq 'RemoveCompat') {
+        if (-not (Test-Path $target)) { throw 'Installed compatibility DLL not found.' }
+        $process = Start-Process -FilePath $regsvr -ArgumentList @('/s','/u',('"' + $target + '"')) -Wait -PassThru
+        if ($process.ExitCode -ne 0) { throw "Compatibility unregister failed: $($process.ExitCode)" }
+        Write-Host 'Compatibility camera unregistered. Files retained until clients release the DLL.'
+        exit
+    }
+    Assert-PackageFile 'meeting-assistant-compat.dll'
+    Assert-PackageFile 'meeting-assistant-compat-check.exe'
+    New-Item -ItemType Directory -Force $compatRoot | Out-Null
+    foreach ($name in @('meeting-assistant-compat.dll','meeting-assistant-compat-check.exe')) {
+        $dest = Join-Path $compatRoot $name
+        if (Test-Path $dest) { Copy-Item $dest "$dest.backup-$(Get-Date -Format yyyyMMddHHmmss)" }
+        Copy-Item (Join-Path $PSScriptRoot $name) $dest -Force
+    }
+    $process = Start-Process -FilePath $regsvr -ArgumentList @('/s',('"' + $target + '"')) -Wait -PassThru
+    if ($process.ExitCode -ne 0) { throw "Compatibility registration failed: $($process.ExitCode)" }
+    & (Join-Path $compatRoot 'meeting-assistant-compat-check.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Compatibility component check failed. Copy the HRESULT above.' }
+    Write-Host 'Meeting Assistant Compat installed. Open the experimental camera screen and select Compatibility.'
     exit
 }
 if ([Environment]::OSVersion.Version.Build -lt 22000) { throw 'Camera component requires Windows 11 build 22000+.' }

@@ -257,3 +257,51 @@ def test_preview_reuses_decoder_thread_and_closes_cleanly(monkeypatch, qt_applic
     assert len(threads) == 1
     assert commands[-1] == "T"
     assert dialog.transport is None and dialog.worker is None
+
+
+def test_compat_backend_pauses_preview_and_stops_gate(monkeypatch):
+    import meeting_assistant.ui.virtual_camera_dialog as ui
+
+    monkeypatch.setattr(ui, "camera_support", lambda: (False, "Windows 10"))
+    monkeypatch.setattr(ui, "registered_camera", lambda: True)
+    gate = Mock()
+    monkeypatch.setattr(ui, "CompatibilityGate", lambda: gate)
+    dialog = ui.VirtualCameraDialog()
+    send = Mock()
+    monkeypatch.setattr(dialog, "send", send)
+    assert dialog.camera_button.isEnabled()
+    dialog.toggle_camera()
+    assert dialog.last_diagnostic["camera_backend"] == "compat"
+    assert dialog.last_diagnostic["compat_enabled"] is True
+    assert not dialog.backend.isEnabled()
+    assert dialog.camera_running()
+    send.assert_called_with("S")
+    dialog.poll()
+    send.assert_called_with("I")
+    dialog.toggle_camera()
+    gate.close.assert_called_once()
+    send.assert_called_with("T")
+    assert dialog.backend.isEnabled() and dialog.compat_gate is None
+    dialog.stop_requested = True
+    dialog.reject()
+
+
+def test_backend_selection_preserves_windows11_and_manual_choice():
+    from meeting_assistant.services.compat_camera import resolve_backend
+
+    assert resolve_backend("auto", True) == "modern"
+    assert resolve_backend("auto", False) == "compat"
+    assert resolve_backend("compat", True) == "compat"
+
+
+def test_closing_compat_gate_precedes_async_shutdown(monkeypatch):
+    dialog = VirtualCameraDialog()
+    gate = Mock()
+    dialog.compat_gate = gate
+    dialog.worker = Mock()
+    dialog.reject()
+    gate.close.assert_called_once()
+    assert dialog.compat_gate is None and dialog.closing
+    dialog.worker = None
+    dialog.stop_requested = True
+    dialog.reject()

@@ -20,9 +20,11 @@ function Get-PinnedSource([string]$Name, [string]$Url, [string]$Commit) {
 }
 $obs = Get-PinnedSource 'obs' 'https://github.com/obsproject/obs-studio.git' 'fcd1910bf5116b69404a6ecdda6efedd1d00ebdf'
 $ms = Get-PinnedSource 'camera' 'https://github.com/microsoft/Windows-Camera.git' '626f8b19c5f367602f2e89c6b314573d3776c9df'
+$dshow = Get-PinnedSource 'libdshowcapture' 'https://github.com/obsproject/libdshowcapture.git' 'ef8c1d2e19c93e664100dd41e1a0df4f8ad45430'
+Run-Native python @((Join-Path $repo 'scripts\prepare-compat-camera.py'), $dshow)
 $native = Join-Path $repo 'native\virtual-camera'
 $cmakeBuild = Join-Path $BuildRoot 'cmake'
-Run-Native cmake @('-S', $native, '-B', $cmakeBuild, '-A', 'x64', "-DOBS_HEADERS=$obs")
+Run-Native cmake @('-S', $native, '-B', $cmakeBuild, '-A', 'x64', "-DOBS_HEADERS=$obs", "-DDSHOW_SOURCE=$dshow")
 Run-Native cmake @('--build', $cmakeBuild, '--config', 'Release')
 Run-Native ctest @('--test-dir', $cmakeBuild, '-C', 'Release', '--output-on-failure')
 Run-Native python @((Join-Path $repo 'scripts\prepare-camera-source.py'), $ms, $native)
@@ -34,6 +36,19 @@ $out = Join-Path $BuildRoot 'package'
 New-Item -ItemType Directory -Force $out | Out-Null
 Copy-Item (Join-Path $cmakeBuild 'Release\meeting-assistant-bridge.dll') $out
 Copy-Item (Join-Path $cmakeBuild 'Release\meeting-assistant-camera.exe') $out
+Copy-Item (Join-Path $cmakeBuild 'Release\meeting-assistant-compat.dll') $out
+Copy-Item (Join-Path $cmakeBuild 'Release\meeting-assistant-compat-check.exe') $out
+Copy-Item (Join-Path $dshow 'COPYING') (Join-Path $out 'LICENSE-libdshowcapture.txt')
+Copy-Item (Join-Path $repo 'docs\test-compat-camera.md') $out
+# Include corresponding sources for the LGPL component and our integration.
+$sourceBundle = Join-Path $BuildRoot 'compat-source'
+New-Item -ItemType Directory -Force $sourceBundle | Out-Null
+Copy-Item (Join-Path $dshow 'source') $sourceBundle -Recurse
+Copy-Item (Join-Path $dshow 'dshowcapture.hpp') $sourceBundle
+Copy-Item (Join-Path $dshow 'COPYING') $sourceBundle
+Copy-Item (Join-Path $repo 'native') $sourceBundle -Recurse
+Copy-Item (Join-Path $repo 'scripts') $sourceBundle -Recurse
+Compress-Archive -Path (Join-Path $sourceBundle '*') -DestinationPath (Join-Path $out 'compat-source.zip')
 Copy-Item (Join-Path $BuildRoot 'provider\MeetingAssistantMediaSource.dll') $out
 Copy-Item (Join-Path $ms 'LICENSE') (Join-Path $out 'LICENSE-Microsoft.txt')
 Copy-Item (Join-Path $obs 'COPYING') (Join-Path $out 'LICENSE-OBS.txt')

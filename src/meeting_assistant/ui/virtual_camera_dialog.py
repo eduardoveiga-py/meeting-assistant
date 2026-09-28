@@ -11,8 +11,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QProcess, QSize, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QSizePolicy, QVBoxLayout
+from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QLabel, QPushButton, QSizePolicy, QVBoxLayout
 
+from meeting_assistant.services.compat_camera import CompatibilityGate, registered_camera, resolve_backend
 from meeting_assistant.services.video_metrics import VideoMetrics
 from meeting_assistant.services.virtual_camera import FRAME_BYTES, HEIGHT, WIDTH, camera_support, request
 from meeting_assistant.ui.window_geometry import ScreenFitController
@@ -109,6 +110,8 @@ class VirtualCameraDialog(QDialog):
             "camera_approved_in_whatsapp": False,
         }
         self.supported, support = camera_support()
+        self.compat_gate = None
+        self.compat_installed = registered_camera()
         self.host_buffer = ""
         self.host = QProcess(self)
         self.host.readyReadStandardOutput.connect(self.host_output)
@@ -118,7 +121,8 @@ class VirtualCameraDialog(QDialog):
         )
         root = QVBoxLayout(self)
         title = QLabel(
-            support + "\nFechar esta tela encerra o teste e a câmera própria. "
+            "Moderno: Windows 11. Compatibilidade: Windows 10/11 x64 (instalação separada).\n"
+            "Fechar esta tela encerra o teste e o envio de vídeo. "
             "A câmera do OBS para o Zoom continua independente."
         )
         title.setWordWrap(True)
@@ -145,9 +149,16 @@ class VirtualCameraDialog(QDialog):
         self.camera_state = QLabel("Câmera própria ainda não iniciada.")
         self.camera_state.setWordWrap(True)
         root.addWidget(self.camera_state)
-        self.camera_button = QPushButton("Iniciar câmera própria (Windows 11)")
+        self.backend = QComboBox()
+        self.backend.addItem("Automático", "auto")
+        self.backend.addItem("Moderno — Windows 11", "modern")
+        self.backend.addItem("Compatibilidade — Windows 10/11", "compat")
+        root.addWidget(self.backend)
+        self.camera_button = QPushButton("Iniciar câmera selecionada")
         self.camera_button.setEnabled(self.supported)
         self.camera_button.clicked.connect(self.toggle_camera)
+        self.backend.currentIndexChanged.connect(self.refresh_backend)
+        self.refresh_backend()
         root.addWidget(self.camera_button)
         copy_button = QPushButton("Copiar diagnóstico técnico")
         copy_button.clicked.connect(
@@ -169,7 +180,7 @@ class VirtualCameraDialog(QDialog):
         # Keep the diagnostic consumer from competing with the camera for frames.
         if self.closing or self.worker is not None:
             return
-        camera_running = self.host.state() != QProcess.ProcessState.NotRunning
+        camera_running = self.camera_running()
         command = "I" if camera_running else "F"
         self.timer.setInterval(500 if camera_running else 33)
         self.send(command)
@@ -205,7 +216,7 @@ class VirtualCameraDialog(QDialog):
         self.last_diagnostic.pop("last_error", None)
         self.last_diagnostic["bridge"] = status.diagnostic()
         now = time.monotonic()
-        camera_running = self.host.state() != QProcess.ProcessState.NotRunning
+        camera_running = self.camera_running()
         displayed = False
         if pixels is not None and not camera_running and pixels:
             try:
@@ -260,9 +271,53 @@ class VirtualCameraDialog(QDialog):
             command, self.pending_command = self.pending_command, None
             self.send(command)
 
+    def camera_running(self):
+        return self.compat_gate is not None or self.host.state() != QProcess.ProcessState.NotRunning
+
+    def refresh_backend(self):
+        selected = resolve_backend(self.backend.currentData(), self.supported)
+        self.last_diagnostic["camera_backend"] = selected
+        self.last_diagnostic["compat_registered"] = self.compat_installed
+        self.last_diagnostic["compat_enabled"] = self.compat_gate is not None
+        self.camera_button.setEnabled(self.supported if selected == "modern" else self.compat_installed)
+        if selected == "compat" and not self.compat_installed:
+            self.camera_state.setText(
+                "Instale o componente Compat e reabra esta tela. Reconhecimento no WhatsApp exige teste."
+            )
+
     def toggle_camera(self):
+        if self.compat_gate is not None:
+            self.compat_gate.close()
+            self.compat_gate = None
+            self.backend.setEnabled(True)
+            self.camera_button.setText("Iniciar câmera selecionada")
+            self.camera_state.setText(
+                "Envio de compatibilidade parado; câmera registrada permanece na lista."
+            )
+            self.refresh_backend()
+            self.send("T")
+            return
         if self.host.state() != QProcess.ProcessState.NotRunning:
             self.host.write(b"stop\n")
+            return
+        if resolve_backend(self.backend.currentData(), self.supported) == "compat":
+            if not self.compat_installed:
+                return
+            try:
+                self.compat_gate = CompatibilityGate()
+            except OSError as exc:
+                self.camera_state.setText(str(exc))
+                return
+            self.backend.setEnabled(False)
+            self.camera_button.setText("Parar câmera de compatibilidade")
+            self.camera_state.setText(
+                "Envio autorizado. Selecione Meeting Assistant Compat no WhatsApp. "
+                "Reconhecimento ainda não confirmado."
+            )
+            self.preview.clear()
+            self.preview.setText("Prévia pausada: confira a imagem no aplicativo que usa a câmera.")
+            self.refresh_backend()
+            self.send("S")
             return
         if not self.supported:
             return
@@ -279,6 +334,7 @@ class VirtualCameraDialog(QDialog):
             return
         self.camera_state.setText("Aguardando confirmação da API do Windows…")
         self.host_buffer = ""
+        self.backend.setEnabled(False)
         self.host.start(str(executable), [])
 
     def host_output(self):
@@ -300,7 +356,8 @@ class VirtualCameraDialog(QDialog):
                 self.camera_state.setText(text + " — confira instalação e permissões de câmera do Windows.")
 
     def host_finished(self, exit_code=0, *_):
-        self.camera_button.setText("Iniciar câmera própria (Windows 11)")
+        self.camera_button.setText("Iniciar câmera selecionada")
+        self.backend.setEnabled(True)
         if exit_code:
             error = self.last_diagnostic.get("camera_api", "Falha ao iniciar componente nativo")
             self.camera_state.setText(f"{error} • saída {exit_code}. Copie o diagnóstico.")
@@ -308,6 +365,10 @@ class VirtualCameraDialog(QDialog):
             self.camera_state.setText("Processo da câmera encerrado. OBS/Zoom não foram encerrados.")
 
     def reject(self):
+        if self.compat_gate is not None:
+            self.compat_gate.close()
+            self.compat_gate = None
+            self.last_diagnostic["compat_enabled"] = False
         self.timer.stop()
         if self.worker is not None:
             self.closing = True

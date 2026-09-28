@@ -20,3 +20,27 @@ if(BUILD_TESTING)
   add_executable(frame-clock-test frame_clock_test.cpp)
   add_test(NAME frame-clock COMMAND frame-clock-test)
 endif()
+
+set(DSHOW_SOURCE "" CACHE PATH "Pinned libdshowcapture source root")
+if(NOT EXISTS "${DSHOW_SOURCE}/source/output-filter.cpp")
+  message(FATAL_ERROR "DSHOW_SOURCE must point to prepared libdshowcapture")
+endif()
+set(COMPAT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../compat-camera")
+add_library(meeting-assistant-compat MODULE
+  "${COMPAT_DIR}/compat_camera.cpp"
+  "${DSHOW_SOURCE}/source/output-filter.cpp"
+  "${DSHOW_SOURCE}/source/dshow-media-type.cpp"
+  "${DSHOW_SOURCE}/source/dshow-formats.cpp"
+  "${DSHOW_SOURCE}/source/log.cpp")
+target_include_directories(meeting-assistant-compat PRIVATE "${DSHOW_SOURCE}")
+target_compile_definitions(meeting-assistant-compat PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(meeting-assistant-compat PRIVATE ole32 oleaut32 strmiids advapi32)
+add_executable(meeting-assistant-compat-check "${COMPAT_DIR}/probe.cpp")
+target_compile_definitions(meeting-assistant-compat-check PRIVATE UNICODE _UNICODE NOMINMAX)
+target_link_libraries(meeting-assistant-compat-check PRIVATE ole32 oleaut32 strmiids)
+if(BUILD_TESTING)
+  add_executable(compat-pixels-test "${COMPAT_DIR}/pixels_test.cpp")
+  add_test(NAME compat-pixels COMMAND compat-pixels-test)
+  add_test(NAME compat-com COMMAND meeting-assistant-compat-check $<TARGET_FILE:meeting-assistant-compat>)
+  set_tests_properties(compat-com PROPERTIES TIMEOUT 15)
+endif()

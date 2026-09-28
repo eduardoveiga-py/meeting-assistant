@@ -1,5 +1,14 @@
 # Histórico de alterações
 
+## Não lançado — câmera de compatibilidade, 27/09/2026
+
+- Módulo DirectShow separado para Windows 10 2004+/11 x64, identidade Meeting Assistant Compat.
+- Mesma ponte Program OBS; saída NV12/I420/YUY2 720p30 e preto sem envio autorizado.
+- Seleção Automático/Moderno/Compatibilidade na tela experimental; um consumidor por vez.
+- Instalar, verificar e remover Compat separadamente, com SHA256 e verificador COM.
+- Testes de formatos, ciclo de vida e controles; recepção WhatsApp depende de ensaio físico.
+- Fontes correspondentes e licença libdshowcapture incluídas no pacote.
+
 ## Não lançado — instalador de vídeo / PowerShell 5.1, 27/09/2026
 
 - Corrigida enumeração do manifesto JSON que podia causar falso erro de SHA256 no Windows PowerShell 5.1.

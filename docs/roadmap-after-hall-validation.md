@@ -219,3 +219,10 @@ Atualização 27/09 — câmera, revisão 2:
 - Próximo gate: Windows 11, instalação do provedor, enumeração no WhatsApp, vídeo contínuo,
   retomada e encerramento de sessão. Depois, integrar ciclo de vida permanente e instalador
   principal; atualmente fechar a tela experimental encerra o teste.
+
+
+Câmera Compat (27/09): implementação DirectShow separada, Windows 10/11 x64.
+Reaproveita ponte, usa GUID próprio e libdshowcapture fixada. Seleção de backend e
+autorização local explícita implementadas. Gate antes da integração definitiva:
+[reconhecimento e vídeo recebido no WhatsApp](test-compat-camera.md).
+Windows 11 moderno continua preservado e pendente de validação física.

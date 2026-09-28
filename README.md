@@ -187,3 +187,9 @@ Em desenvolvimento: ponte do Program OBS e câmera Windows 11, sem alterar a sa�
 JWL/Zoom validada. Windows 10 permite testar somente a ponte/diagnóstico.
 Veja [binários de teste, instalação, diagnóstico e remoção](docs/test-virtual-camera.md).
 Esta função não faz parte da Release 0.5.0 e ainda não tem aprovação física no WhatsApp.
+
+
+Câmera alternativa em desenvolvimento: **Meeting Assistant Compat**, para aplicativos
+x64 que aceitam DirectShow no Windows 10/11. Instalação separada e seleção na tela
+experimental; [teste e remoção](docs/test-compat-camera.md). Não incluída na release
+estável; reconhecimento no WhatsApp ainda precisa de teste físico.
