@@ -61,4 +61,8 @@ replace(
     "} else if (riid == IID_IMemInputPin) {\n\t\tAddRef();\n\t\t*ppv = (IMemInputPin *)this;\n\t",
     "} else if (riid == IID_IMemInputPin) {\n        *ppv = nullptr;\n        return E_NOINTERFACE;\n\t",
 )
+replace(
+    "\tcurCX = cx;\n\tcurCY = cy;\n\tcurInterval = interval;",
+    "\tcurVFormat = format;\n\tcurCX = cx;\n\tcurCY = cy;\n\tcurInterval = interval;",
+)
 p.write_text("// Modified by Meeting Assistant 2026-09-27; see prepare-compat-camera.py.\n" + s)

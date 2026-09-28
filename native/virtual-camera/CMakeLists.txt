@@ -28,6 +28,7 @@ endif()
 set(COMPAT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../compat-camera")
 add_library(meeting-assistant-compat MODULE
   "${COMPAT_DIR}/compat_camera.cpp"
+  "${COMPAT_DIR}/compat_camera.def"
   "${DSHOW_SOURCE}/source/output-filter.cpp"
   "${DSHOW_SOURCE}/source/dshow-media-type.cpp"
   "${DSHOW_SOURCE}/source/dshow-formats.cpp"

@@ -1,0 +1,6 @@
+LIBRARY meeting-assistant-compat.dll
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE
+    DllRegisterServer PRIVATE
+    DllUnregisterServer PRIVATE

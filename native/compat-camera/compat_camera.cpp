@@ -156,9 +156,8 @@ HRESULT filter_registration(bool install) {
     return hr;
 }
 }
-#define EXPORT extern "C" __declspec(dllexport)
-EXPORT HRESULT __stdcall DllCanUnloadNow() { return objects || server_locks ? S_FALSE : S_OK; }
-EXPORT HRESULT __stdcall DllGetClassObject(REFCLSID cls, REFIID iid, void** out) {
+STDAPI DllCanUnloadNow() { return objects || server_locks ? S_FALSE : S_OK; }
+STDAPI DllGetClassObject(REFCLSID cls, REFIID iid, void** out) {
     if (!out) return E_POINTER;
     *out = nullptr;
     if (cls != ma_compat::clsid) return CLASS_E_CLASSNOTAVAILABLE;
@@ -166,13 +165,13 @@ EXPORT HRESULT __stdcall DllGetClassObject(REFCLSID cls, REFIID iid, void** out)
     if (!f) return E_OUTOFMEMORY;
     HRESULT hr = f->QueryInterface(iid, out); f->Release(); return hr;
 }
-EXPORT HRESULT __stdcall DllUnregisterServer() {
+STDAPI DllUnregisterServer() {
     HRESULT hr = filter_registration(false);
     auto error = RegDeleteTreeW(HKEY_LOCAL_MACHINE, ma_compat::registry);
     if (error && error != ERROR_FILE_NOT_FOUND) return HRESULT_FROM_WIN32(error);
     return FAILED(hr) ? hr : S_OK;
 }
-EXPORT HRESULT __stdcall DllRegisterServer() {
+STDAPI DllRegisterServer() {
     wchar_t path[32768];
     DWORD size = GetModuleFileNameW(instance, path, 32768);
     if (!size || size >= 32768) return E_FAIL;
