@@ -16,6 +16,12 @@ Run git @('-C', $source, 'checkout', '--detach', 'FETCH_HEAD')
 Run git @('-C', $source, 'submodule', 'update', '--init', '--depth', '1', 'wil')
 Run python @((Join-Path $PSScriptRoot 'prepare.py'), $source)
 Run nuget @('install', 'Microsoft.Windows.WDK.x64', '-Version', '10.0.26100.2454', '-OutputDirectory', (Join-Path $source 'packages'), '-NonInteractive', '-Source', 'https://api.nuget.org/v3/index.json')
+# NuGet WDK tools are not necessarily added to PATH by the imported targets.
+$kitTools = Get-ChildItem (Join-Path $source 'packages') -Recurse -File |
+    Where-Object { $_.Name -in @('stampinf.exe','tracewpp.exe','inf2cat.exe','infverif.exe') -and $_.FullName -notmatch '\\arm64\\' } |
+    Select-Object -ExpandProperty DirectoryName -Unique
+$env:PATH = ($kitTools -join ';') + ';' + $env:PATH
+if (-not (Get-Command stampinf.exe -ErrorAction SilentlyContinue)) { throw 'WDK stampinf not found in restored packages.' }
 $sample = Join-Path $source 'general\SimpleMediaSource'
 Run msbuild @((Join-Path $sample 'SimpleMediaSource.sln'), '/m', '/p:Configuration=Release', '/p:Platform=x64', '/p:SignMode=Off', '/p:DriverTargetPlatform=Desktop', '/p:UMDF_VERSION_MAJOR=2', '/p:UMDF_VERSION_MINOR=31', '/p:Driver_SpectreMitigation=false', '/p:SpectreMitigation=false', '/p:Inf2CatUseLocalTime=true', '/p:Inf2CatWindowsVersionList=10_VB_X64')
 $out = Join-Path $build 'package'
