@@ -31,8 +31,7 @@ add_library(meeting-assistant-compat MODULE
   "${COMPAT_DIR}/compat_camera.def"
   "${DSHOW_SOURCE}/source/output-filter.cpp"
   "${DSHOW_SOURCE}/source/dshow-media-type.cpp"
-  "${DSHOW_SOURCE}/source/dshow-formats.cpp"
-  "${DSHOW_SOURCE}/source/log.cpp")
+  "${DSHOW_SOURCE}/source/dshow-formats.cpp")
 target_include_directories(meeting-assistant-compat PRIVATE "${DSHOW_SOURCE}")
 target_compile_definitions(meeting-assistant-compat PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_link_libraries(meeting-assistant-compat PRIVATE ole32 oleaut32 strmiids advapi32)
