@@ -127,6 +127,9 @@ class VirtualCameraDialog(QDialog):
         )
         title.setWordWrap(True)
         root.addWidget(title)
+        ndi_button = QPushButton("NDI → WhatsApp (Windows 10/11)")
+        ndi_button.clicked.connect(self.open_ndi)
+        root.addWidget(ndi_button)
         self.preview = QLabel("Sem quadro confirmado do Program do OBS")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setWordWrap(True)
@@ -175,6 +178,17 @@ class VirtualCameraDialog(QDialog):
         self.timer.setInterval(33)
         self.timer.timeout.connect(self.poll)
         self._screen_fit = ScreenFitController(self)
+
+    def open_ndi(self):
+        from meeting_assistant.ui.ndi_dialog import NdiDialog
+
+        if self.camera_running():
+            self.camera_state.setText("Pare a câmera própria antes de abrir o teste NDI.")
+            return
+        self.timer.stop()
+        if self.transport is not None:
+            self.send("T")
+        NdiDialog(self).exec()
 
     def poll(self):
         # Keep the diagnostic consumer from competing with the camera for frames.
@@ -317,8 +331,8 @@ class VirtualCameraDialog(QDialog):
             self.backend.setEnabled(False)
             self.camera_button.setText("Parar câmera de compatibilidade")
             self.camera_state.setText(
-                "Envio autorizado. Selecione Meeting Assistant Compat no WhatsApp. "
-                "Reconhecimento ainda não confirmado."
+                "Envio DirectShow autorizado. Selecione Meeting Assistant Compat num aplicativo compatível. "
+                "No WhatsApp testado no Windows 10, use a opção NDI."
             )
             self.preview.clear()
             self.preview.setText("Prévia pausada: confira a imagem no aplicativo que usa a câmera.")
