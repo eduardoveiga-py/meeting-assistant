@@ -58,13 +58,17 @@ O downloader exige que a release nativa tenha sido publicada pelo workflow
 Um repositorio privado pode usar GitHub CLI autenticado, ou uma URL acessivel
 em `MEETING_ASSISTANT_NATIVE_URL`. Nenhum token deve ser colocado no codigo.
 
-As instrucoes abaixo sao destinadas ao futuro pacote de distribuicao.
+As instruções abaixo se aplicam ao instalador da release candidata 0.6.0-rc1.
 
 ## 1. Instalar o Meeting Assistant
 
 Baixe `MeetingAssistant-Setup-<versão>.exe` na Release do GitHub e execute.
 
-O instalador é por usuário e normalmente não exige uma senha de administrador. Aceite o local padrão e crie o atalho desejado.
+Feche app, OBS e WhatsApp. O instalador solicita permissão de administrador para
+registrar a câmera e instalar a ponte OBS. Selecione a pasta do OBS e mantenha os
+componentes câmera/ponte habilitados. Se ainda não tiver OBS, desmarque a ponte;
+depois use o assistente para instalar OBS e instalar os componentes nativos.
+Python, bibliotecas e Microsoft Visual C++ x64 estão incluídos.
 
 ## 2. Instalar os aplicativos externos
 
@@ -85,7 +89,7 @@ Na primeira abertura, use **Assistente de instalação e configuração** para v
 1. Em **Configurações → Áudio** dos dois aplicativos, selecione **CABLE Output** como microfone quando quiser enviar a mistura monitorada pelo OBS.
 2. Use os alto-falantes físicos do Salão como saída de ambos. O Meeting Assistant inicia o retorno do WhatsApp silenciado e oferece um botão separado para liberá-lo.
 3. Se precisar de áudio estéreo, teste o modo de áudio original/estéreo do Zoom com outro dispositivo.
-4. Use **OBS Virtual Camera** como câmera quando necessário.
+4. Use **OBS Virtual Camera** como câmera do Zoom e **Meeting Assistant** no WhatsApp.
 5. Ao abrir o Meeting Assistant, a câmera nativa do Windows 11 é iniciada depois que o OBS conecta. Na tela principal, use **Parar câmera WhatsApp** ou **Tentar câmera WhatsApp** quando precisar controlá-la.
 
 ## 5. Áudio de mídia
@@ -104,7 +108,7 @@ JW Library / VLC / Chrome / Edge
       Zoom + WhatsApp
 ```
 
-Para uma fonte somente para o Zoom, prefira **Monitor Only** no OBS.
+Para as fontes da mesa e mídias enviadas aos dois aplicativos, use **Monitor Only** no OBS.
 
 Não selecione o retorno do Zoom como parte da mistura enviada ao Zoom. Se a mesa já inclui o retorno, use uma saída mix-minus.
 

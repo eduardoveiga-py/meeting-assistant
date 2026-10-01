@@ -9,7 +9,7 @@ permissions:
   contents: read
 concurrency:
   group: windows-release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: windows-2022
@@ -41,6 +41,10 @@ jobs:
           $tokens = $null; $errors = $null
           [System.Management.Automation.Language.Parser]::ParseFile(
             (Join-Path $PWD 'packaging/installer-preflight.ps1'), [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count) { throw ($errors | Out-String) }
+          python -c "from meeting_assistant.services.packaged_native import installation_script; from pathlib import Path; Path('elevation-check.ps1').write_text(installation_script('C:/Program Files/Meeting Assistant/native', 'D:/OBS Studio'), encoding='utf-8')"
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $PWD 'elevation-check.ps1'), [ref]$tokens, [ref]$errors) | Out-Null
           if ($errors.Count) { throw ($errors | Out-String) }
       - name: Build and verify native camera and OBS bridge
         shell: pwsh
@@ -103,6 +107,10 @@ jobs:
         shell: pwsh
         run: |
           $target = Join-Path $env:RUNNER_TEMP 'MeetingAssistant-installed'
+          $settings = Join-Path $env:APPDATA 'MeetingAssistant/settings.json'
+          New-Item -ItemType Directory -Force (Split-Path $settings) | Out-Null
+          '{"release_test_marker":"preserve"}' | Set-Content $settings
+          $settingsHash = (Get-FileHash $settings).Hash
           $installer = Resolve-Path release/MeetingAssistant-Setup-0.6.0-rc1.exe
           $process = Start-Process $installer -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /COMPONENTS=app /DIR=`"$target`" /LOG=installer-check.log" -Wait -PassThru
           if ($process.ExitCode -notin @(0,3010)) { throw "Installer failed: $($process.ExitCode)" }
@@ -111,8 +119,11 @@ jobs:
           $report = Get-Content installed-runtime-check.json -Raw | ConvertFrom-Json
           if (-not $report.ok -or -not $report.frozen) { throw 'Installed runtime report failed' }
           if (-not (Test-Path "$target/native/MeetingAssistantMediaSource.dll")) { throw 'Native bundle missing' }
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$target/native/install-video-native.ps1" -Component All -VerifyOnly
+          if ($LASTEXITCODE -ne 0) { throw 'Installed native bundle integrity failed' }
           $process = Start-Process "$target/unins000.exe" -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
           if ($process.ExitCode -ne 0 -or (Test-Path "$target/MeetingAssistant.exe")) { throw 'Uninstall failed' }
+          if (-not (Test-Path $settings) -or (Get-FileHash $settings).Hash -ne $settingsHash) { throw 'User settings not preserved' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
