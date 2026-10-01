@@ -14,8 +14,14 @@ A compatibilidade real com a versão instalada do WhatsApp ainda precisa ser con
 
 ```powershell
 Unblock-File -LiteralPath .\install-video-native.ps1
-.\install-video-native.ps1 -Component All
+powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File ".\install-video-native.ps1" -Component All
 ```
+
+`Unblock-File` remove a marca de arquivo baixado, mas não libera a execução quando
+a política do PowerShell é `Restricted`. O comando acima usa `RemoteSigned` apenas
+no processo do instalador, sem alterar a política permanente do Windows.
+Se a execução continuar bloqueada, rode `Get-ExecutionPolicy -List` e envie a saída
+para diagnóstico; políticas de grupo têm prioridade sobre a opção do processo.
 
 O instalador verifica hashes, testa a ativação da fonte Microsoft adaptada, instala
 nosso plugin no OBS e registra nossa fonte de câmera no Windows. Não modifica cenas,
@@ -90,8 +96,8 @@ acesso de aplicativos e aplicativos da área de trabalho. Não altere proteçõe
 Feche app, OBS e clientes da câmera. PowerShell administrador, pasta do pacote:
 
 ```powershell
-.\install-video-native.ps1 -Component RemoveCamera
-.\install-video-native.ps1 -Component RemoveBridge
+powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File ".\install-video-native.ps1" -Component RemoveCamera
+powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File ".\install-video-native.ps1" -Component RemoveBridge
 ```
 
 A câmera é de sessão e some quando seu processo termina. O registro COM próprio é
