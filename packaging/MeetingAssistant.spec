@@ -1,10 +1,13 @@
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_data_files
 
 datas = collect_data_files("meeting_assistant.resources")
+source = Path(SPECPATH).resolve().parent / "src"
 
 a = Analysis(
-    ["src/meeting_assistant/main.py"],
-    pathex=["src"],
+    [str(source / "meeting_assistant/main.py")],
+    pathex=[str(source)],
     binaries=[],
     datas=datas,
     hiddenimports=["comtypes", "comtypes.client", "pythoncom", "pywintypes"],

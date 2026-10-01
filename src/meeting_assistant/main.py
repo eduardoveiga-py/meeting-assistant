@@ -59,6 +59,12 @@ def main() -> int:
     # The JW Library UIA service intentionally performs that import lazily on
     # its own STA worker thread, after Qt has established OLE and DPI awareness.
     app = QApplication(sys.argv)
+    if sys.argv[1:2] == ["--self-check"]:
+        from meeting_assistant.services.startup_diagnostic import write_startup_diagnostic
+
+        if len(sys.argv) != 3:
+            return 2
+        return write_startup_diagnostic(sys.argv[2], _load_app_icon())
     supported, reason = camera_support()
     if not supported:
         QMessageBox.critical(None, "Windows 11 necessário", reason)
