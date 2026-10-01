@@ -64,7 +64,15 @@ int main() {
         ma::ProgramReader reader;
         Sleep(20); // Allow the prior test client to disconnect.
         std::vector<uint8_t> copied(ma::bytes);
-        std::thread first([&] { reader.copy_frame(copied.data(), ma::bytes, ma::width); }); first.join();
+        // The camera reader is intentionally asynchronous. Allow its first
+        // connection/frame to warm up without making Media Foundation block.
+        std::thread first([&] {
+            for (int attempt = 0; attempt < 20; ++attempt) {
+                reader.copy_frame(copied.data(), ma::bytes, ma::width);
+                if (copied == data) break;
+                Sleep(10);
+            }
+        }); first.join();
         check(copied == data);
         std::thread second([&] { reader.copy_frame(copied.data(), ma::bytes, ma::width); }); second.join();
         check(copied == data);
