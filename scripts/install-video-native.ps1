@@ -87,12 +87,24 @@ foreach ($name in @('MeetingAssistantMediaSource.dll','meeting-assistant-camera.
 & (Join-Path $PSScriptRoot 'meeting-assistant-source-probe.exe') (Join-Path $PSScriptRoot 'MeetingAssistantMediaSource.dll')
 if ($LASTEXITCODE -ne 0) { throw 'Media source activation failed. Copy the HRESULT above.' }
 New-Item -ItemType Directory -Force $cameraRoot | Out-Null
-foreach ($name in @('MeetingAssistantMediaSource.dll','meeting-assistant-camera.exe','meeting-assistant-source-probe.exe','meeting-assistant-camera-inventory.exe')) {
+$sourceDll = Join-Path $PSScriptRoot 'MeetingAssistantMediaSource.dll'
+$sourceHash = (Get-FileHash -LiteralPath $sourceDll -Algorithm SHA256).Hash.ToLowerInvariant()
+# A client such as WhatsApp or the Windows camera broker may keep the previous
+# COM DLL mapped even after the visible app has closed. Install each build under
+# its content hash so an in-use previous version never blocks an update.
+$versionedDll = Join-Path $cameraRoot "MeetingAssistantMediaSource.$($sourceHash.Substring(0,16)).dll"
+if (Test-Path $versionedDll) {
+    $installedHash = (Get-FileHash -LiteralPath $versionedDll -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($installedHash -ne $sourceHash) { throw "Installed camera DLL hash mismatch: $versionedDll" }
+} else {
+    Copy-Item $sourceDll $versionedDll -Force
+}
+foreach ($name in @('meeting-assistant-camera.exe','meeting-assistant-source-probe.exe','meeting-assistant-camera-inventory.exe')) {
     $target = Join-Path $cameraRoot $name
     if (Test-Path $target) { Copy-Item $target "$target.backup-$(Get-Date -Format yyyyMMddHHmmss)" }
     Copy-Item (Join-Path $PSScriptRoot $name) $target -Force
 }
 New-Item -Path "$clsid\InprocServer32" -Force | Out-Null
-Set-Item -Path "$clsid\InprocServer32" -Value (Join-Path $cameraRoot 'MeetingAssistantMediaSource.dll')
+Set-Item -Path "$clsid\InprocServer32" -Value $versionedDll
 New-ItemProperty -Path "$clsid\InprocServer32" -Name ThreadingModel -Value Both -PropertyType String -Force | Out-Null
-Write-Host 'Camera provider installed. Start the session camera from Meeting Assistant; verify WhatsApp separately.'
+Write-Host "Camera provider installed ($($versionedDll | Split-Path -Leaf)). Start the session camera from Meeting Assistant; verify WhatsApp separately."

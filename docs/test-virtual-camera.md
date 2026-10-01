@@ -27,6 +27,10 @@ O instalador verifica hashes, testa a ativação da fonte Microsoft adaptada, in
 nosso plugin no OBS e registra nossa fonte de câmera no Windows. Não modifica cenas,
 fontes, áudio, Secure Boot ou assinatura de drivers. O requisito Windows 11 elimina
 a necessidade do experimento de driver que estávamos preparando para Windows 10.
+As atualizações da DLL da câmera são instaladas com um nome versionado; uma versão
+antiga mantida temporariamente pelo Windows ou por um cliente de câmera não bloqueia
+a substituição. Ainda é necessário fechar Meeting Assistant, OBS e WhatsApp antes
+de atualizar os executáveis e a ponte.
 Se o OBS estiver em outro caminho, acrescente `-ObsDirectory 'D:\OBS Studio'`.
 Se ainda existir **Meeting Assistant Compat** da tentativa anterior, com OBS/WhatsApp/
 Zoom fechados, use `-Component RemoveLegacy` para remover apenas seu registro.
