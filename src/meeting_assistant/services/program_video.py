@@ -21,7 +21,6 @@ def video_frame(pixels):
     fmt = QVideoFrameFormat(QSize(WIDTH, HEIGHT), QVideoFrameFormat.PixelFormat.Format_NV12)
     fmt.setColorSpace(QVideoFrameFormat.ColorSpace.ColorSpace_BT709)
     fmt.setColorRange(QVideoFrameFormat.ColorRange.ColorRange_Video)
-    fmt.setFrameRate(30)
     frame = QVideoFrame(fmt)
     if not frame.map(QVideoFrame.MapMode.WriteOnly):
         raise ValueError("Não foi possível preparar o quadro de vídeo.")

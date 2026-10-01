@@ -6,6 +6,7 @@ import platform
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QVBoxLayout
 
+from meeting_assistant import __version__
 from meeting_assistant.services.camera_session import camera_session
 from meeting_assistant.services.program_video import program_video
 from meeting_assistant.ui.program_preview import ProgramPreview
@@ -71,6 +72,7 @@ class VirtualCameraDialog(QDialog):
     def update_diagnostic(self):
         self.last_diagnostic = {
             "diagnostic_revision": 3,
+            "app_version": __version__,
             "platform": platform.system(), "release": platform.release(),
             "windows_version": platform.version(),
             **self.monitor.diagnostic, **self.session.diagnostic(),

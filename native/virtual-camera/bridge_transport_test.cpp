@@ -57,6 +57,18 @@ int main() {
         { std::lock_guard<std::mutex> lock(frame_mutex); state.tick_ms = GetTickCount64() - 2000; }
         h = exchange(preview, 'F', received); check(h.flags == 1 && received.empty());
         CloseHandle(camera); CloseHandle(preview);
+        // A single MF stream may issue samples from different OS threads.
+        control = connect(ma::control_pipe);
+        exchange(control, 'S', received); CloseHandle(control);
+        input.timestamp += 1000000000; video(nullptr, &input);
+        ma::ProgramReader reader;
+        Sleep(20); // Allow the prior test client to disconnect.
+        std::vector<uint8_t> copied(ma::bytes);
+        std::thread first([&] { reader.copy_frame(copied.data(), ma::bytes, ma::width); }); first.join();
+        check(copied == data);
+        std::thread second([&] { reader.copy_frame(copied.data(), ma::bytes, ma::width); }); second.join();
+        check(copied == data);
+        reader.reset();
         std::cout << "PASS: simultaneous consumers, persistent connections, camera stop, stale rejection\n";
     } catch (const std::exception& e) { std::cerr << e.what() << '\n'; result = 1; }
     SetEvent(quit); ft.join(); pt.join(); ct.join(); CloseHandle(quit);

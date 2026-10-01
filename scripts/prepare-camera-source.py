@@ -23,7 +23,9 @@ def patch(root, native):
     )
     end = text.index("        RETURN_IF_FAILED(MFCreateAttributes(&m_spAttributes", start)
     text = text[:start] + text[end:]
-    text = text.replace(needle, "HRESULT frameResult = ma::copy_frame(pbuf, bufferLength, pitch);")
+    text = text.replace(
+        needle, "HRESULT frameResult = m_programReader.copy_frame(pbuf, bufferLength, pitch);"
+    )
     text = text.replace(
         "RETURN_IF_FAILED(buffer2D->Unlock2D());",
         "RETURN_IF_FAILED(buffer2D->Unlock2D());\n        RETURN_IF_FAILED(frameResult);",
@@ -34,7 +36,20 @@ def patch(root, native):
         "        spMediaType->SetUINT32(MF_MT_YUV_MATRIX, MFVideoTransferMatrix_BT709);\n"
         "        spMediaType->SetUINT32(MF_MT_VIDEO_NOMINAL_RANGE, MFNominalRange_16_235);",
     )
+    text = text.replace(
+        "        m_bIsShutdown = true;", "        m_bIsShutdown = true;\n        m_programReader.reset();"
+    )
     stream.write_text(text, encoding="utf-8")
+    header = source / "SimpleMediaStream.h"
+    header_text = header.read_text(encoding="utf-8-sig")
+    anchor = "        winrt::slim_mutex  m_Lock;"
+    if header_text.count(anchor) != 1:
+        raise ValueError("Unexpected stream header; refusing to patch")
+    header_text = header_text.replace(
+        '#include "SimpleMediaSource.h"', '#include "SimpleMediaSource.h"\n#include "pipe_client.hpp"'
+    )
+    header_text = header_text.replace(anchor, anchor + "\n        ma::ProgramReader m_programReader;")
+    header.write_text(header_text, encoding="utf-8")
     for name in ("protocol.hpp", "pipe_client.hpp"):
         (source / name).write_bytes((native / name).read_bytes())
     for file in source.glob("*.h"):
