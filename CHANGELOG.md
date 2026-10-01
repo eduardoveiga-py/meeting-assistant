@@ -1,5 +1,15 @@
 # Histórico de alterações
 
+## 0.6.0-rc1 — 01/10/2026
+
+- Instalador Windows 11 com Python, bibliotecas, câmera Media Foundation, ponte OBS
+  e runtime Visual C++ incluídos; seleção da pasta OBS e bloqueio enquanto apps estão abertos.
+- ZIP portátil e checksums publicados após testes do CI.
+- Executável verificado e instalação/desinstalação automatizadas no CI.
+- Assistente permite instalar o pacote nativo depois da instalação do OBS.
+- Metadados de versão incluídos no executável para diagnóstico/revisão do assistente.
+- Pré-release: ensaio físico de áudio simultâneo e instalação Windows 11 pendentes.
+
 ## Não lançado — áudio Zoom/WhatsApp e câmera na tela principal — 01/10/2026
 
 - Inicializacao verifica Python 3.12 estavel x64 antes do pip; se `.venv` for

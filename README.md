@@ -9,7 +9,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Windows-11%20x64-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Python-runtime%20incluído-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python runtime incluído">
-  <img src="https://img.shields.io/badge/Release-0.6.0--dev1-22C55E?style=for-the-badge" alt="Release 0.6.0-dev1">
+  <img src="https://img.shields.io/badge/Release-0.6.0--rc1-22C55E?style=for-the-badge" alt="Release 0.6.0-rc1">
   <img src="https://img.shields.io/badge/Status-build%20Windows%2011%20em%20validação-F59E0B?style=for-the-badge" alt="Build Windows 11 em validação">
 </p>
 
@@ -42,26 +42,26 @@ O comportamento **JWL ↔ Zoom ↔ Salão** foi validado pelo operador em **21/0
 
 ---
 
-## 📦 Distribuição final planejada para quem não tem Python
+## 📦 Instalador para quem não tem Python
 
-**O instalador final incluirá Python e as bibliotecas. Durante os testes atuais,
-use o código Python conforme o procedimento abaixo. O instalador ainda precisa
-da validação final; esta seção descreve a distribuição planejada.**
+**A release candidata inclui Python, bibliotecas e componentes nativos da câmera.
+O instalador ainda precisa do ensaio completo no Windows 11 do operador.**
 
 1. Abra a área de **Releases** do repositório.
-2. Baixe `MeetingAssistant-Setup-0.6.0-dev1.exe`.
+2. Baixe `MeetingAssistant-Setup-0.6.0-rc1.exe`.
 3. Execute o instalador e siga as etapas.
 4. Abra o **Meeting Assistant** pelo menu Iniciar ou pelo atalho criado.
 5. Na primeira abertura, use o **Assistente de instalação e configuração** para verificar o ambiente.
 
 ### Aplicativos externos necessários
 
-O instalador não redistribui softwares de terceiros. Para a operação completa, instale:
+O instalador inclui o runtime Microsoft Visual C++ e as DLLs nativas. Para a operação completa, instale:
 
 - **OBS Studio**
 - **Zoom para desktop**
 - **JW Library para Windows**
 - **VB-CABLE**, quando o áudio de mídia for enviado ao Zoom
+- **WhatsApp para desktop**, quando usar a câmera Meeting Assistant
 
 O assistente pode ajudar a instalar OBS e Zoom por WinGet, com autorização explícita. O JW Library deve ser instalado pela fonte oficial. O VB-CABLE é um driver externo e deve ser instalado pelo fabricante.
 
@@ -82,7 +82,7 @@ Ele reutiliza a camera/ponte ja instaladas; se faltarem, baixa somente o pacote
 nativo. Use `-Refresh` quando precisar atualizar os componentes nativos.
 
 A camera tem DLLs e pequenos executaveis C++ auxiliares; o aplicativo principal
-continua em Python. O executavel e o instalador finais ficam para a distribuicao.
+continua disponível em Python. Executável e instalador são uma alternativa de distribuição.
 Veja [o procedimento completo](docs/installation.md).
 
 ---

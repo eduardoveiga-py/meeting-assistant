@@ -13,7 +13,10 @@ Nao e necessario compilar C++ ou criar o executavel do aplicativo para testar.
 
 O workflow **Windows 11 video** compila DLLs e auxiliares da camera, testa a
 integridade e prepara a release `native-latest`. Ele nao empacota o app Python.
-O workflow **Windows Release** fica reservado para o executavel/instalador final.
+O workflow **Windows Release** compila e testa o executável e instalador da release
+candidata 0.6.0-rc1, incluindo o pacote nativo e Microsoft Visual C++ x64.
+Os downloads ficam em https://github.com/eduardoveiga-py/meeting-assistant/releases.
+O usuário final não precisa de Python, Git, MSBuild ou Inno Setup.
 
 ## Build de mantenedor
 
@@ -122,7 +125,7 @@ New-Item -ItemType Directory -Force .\release | Out-Null
 & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" .\packaging\MeetingAssistant.iss
 ```
 
-O instalador será criado em `release\MeetingAssistant-Setup-0.6.0-dev1.exe`.
+O instalador será criado em `release\MeetingAssistant-Setup-0.6.0-rc1.exe`.
 
 Para gerar hashes:
 
