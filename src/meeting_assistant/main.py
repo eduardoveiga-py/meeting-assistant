@@ -10,6 +10,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from meeting_assistant.core.state import AppState
+from meeting_assistant.services.camera_session import camera_session
 from meeting_assistant.services.display_service import DisplayService, resolve_hall_display
 from meeting_assistant.services.hall_monitor_sensor import HallMonitorSensorRegionProvider
 from meeting_assistant.services.jwl_fast_window_guard import JwlFastWindowGuard
@@ -29,6 +30,7 @@ from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsCo
 from meeting_assistant.services.settings import SettingsService
 from meeting_assistant.services.telemetry_service import TelemetryService
 from meeting_assistant.services.virtual_camera import camera_support
+from meeting_assistant.services.windows_audio import WhatsAppAudioGuard
 from meeting_assistant.services.zoom_hall_service import ZoomHallService, hall_runtime_flags
 from meeting_assistant.ui.main_window import MainWindow
 
@@ -166,6 +168,24 @@ def main() -> int:
         display_provider=current_hall_display,
         jwl_window_provider=lambda: jwl_secondary.current or jwl_fast_guard.cached_candidate,
     )
+    whatsapp_audio_guard = WhatsAppAudioGuard()
+    whatsapp_camera_session = camera_session()
+    # Connect before MainWindow starts the fail-closed guard so the initial
+    # WhatsApp state is included in telemetry, even when no call is active.
+    whatsapp_audio_guard.state_changed.connect(
+        lambda muted, message: telemetry.event(
+            "whatsapp_audio_output",
+            muted=muted,
+            message=message,
+        )
+    )
+    whatsapp_camera_session.changed.connect(
+        lambda: telemetry.event(
+            "whatsapp_camera_state",
+            **whatsapp_camera_session.diagnostic(),
+        )
+    )
+    telemetry.event("whatsapp_camera_state", **whatsapp_camera_session.diagnostic())
 
     window = MainWindow(
         state=state,
@@ -180,6 +200,8 @@ def main() -> int:
         app_icon=app_icon,
         hall_window_provider=lambda: jwl_secondary.current or jwl_fast_guard.cached_candidate,
         hall_display_provider=current_hall_display,
+        whatsapp_audio_guard=whatsapp_audio_guard,
+        camera_session=whatsapp_camera_session,
     )
     # Startup routing belongs to the media automation now. Preserving the OBS
     # scene here is essential when Meeting Assistant is reopened mid-video.
@@ -365,7 +387,6 @@ def main() -> int:
             telemetry.request_sync(),
         )
     )
-
     def apply_automation_runtime(enabled: bool, *, switching_to_zoom: bool = False) -> None:
         protect_jwl, effective = hall_runtime_flags(
             enabled, zoom_hall.active, zoom_hall.returning, switching_to_zoom
@@ -408,6 +429,7 @@ def main() -> int:
     app.aboutToQuit.connect(jwl_virtual_desktop.stop)
     app.aboutToQuit.connect(jwl_secondary.stop)
     app.aboutToQuit.connect(obs_controller.stop)
+    app.aboutToQuit.connect(whatsapp_audio_guard.stop)
     app.aboutToQuit.connect(jwl_probe.stop)
     app.aboutToQuit.connect(jwl_service.stop)
     app.aboutToQuit.connect(lambda: telemetry.event("qt_about_to_quit"))

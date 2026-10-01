@@ -15,7 +15,7 @@ Configurações do app ficam em `%APPDATA%\MeetingAssistant\settings.json`. Fech
 3. No OBS, habilite o servidor WebSocket e use os mesmos dados em Ajustes.
 4. Configure as cenas e fontes do ambiente: **Texto do Ano** com a foto, **Palco** com a câmera e **Mídias** com a captura adequada do JWL. Mapeie os nomes reais no app.
 5. Habilite dois monitores no Zoom antes de entrar na reunião. As duas janelas precisam existir para Zoom → Salão.
-6. Iniciar reunião solicita e verifica a câmera virtual, inclusive com OBS aberto. Também há botão para isso na tela de Texto do Ano/fontes OBS. Selecione OBS Virtual Camera no Zoom; ativação no OBS não prova seleção no Zoom.
+6. A câmera virtual nativa é iniciada automaticamente depois que o OBS conecta. O botão **Câmera WhatsApp** na tela principal permite parar, iniciar ou tentar novamente. Selecione Meeting Assistant no WhatsApp; o estado ativo no OBS não prova a seleção dentro do WhatsApp.
 7. Configure o áudio separadamente. O retorno dos participantes não deve compor o áudio enviado de volta ao Zoom; a solução integrada ainda está pendente.
 
 ## Operar
@@ -24,7 +24,7 @@ Configurações do app ficam em `%APPDATA%\MeetingAssistant\settings.json`. Fech
 - **Verificar:** confere conexão OBS, nomes de cenas e informações de monitores/JWL.
 - **Ativar automação:** acompanha mídia; repouso com texto do ano corresponde a Palco.
 - **Zoom → Salão:** mostra participantes no monitor local; clicar novamente deve restaurar JWL.
-- **Fundo / Palco / Mídia:** seleção manual da cena.
+- **Texto do Ano / Palco / Mídia:** seleção manual da cena.
 - **Cena segura → Palco:** pausa a automação e solicita Palco.
 - **Observar mídia / Calibrar Texto do Ano:** ferramentas técnicas atualmente na tela principal, com mudança para Ajustes planejada. Calibrar altera referências do detector e ativa a automação; não salva a foto de apresentação do OBS.
 
@@ -70,4 +70,3 @@ A nova configuração em Ajustes, os nomes padrão das cenas e o início do OBS 
 ## Foto do Texto do Ano e fontes
 
 Siga o [passo a passo de captura e teste](yeartext-and-obs.md). A imagem só é salva após confirmação do operador. A gravação não altera a calibração do sensor. A verificação de fontes informa configuração, não valida sozinha o conteúdo mostrado aos participantes.
-

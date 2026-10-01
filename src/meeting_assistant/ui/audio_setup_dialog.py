@@ -27,7 +27,7 @@ class AudioSetupDialog(QDialog):
         self.settings = settings
         self.token = uuid4().hex
         self.busy = False
-        self.setWindowTitle("Áudio da mesa e das mídias → Zoom")
+        self.setWindowTitle("Áudio da mesa e das mídias → Zoom + WhatsApp")
         self.resize(590, 690)
         self.setMinimumSize(360, 280)
         outer = QVBoxLayout(self)
@@ -42,7 +42,8 @@ class AudioSetupDialog(QDialog):
             "e reinicie o Windows conforme o instalador.<br>"
             "2. OBS → Configurações → Áudio → Avançado → Dispositivo de monitoramento: "
             "<b>CABLE Input</b>.<br>"
-            "3. Zoom → Áudio → Microfone: <b>CABLE Output</b>. Alto-falante: saída física do salão.<br>"
+            "3. Zoom e WhatsApp → Áudio → Microfone: <b>CABLE Output</b>. "
+            "Alto-falante: saída física do salão.<br>"
             "4. Abra os aplicativos de mídia, prepare as listas e selecione as fontes abaixo.<br>"
             "A preparação silencia as fontes deste módulo. A ativação afeta o áudio ao vivo. "
             "A câmera virtual continua cuidando da imagem."
@@ -67,14 +68,15 @@ class AudioSetupDialog(QDialog):
             "Selecione somente os aplicativos usados. Todas as abas do navegador escolhido "
             "podem ser ouvidas. Se a mesa já devolve as mídias ao notebook, a mistura pode "
             "duplicá-las. O retorno do Zoom não pode entrar novamente na saída da mesa "
-            "que alimenta o notebook (mix-minus)."
+            "que alimenta o notebook (mix-minus). O botão principal do app controla "
+            "somente o retorno do WhatsApp; ele não silencia o mix enviado aos aplicativos."
         )
         note.setWordWrap(True)
         body.addWidget(note)
         self.confirmations = []
         for text in (
             "Conferi CABLE Input como monitoramento do OBS.",
-            "Conferi CABLE Output como microfone do Zoom e a saída física como alto-falante.",
+            "Conferi CABLE Output como microfone do Zoom e do WhatsApp, e a saída física como alto-falante.",
             "Conferi que a entrada da mesa não devolve Zoom nem duplica as mídias.",
         ):
             row = QHBoxLayout()
@@ -90,7 +92,7 @@ class AudioSetupDialog(QDialog):
             self.confirmations.append(check)
         hint = QLabel(
             "As confirmações são manuais. O app não verifica os dispositivos escolhidos "
-            "no Zoom nem o cabo físico da mesa. No OBS, deixe outras fontes sem monitoramento. "
+            "no Zoom/WhatsApp nem o cabo físico da mesa. No OBS, deixe outras fontes sem monitoramento. "
             "As escolhas ficam salvas na coleção de cenas do OBS, incluindo a ativação."
         )
         hint.setWordWrap(True)
@@ -102,10 +104,10 @@ class AudioSetupDialog(QDialog):
         self.status.setWordWrap(True)
         self.status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         outer.addWidget(self.status)
-        self.activate_button = QPushButton("Aplicar seleção e ativar envio ao Zoom")
+        self.activate_button = QPushButton("Aplicar seleção e ativar envio ao Zoom e WhatsApp")
         self.activate_button.clicked.connect(lambda: self.request("activate"))
         outer.addWidget(self.activate_button)
-        self.mute_button = QPushButton("Silenciar envio do app")
+        self.mute_button = QPushButton("Silenciar mix enviado aos aplicativos")
         self.mute_button.clicked.connect(lambda: self.request("mute"))
         outer.addWidget(self.mute_button)
         self.close_button = QPushButton("Fechar")

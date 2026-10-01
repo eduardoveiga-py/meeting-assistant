@@ -10,7 +10,16 @@ a = Analysis(
     pathex=[str(source)],
     binaries=[],
     datas=datas,
-    hiddenimports=["comtypes", "comtypes.client", "pythoncom", "pywintypes"],
+    hiddenimports=[
+        "comtypes",
+        "comtypes.client",
+        "pythoncom",
+        "pywintypes",
+        # windows_audio imports pycaw lazily so non-Windows development stays
+        # importable; keep the Windows package explicit in frozen builds.
+        "pycaw",
+        "pycaw.pycaw",
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
