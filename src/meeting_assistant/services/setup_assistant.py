@@ -12,12 +12,30 @@ from pathlib import Path
 from uuid import uuid4
 
 import psutil
+from websocket import WebSocketBadStatusException, WebSocketTimeoutException
 
 from meeting_assistant.services.meeting_launcher import zoom_join_uri
 from meeting_assistant.services.obs_setup import find_obs_executable
 
 PACKAGES = {"OBS": "OBSProject.OBSStudio", "Zoom": "Zoom.Zoom"}
 SCHEMA = 1
+
+
+def websocket_failure_reason(exc: BaseException) -> str:
+    """Return a useful, credential-safe explanation for a failed OBS probe."""
+
+    text = str(exc).strip().casefold()
+    if isinstance(exc, (ConnectionRefusedError,)) or "10061" in text or "refused" in text:
+        return "porta recusada; habilite o servidor WebSocket no OBS e confira a porta"
+    if isinstance(exc, (TimeoutError, WebSocketTimeoutException)) or "timed out" in text or "timeout" in text:
+        return "tempo esgotado; confira se o OBS está aberto e se o host/porta estão corretos"
+    if isinstance(exc, WebSocketBadStatusException) or any(
+        token in text for token in ("authentication", "identify", "4009", "401", "403")
+    ):
+        return "autenticação recusada; use no app a mesma senha configurada no OBS"
+    if "connection reset" in text or "closed" in text:
+        return "servidor fechou a conexão; reinicie o OBS e confira o servidor WebSocket"
+    return "falha ao autenticar; confira host, porta, senha e a versão do WebSocket do OBS"
 
 
 def review_key():
@@ -180,8 +198,9 @@ def inspect_environment(settings):
         rows.append(
             ("Câmera virtual ativa", bool(client.send("GetVirtualCamStatus", raw=True)["outputActive"]))
         )
-    except Exception:
-        rows.append(("WebSocket: conferir OBS aberto, endereço, porta e senha", False))
+    except Exception as exc:
+        rows.append(("WebSocket conectado e autenticado", False))
+        rows.append((f"Diagnóstico WebSocket: {websocket_failure_reason(exc)}", False))
     finally:
         if client is not None:
             client.disconnect()

@@ -186,7 +186,21 @@ class SetupAssistantDialog(QDialog):
         self._completion = None
 
     def _inspect(self):
+        # Probe what is currently displayed in the embedded editor. Previously
+        # this used only owner.settings, so a freshly typed host/port/password
+        # was ignored until the operator discovered the separate Save button.
         settings = replace(self.owner.settings)
+        self.editor.apply_to(settings)
+        if settings != self.owner.settings:
+            try:
+                service.validate_settings(settings)
+                self.owner._apply_assistant_settings(settings)
+            except ValueError as exc:
+                self.status.setText(str(exc))
+                return
+            except Exception:
+                self.status.setText("Falha ao aplicar os ajustes antes da verificação.")
+                return
         self._run(lambda: service.inspect_environment(settings))
 
     def _install(self, app):
