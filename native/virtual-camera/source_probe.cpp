@@ -6,7 +6,7 @@
 #include <iostream>
 using Microsoft::WRL::ComPtr;
 int wmain(int argc, wchar_t** argv) {
-    if (argc != 2) { std::cerr << "Pass the full path to SimpleMediaSource.dll\n"; return 2; }
+    if (argc != 2) { std::cerr << "Pass the full path to MeetingAssistantMediaSource.dll\n"; return 2; }
     HRESULT init = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (FAILED(init)) return 3;
     HRESULT startup = MFStartup(MF_VERSION);
@@ -20,7 +20,7 @@ int wmain(int argc, wchar_t** argv) {
     if (SUCCEEDED(hr)) {
         auto get = reinterpret_cast<HRESULT(__stdcall*)(REFCLSID, REFIID, void**)>(GetProcAddress(module, "DllGetClassObject"));
         CLSID cls{};
-        hr = CLSIDFromString(L"{C5C7589B-FF9A-4E96-B156-68479F4C75CA}", &cls);
+        hr = CLSIDFromString(L"{5108191D-9AD8-44F5-B760-7A35D433A427}", &cls);
         ComPtr<IClassFactory> factory;
         ComPtr<IMFActivate> activate;
         ComPtr<IMFMediaSource> source;

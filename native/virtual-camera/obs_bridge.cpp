@@ -14,7 +14,7 @@
 namespace {
 std::atomic<bool> active{false};
 HANDLE quit = nullptr;
-std::thread frame_thread, control_thread;
+std::thread frame_thread, preview_thread, control_thread;
 std::mutex frame_mutex;
 std::vector<uint8_t> pixels(ma::bytes);
 ma::Header state;
@@ -23,7 +23,7 @@ decltype(&obs_add_raw_video_callback) add_video = nullptr;
 decltype(&obs_remove_raw_video_callback) remove_video = nullptr;
 
 void video(void*, video_data* frame) {
-    if (!active || !frame || !frame->data[0] || !frame->data[1]
+    if (!frame || !frame->data[0] || !frame->data[1]
         || frame->linesize[0] < ma::width || frame->linesize[1] < ma::width) return;
     std::unique_lock<std::mutex> lock(frame_mutex, std::try_to_lock);
     if (!lock) return; // Never wait for an IPC consumer on the rendering callback.
@@ -38,7 +38,6 @@ void video(void*, video_data* frame) {
     ++state.sequence;
 }
 void start() {
-    if (active.exchange(true)) return;
     { std::lock_guard<std::mutex> lock(frame_mutex); state.tick_ms = 0; state.sequence = 0; frame_clock = ma::FrameClock{}; }
     video_scale_info conversion{};
     conversion.format = VIDEO_FORMAT_NV12;
@@ -47,7 +46,8 @@ void start() {
     add_video(&conversion, video, nullptr);
 }
 void stop() {
-    if (active.exchange(false)) remove_video(video, nullptr);
+    active = false;
+    remove_video(video, nullptr);
     std::lock_guard<std::mutex> lock(frame_mutex);
     state.tick_ms = 0;
 }
@@ -88,18 +88,18 @@ PSECURITY_DESCRIPTOR security(bool frames) {
         return nullptr;
     return sd;
 }
-HANDLE make_pipe(bool frames) {
+HANDLE make_pipe(const wchar_t* name, bool frames) {
     auto sd = security(frames);
     if (!sd) return INVALID_HANDLE_VALUE;
     SECURITY_ATTRIBUTES sa{sizeof(sa), sd, FALSE};
-    HANDLE p = CreateNamedPipeW(frames ? ma::frames_pipe : ma::control_pipe,
+    HANDLE p = CreateNamedPipeW(name,
         PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
         PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
         1, ma::bytes + sizeof(ma::Header), 16, 300, &sa);
     LocalFree(sd);
     return p;
 }
-void serve(HANDLE pipe, bool frames) {
+void serve(HANDLE pipe, bool frames, bool preview = false) {
     while (WaitForSingleObject(quit, 0) != WAIT_OBJECT_0) {
         OVERLAPPED ov{};
         ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
@@ -119,25 +119,26 @@ void serve(HANDLE pipe, bool frames) {
         CloseHandle(ov.hEvent);
         if (!connected) { DisconnectNamedPipe(pipe); continue; }
         char command = 0;
-        if (io(pipe, &command, 1, false)) {
-            if (!frames && command == 'S') start();
-            if (!frames && command == 'T') stop();
+        while (io(pipe, &command, 1, false)) {
+            if (!frames && command == 'S') active = true;
+            if (!frames && command == 'T') active = false;
             if ((frames && command == 'F') || (!frames && (command == 'S' || command == 'T' || command == 'I'))) {
                 ma::Header header;
                 std::vector<uint8_t> frame;
                 {
                     std::lock_guard<std::mutex> lock(frame_mutex);
                     header = state;
-                    header.flags = active ? ma::enabled : 0;
-                    if (active && state.tick_ms && GetTickCount64() - state.tick_ms < 1000)
+                    header.flags = (preview || active) ? ma::enabled : 0;
+                    if ((preview || active) && state.tick_ms && GetTickCount64() - state.tick_ms < 1000)
                         header.flags |= ma::fresh;
                     if (frames && (header.flags & ma::fresh)) { header.payload = ma::bytes; frame = pixels; }
                 }
                 bool ok = io(pipe, &header, sizeof(header), true);
                 if (ok && !frame.empty()) ok = io(pipe, frame.data(), static_cast<DWORD>(frame.size()), true);
                 char ack = 0;
-                if (ok) io(pipe, &ack, 1, false); // Don't discard bytes before the reader consumes them.
-            }
+                if (!ok || !io(pipe, &ack, 1, false) || ack != 'A') break;
+                if (!frames) break; // Control is one command per connection.
+            } else break;
         }
         DisconnectNamedPipe(pipe);
     }
@@ -148,7 +149,7 @@ void serve(HANDLE pipe, bool frames) {
 MA_EXPORT void obs_module_set_pointer(obs_module_t*) {}
 MA_EXPORT uint32_t obs_module_ver() { return LIBOBS_API_VER; }
 MA_EXPORT const char* obs_module_name() { return "Meeting Assistant Program Bridge"; }
-MA_EXPORT const char* obs_module_description() { return "Local Program output bridge; explicitly started by Meeting Assistant."; }
+MA_EXPORT const char* obs_module_description() { return "Local Program preview and separately authorized camera output."; }
 MA_EXPORT bool obs_module_load() {
     auto lib = GetModuleHandleW(L"obs.dll");
     if (!lib) return false;
@@ -157,14 +158,18 @@ MA_EXPORT bool obs_module_load() {
     if (!add_video || !remove_video) return false;
     quit = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     if (!quit) return false;
-    HANDLE frames = make_pipe(true), control = make_pipe(false);
-    if (frames == INVALID_HANDLE_VALUE || control == INVALID_HANDLE_VALUE) {
+    HANDLE frames = make_pipe(ma::frames_pipe, true), control = make_pipe(ma::control_pipe, false);
+    HANDLE preview = make_pipe(ma::preview_pipe, false);
+    if (frames == INVALID_HANDLE_VALUE || control == INVALID_HANDLE_VALUE || preview == INVALID_HANDLE_VALUE) {
         if (frames != INVALID_HANDLE_VALUE) CloseHandle(frames);
         if (control != INVALID_HANDLE_VALUE) CloseHandle(control);
+        if (preview != INVALID_HANDLE_VALUE) CloseHandle(preview);
         CloseHandle(quit); quit = nullptr; return false;
     }
-    frame_thread = std::thread(serve, frames, true);
-    control_thread = std::thread(serve, control, false);
+    start(); // Capture Program for local preview; camera delivery remains explicitly disabled.
+    frame_thread = std::thread(serve, frames, true, false);
+    preview_thread = std::thread(serve, preview, true, true);
+    control_thread = std::thread(serve, control, false, false);
     return true;
 }
 MA_EXPORT void obs_module_unload() {
@@ -172,5 +177,6 @@ MA_EXPORT void obs_module_unload() {
     SetEvent(quit);
     if (control_thread.joinable()) control_thread.join();
     if (frame_thread.joinable()) frame_thread.join();
+    if (preview_thread.joinable()) preview_thread.join();
     stop(); CloseHandle(quit); quit = nullptr;
 }

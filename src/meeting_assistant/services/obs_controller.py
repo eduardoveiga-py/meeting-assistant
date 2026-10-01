@@ -139,10 +139,13 @@ class ObsController(QObject):
     hall_task_finished = Signal(str, bool, str)
     audio_task_finished = Signal(str, str, bool, object)
 
-    def __init__(self, poll_interval: float = 0.5, preview_interval: float = 0.15) -> None:
+    def __init__(
+        self, poll_interval: float = 0.5, preview_interval: float = 0.15, *, screenshot_preview: bool = True
+    ) -> None:
         super().__init__()
         _install_transient_log_filter()
         self._poll_interval = max(0.25, poll_interval)
+        self._screenshot_preview = screenshot_preview
         self._preview_interval = max(0.12, preview_interval)
         self._commands: queue.Queue[tuple[str, object | None]] = queue.Queue()
         self._stop_event = threading.Event()
@@ -296,7 +299,7 @@ class ObsController(QObject):
                     next_reconnect = time.monotonic() + 2.0
                 next_poll = now + self._poll_interval
 
-            if self._client is not None and now >= next_preview:
+            if self._screenshot_preview and self._client is not None and now >= next_preview:
                 self._refresh_preview()
                 if self._client is None:
                     next_reconnect = time.monotonic() + 2.0

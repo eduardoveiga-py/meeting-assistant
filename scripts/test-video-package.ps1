@@ -22,7 +22,7 @@ try {
     Write-Host "Legacy comparison matches on this shell: $oldMatches"
     & $installer -Component Bridge -VerifyOnly
     & $installer -Component Camera -VerifyOnly
-    & $installer -Component Compat -VerifyOnly
+    & $installer -Component All -VerifyOnly
     $originalBytes = [IO.File]::ReadAllBytes($bridge)
     [IO.File]::WriteAllBytes($bridge, [byte[]](1,2,3))
     Expect-Rejection 'Artifact checksum mismatch:*'

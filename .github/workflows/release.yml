@@ -67,7 +67,7 @@ jobs:
           $tag = $env:GITHUB_REF_NAME
           $notes = @"
           ## Meeting Assistant $tag
-          Primeira compilação instalável para Windows 10/11 x64.
+          Primeira compilação instalável para Windows 11 x64.
           O instalador inclui o runtime Python e as bibliotecas Python necessárias para o Meeting Assistant.
           OBS Studio, Zoom, JW Library e VB-CABLE continuam sendo componentes externos.
           O núcleo JWL ↔ Zoom ↔ Salão foi validado pelo operador em 21/09/2026 e está protegido por checkpoint.

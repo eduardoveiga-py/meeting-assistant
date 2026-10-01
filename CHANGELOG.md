@@ -1,5 +1,21 @@
 # Histórico de alterações
 
+## Não lançado — Windows 11 e vídeo revisão 3 — 30/09/2026
+
+- Windows 11 x64 passa a ser requisito do app e do instalador.
+- Retiradas as alternativas DirectShow Compat, NDI e driver experimental Windows 10.
+- Câmera nativa Media Foundation recebe Program do OBS, com identidade própria.
+- Prévia contínua NV12 na tela principal e nos ajustes; sem screenshots JPEG ou
+  conversão QImage/QPixmap por quadro. Canais independentes para prévia e câmera.
+- Uma conexão persistente compartilhada entre as prévias; descarte de quadros atrasados.
+- Câmera permanece ativa ao fechar ajustes, para permitir operar cenas na tela principal.
+- Retomada após reinício OBS, desligamento explícito e diagnóstico revisão 3.
+- Pacote de desenvolvimento inclui app portátil com Python e bibliotecas.
+- Núcleo congelado JWL/Zoom preservado. Compatibilidade WhatsApp e fluidez no hardware
+  aguardam confirmação do operador; compilação não substitui esse ensaio.
+
+As entradas históricas abaixo descrevem tentativas anteriores, algumas já removidas.
+
 ## Não lançado — câmera de compatibilidade, 27/09/2026
 
 - Módulo DirectShow separado para Windows 10 2004+/11 x64, identidade Meeting Assistant Compat.

@@ -1,11 +1,13 @@
-name: Video native prototype
+name: Windows 11 video
 on:
   push:
     branches: ['feature/**']
-    paths: ['native/**', 'scripts/*video*', 'scripts/prepare-camera-source.py', 'scripts/prepare-compat-camera.py', '.github/workflows/video-native.yml']
+    paths: ['native/**', 'src/**', 'packaging/**', 'pyproject.toml', 'scripts/*video*', 'scripts/prepare-camera-source.py', '.github/workflows/video-native.yml']
   pull_request:
-    paths: ['native/**', 'scripts/*video*', 'scripts/prepare-camera-source.py', 'scripts/prepare-compat-camera.py', '.github/workflows/video-native.yml']
+    paths: ['native/**', 'src/**', 'packaging/**', 'pyproject.toml', 'scripts/*video*', 'scripts/prepare-camera-source.py', '.github/workflows/video-native.yml']
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: windows-2022
@@ -20,8 +22,16 @@ jobs:
       - name: Build bridge and Windows 11 provider
         shell: pwsh
         run: ./scripts/build-video-native.ps1
+      - name: Package application with Python runtime
+        shell: pwsh
+        run: |
+          python -m pip install . "pyinstaller>=6,<7"
+          if ($LASTEXITCODE -ne 0) { throw 'Application dependencies failed' }
+          pyinstaller --clean --noconfirm packaging/MeetingAssistant.spec
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path 'dist/MeetingAssistant/MeetingAssistant.exe')) { throw 'Application build failed' }
+          Copy-Item 'dist/MeetingAssistant' 'build/video-native/package/MeetingAssistant' -Recurse
       - uses: actions/upload-artifact@v4
         with:
-          name: meeting-assistant-video-prototype-x64
+          name: meeting-assistant-video-windows11-x64
           path: build/video-native/package/
           if-no-files-found: error

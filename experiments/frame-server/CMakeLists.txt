@@ -1,7 +1,0 @@
-cmake_minimum_required(VERSION 3.24)
-project(FrameServerSourceProbe LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-add_executable(meeting-assistant-source-probe source_probe.cpp)
-target_compile_definitions(meeting-assistant-source-probe PRIVATE UNICODE _UNICODE NOMINMAX)
-target_link_libraries(meeting-assistant-source-probe PRIVATE ole32 mfplat mfuuid)

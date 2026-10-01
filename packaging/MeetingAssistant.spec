@@ -20,9 +20,8 @@ pyz = PYZ(a.pure, a.zipped_data)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name="MeetingAssistant",
     debug=False,
     bootloader_ignore_signals=False,
@@ -31,4 +30,8 @@ exe = EXE(
     console=False,
     argv_emulation=False,
     target_arch=None,
+)
+
+coll = COLLECT(
+    exe, a.binaries, a.datas, strip=False, upx=False, name="MeetingAssistant"
 )

@@ -2,6 +2,7 @@
 #include <cstdint>
 namespace ma {
 constexpr wchar_t frames_pipe[] = L"\\\\.\\pipe\\MeetingAssistant.Program.v1";
+constexpr wchar_t preview_pipe[] = L"\\\\.\\pipe\\MeetingAssistant.Preview.v1";
 constexpr wchar_t control_pipe[] = L"\\\\.\\pipe\\MeetingAssistant.Control.v1";
 constexpr uint32_t magic = 0x3143414d; // MAC1, little endian
 constexpr uint32_t width = 1280, height = 720, bytes = width * height * 3 / 2;

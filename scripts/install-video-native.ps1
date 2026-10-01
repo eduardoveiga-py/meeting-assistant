@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Bridge','Camera','Compat','RemoveCamera','RemoveBridge','RemoveCompat')][string]$Component = 'Bridge',
+    [ValidateSet('All','Bridge','Camera','RemoveCamera','RemoveBridge','RemoveLegacy')][string]$Component = 'All',
     [string]$ObsDirectory = "$env:ProgramFiles\obs-studio",
     [switch]$VerifyOnly
 )
@@ -27,16 +27,25 @@ if ($VerifyOnly) {
     elseif ($Component -eq 'Camera') {
         Assert-PackageFile 'MeetingAssistantMediaSource.dll'
         Assert-PackageFile 'meeting-assistant-camera.exe'
-    } elseif ($Component -eq 'Compat') {
-        Assert-PackageFile 'meeting-assistant-compat.dll'
-        Assert-PackageFile 'meeting-assistant-compat-check.exe'
-    } else { throw 'VerifyOnly requires Bridge, Camera or Compat.' }
+    } elseif ($Component -eq 'All') {
+        Assert-PackageFile 'meeting-assistant-bridge.dll'
+        Assert-PackageFile 'MeetingAssistantMediaSource.dll'
+        Assert-PackageFile 'meeting-assistant-camera.exe'
+    } else { throw 'VerifyOnly requires All, Bridge or Camera.' }
     Write-Host "Package integrity OK ($Component). No files installed. PowerShell $($PSVersionTable.PSVersion)"
     return
 }
+if ([Environment]::OSVersion.Version.Build -lt 22000) { throw 'Meeting Assistant requires Windows 11 build 22000+.' }
 if (-not [Environment]::Is64BitProcess) { throw 'Use PowerShell x64.' }
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $admin) { throw 'Open PowerShell as administrator for this explicit installation step.' }
+if ($Component -eq 'All') {
+    & $PSCommandPath -Component All -VerifyOnly
+    if (Get-Process obs64,WhatsApp,meeting-assistant-camera -ErrorAction SilentlyContinue) { throw 'Close OBS, WhatsApp and Meeting Assistant first.' }
+    & $PSCommandPath -Component Bridge -ObsDirectory $ObsDirectory
+    & $PSCommandPath -Component Camera
+    return
+}
 $cameraRoot = Join-Path $env:ProgramFiles 'MeetingAssistant\VirtualCamera'
 $clsid = 'HKLM:\SOFTWARE\Classes\CLSID\{5108191D-9AD8-44F5-B760-7A35D433A427}'
 if ($Component -in @('Bridge','RemoveBridge')) {
@@ -53,48 +62,32 @@ if ($Component -in @('Bridge','RemoveBridge')) {
         Copy-Item $source $target -Force
     }
     Write-Host 'Bridge step complete. Restart OBS and verify in Meeting Assistant.'
-    exit
+    return
 }
-if ($Component -in @('Compat','RemoveCompat')) {
-    if ([Environment]::OSVersion.Version.Build -lt 19041) { throw 'Compatibility prototype requires Windows 10 2004+ x64.' }
-    if (Get-Process WhatsApp,Zoom,obs64 -ErrorAction SilentlyContinue) { throw 'Close WhatsApp, Zoom and OBS before installing/removing the compatibility camera.' }
-    $compatRoot = Join-Path $env:ProgramFiles 'MeetingAssistant\CompatCamera'
-    $target = Join-Path $compatRoot 'meeting-assistant-compat.dll'
-    $regsvr = Join-Path $env:WINDIR 'System32\regsvr32.exe'
-    if ($Component -eq 'RemoveCompat') {
-        if (-not (Test-Path $target)) { throw 'Installed compatibility DLL not found.' }
-        $process = Start-Process -FilePath $regsvr -ArgumentList @('/s','/u',('"' + $target + '"')) -Wait -PassThru
-        if ($process.ExitCode -ne 0) { throw "Compatibility unregister failed: $($process.ExitCode)" }
-        Write-Host 'Compatibility camera unregistered. Files retained until clients release the DLL.'
-        exit
+if ($Component -eq 'RemoveLegacy') {
+    if (Get-Process WhatsApp,Zoom,obs64 -ErrorAction SilentlyContinue) { throw 'Close WhatsApp, Zoom and OBS first.' }
+    $target = Join-Path $env:ProgramFiles 'MeetingAssistant\CompatCamera\meeting-assistant-compat.dll'
+    if (Test-Path $target) {
+        $process = Start-Process -FilePath "$env:WINDIR\System32\regsvr32.exe" -ArgumentList @('/s','/u',('"' + $target + '"')) -Wait -PassThru
+        if ($process.ExitCode -ne 0) { throw "Legacy unregister failed: $($process.ExitCode)" }
     }
-    Assert-PackageFile 'meeting-assistant-compat.dll'
-    Assert-PackageFile 'meeting-assistant-compat-check.exe'
-    New-Item -ItemType Directory -Force $compatRoot | Out-Null
-    foreach ($name in @('meeting-assistant-compat.dll','meeting-assistant-compat-check.exe')) {
-        $dest = Join-Path $compatRoot $name
-        if (Test-Path $dest) { Copy-Item $dest "$dest.backup-$(Get-Date -Format yyyyMMddHHmmss)" }
-        Copy-Item (Join-Path $PSScriptRoot $name) $dest -Force
-    }
-    $process = Start-Process -FilePath $regsvr -ArgumentList @('/s',('"' + $target + '"')) -Wait -PassThru
-    if ($process.ExitCode -ne 0) { throw "Compatibility registration failed: $($process.ExitCode)" }
-    & (Join-Path $compatRoot 'meeting-assistant-compat-check.exe')
-    if ($LASTEXITCODE -ne 0) { throw 'Compatibility component check failed. Copy the HRESULT above.' }
-    Write-Host 'Meeting Assistant Compat installed. Open the experimental camera screen and select Compatibility.'
-    exit
+    Write-Host 'Legacy Meeting Assistant Compat unregistered if installed. No other cameras changed.'
+    return
 }
 if ([Environment]::OSVersion.Version.Build -lt 22000) { throw 'Camera component requires Windows 11 build 22000+.' }
 if (Get-Process meeting-assistant-camera -ErrorAction SilentlyContinue) { throw 'Stop the Meeting Assistant camera first.' }
 if ($Component -eq 'RemoveCamera') {
     if (Test-Path $clsid) { Remove-Item $clsid -Recurse }
     Write-Host 'Camera class removed. Files retained until applications release the DLL.'
-    exit
+    return
 }
-foreach ($name in @('MeetingAssistantMediaSource.dll','meeting-assistant-camera.exe')) {
+foreach ($name in @('MeetingAssistantMediaSource.dll','meeting-assistant-camera.exe','meeting-assistant-source-probe.exe','meeting-assistant-camera-inventory.exe')) {
     Assert-PackageFile $name
 }
+& (Join-Path $PSScriptRoot 'meeting-assistant-source-probe.exe') (Join-Path $PSScriptRoot 'MeetingAssistantMediaSource.dll')
+if ($LASTEXITCODE -ne 0) { throw 'Media source activation failed. Copy the HRESULT above.' }
 New-Item -ItemType Directory -Force $cameraRoot | Out-Null
-foreach ($name in @('MeetingAssistantMediaSource.dll','meeting-assistant-camera.exe')) {
+foreach ($name in @('MeetingAssistantMediaSource.dll','meeting-assistant-camera.exe','meeting-assistant-source-probe.exe','meeting-assistant-camera-inventory.exe')) {
     $target = Join-Path $cameraRoot $name
     if (Test-Path $target) { Copy-Item $target "$target.backup-$(Get-Date -Format yyyyMMddHHmmss)" }
     Copy-Item (Join-Path $PSScriptRoot $name) $target -Force

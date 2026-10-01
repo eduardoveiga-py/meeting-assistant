@@ -7,7 +7,7 @@ from importlib.resources import as_file, files
 
 from PySide6.QtCore import QLoggingCategory, Qt, QTimer
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.display_service import DisplayService, resolve_hall_display
@@ -28,6 +28,7 @@ from meeting_assistant.services.meeting_launcher import MeetingLauncherService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.settings import SettingsService
 from meeting_assistant.services.telemetry_service import TelemetryService
+from meeting_assistant.services.virtual_camera import camera_support
 from meeting_assistant.services.zoom_hall_service import ZoomHallService, hall_runtime_flags
 from meeting_assistant.ui.main_window import MainWindow
 
@@ -58,6 +59,10 @@ def main() -> int:
     # The JW Library UIA service intentionally performs that import lazily on
     # its own STA worker thread, after Qt has established OLE and DPI awareness.
     app = QApplication(sys.argv)
+    supported, reason = camera_support()
+    if not supported:
+        QMessageBox.critical(None, "Windows 11 necessário", reason)
+        return 1
     app.setApplicationName("Meeting Assistant")
     app.setOrganizationName("Meeting Assistant")
 
@@ -106,7 +111,7 @@ def main() -> int:
         )
 
     obs_config = current_obs_config()
-    obs_controller = ObsController(poll_interval=0.5, preview_interval=0.15)
+    obs_controller = ObsController(poll_interval=0.5, screenshot_preview=False)
     display_service = DisplayService(app)
     jwl_service = JwlService(interval_ms=2000)
 

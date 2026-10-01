@@ -7,7 +7,7 @@
 <p align="center"><strong>Operação integrada de JW Library, OBS Studio e Zoom para reuniões no Windows.</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows">
+  <img src="https://img.shields.io/badge/Windows-11%20x64-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Python-runtime%20incluído-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python runtime incluído">
   <img src="https://img.shields.io/badge/Release-0.5.0-22C55E?style=for-the-badge" alt="Release 0.5.0">
   <img src="https://img.shields.io/badge/Status-primeira%20release%20instalável-F59E0B?style=for-the-badge" alt="Primeira release instalável">
@@ -181,15 +181,16 @@ O Meeting Assistant é um projeto independente e não oficial do JW Library, Zoo
 Arquivos de configuração podem conter informações privadas. Não publique `%APPDATA%\\MeetingAssistant\\settings.json` ou sessões de telemetria que contenham dados operacionais sem revisão.
 
 
-## Câmera própria para WhatsApp — protótipo separado
+## Desenvolvimento atual — Windows 11 obrigatório
 
-Em desenvolvimento: ponte do Program OBS e câmera Windows 11, sem alterar a saída
-JWL/Zoom validada. Windows 10 permite testar somente a ponte/diagnóstico.
-Veja [binários de teste, instalação, diagnóstico e remoção](docs/test-virtual-camera.md).
-Esta função não faz parte da Release 0.5.0 e ainda não tem aprovação física no WhatsApp.
+O requisito atual é **Windows 11 x64, build 22000 ou superior**. A versão em desenvolvimento
+usa uma câmera própria Media Foundation para receber **Program do OBS**, sem NDI.
+A prévia principal e a da câmera usam vídeo contínuo NV12, com alvo de 30 fps.
 
+As tentativas Windows 10 (DirectShow Compat e driver experimental) foram retiradas.
+A release 0.5.0 acima é anterior a esta mudança. Use o pacote do workflow
+**Windows 11 video**, que inclui app portátil com Python/bibliotecas e componentes nativos.
+A câmera ainda depende de validação física no WhatsApp antes de ser considerada aprovada.
 
-Câmera alternativa em desenvolvimento: **Meeting Assistant Compat**, para aplicativos
-x64 que aceitam DirectShow no Windows 10/11. Instalação separada e seleção na tela
-experimental; [teste e remoção](docs/test-compat-camera.md). Não incluída na release
-estável; reconhecimento no WhatsApp ainda precisa de teste físico.
+- [Instalação e testes no Windows 11](docs/test-virtual-camera.md)
+- [Arquitetura modular e decisão técnica](docs/windows11-video-architecture.md)

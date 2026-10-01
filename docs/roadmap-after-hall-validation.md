@@ -198,31 +198,21 @@ Referências: [captura por aplicativo OBS](https://obsproject.com/kb/application
 [WinGet install](https://learn.microsoft.com/en-us/windows/package-manager/winget/install).
 
 
-## Câmera própria para WhatsApp — 27/09/2026
+## Câmera e vídeo — atualização 30/09/2026
 
-Autorizado desenvolver com testes locais no Windows 10, uso efetivo previsto em Windows 11.
-Módulos separados: ponte Program OBS, transporte local, provedor de câmera e controles/diagnóstico.
-O transporte nativo usa named pipe local com ACL para atender o serviço de câmera fora da sessão
-OBS; Python não transporta o vídeo da câmera. Prova de compatibilidade WhatsApp continua sendo
-um gate obrigatório antes de Release. Não substituir a câmera OBS usada no Zoom neste lote.
+Windows 11 x64 passa a ser requisito. Máquina do operador atualizada e com segundo
+monitor disponível. Uso pessoal neste computador. Decisões técnicas delegadas ao desenvolvimento.
 
-Entregue em código: ponte NV12 720p, controles explícitos, timeout/quadros obsoletos,
-prévia de diagnóstico e adaptação do exemplo Microsoft. Build no CI e validação física são
-etapas distintas; [roteiro de teste](test-virtual-camera.md). Assinatura/instalador integrado,
-Windows ARM64 e múltiplas sessões permanecem pendentes.
+- [x] Retirar DirectShow Compat, NDI e PoC de driver Windows 10 da árvore ativa.
+- [x] Manter fonte Microsoft via MFCreateVirtualCamera e Program OBS NV12 720p30.
+- [x] Separar prévia/câmera em canais independentes; conexão persistente e último quadro.
+- [x] Substituir preview JPEG da tela principal e conversão RGB da prévia da câmera.
+- [x] Câmera permanece ativa ao fechar Ajustes; encerramento explícito ou ao sair do app.
+- [x] Diagnóstico separado, reconexão, módulo de ciclo de vida e pacote com runtime.
+- [ ] Confirmar fluidez real no notebook, com e sem WhatsApp ativo.
+- [ ] Confirmar enumeração MF e vídeo recebido em chamada WhatsApp.
+- [ ] Confirmar retorno após reiniciar OBS e regressão física JWL/Zoom/Windows+D.
+- [ ] Integrar instalação nativa ao assistente principal após a validação acima.
 
-
-Atualização 27/09 — câmera, revisão 2:
-- Confirmado pelo operador no Windows 10/OBS 32.2.2: ponte, cenas, parar/reiniciar.
-- Correção de fluidez e diagnóstico separados implementados; aguardar reteste físico.
-- Empacotamento de teste inclui hashes verificados e identificação da revisão.
-- Próximo gate: Windows 11, instalação do provedor, enumeração no WhatsApp, vídeo contínuo,
-  retomada e encerramento de sessão. Depois, integrar ciclo de vida permanente e instalador
-  principal; atualmente fechar a tela experimental encerra o teste.
-
-
-Câmera Compat (27/09): implementação DirectShow separada, Windows 10/11 x64.
-Reaproveita ponte, usa GUID próprio e libdshowcapture fixada. Seleção de backend e
-autorização local explícita implementadas. Gate antes da integração definitiva:
-[reconhecimento e vídeo recebido no WhatsApp](test-compat-camera.md).
-Windows 11 moderno continua preservado e pendente de validação física.
+[Roteiro de teste e retorno](test-virtual-camera.md). Nenhuma aprovação física é
+inferida da compilação ou da confirmação da API do Windows.

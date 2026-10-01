@@ -1,3 +1,4 @@
+if ([Environment]::OSVersion.Version.Build -lt 22000) { throw "Meeting Assistant requires Windows 11 x64." }
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 

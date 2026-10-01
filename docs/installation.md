@@ -2,7 +2,7 @@
 
 ## Requisitos
 
-- Windows 10 ou Windows 11, 64 bits.
+- Windows 11 x64, build 22000 ou superior (requisito da versão atual em desenvolvimento).
 - OBS Studio.
 - Zoom para desktop.
 - JW Library para Windows.
@@ -87,3 +87,5 @@ Faça o ensaio sem público: voz, JW Library, VLC, Chrome/Edge, voz + mídia, ec
 **Áudio mono:** confira canal estéreo e `Mono` no OBS; depois confira áudio estéreo/original do Zoom.
 
 **Eco:** retire o retorno do Zoom da mistura e evite duplicar `Desktop Audio` e captura por aplicativo.
+
+Para a câmera e prévia atualizadas, use o [pacote Windows 11 de desenvolvimento](test-virtual-camera.md).

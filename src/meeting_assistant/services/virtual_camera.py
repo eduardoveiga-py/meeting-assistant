@@ -40,7 +40,7 @@ def camera_support(system=None, build=None, machine=None):
     if build < 22000:
         return (
             False,
-            "Câmera própria requer Windows 11 (build 22000+). Ponte OBS pode ser testada no Windows 10.",
+            "Meeting Assistant requer Windows 11 x64 (build 22000 ou superior).",
         )
     return True, "Windows compatível com a API. Reconhecimento no WhatsApp ainda exige teste real."
 
@@ -145,7 +145,26 @@ class WindowsPipe:
             self.k.CloseHandle(ov.hEvent)
 
     def close(self):
-        self.k.CloseHandle(self.handle)
+        if self.handle is not None:
+            self.k.CloseHandle(self.handle)
+            self.handle = None
+
+
+class PreviewConnection:
+    """Persistent preview reader. Never starts/stops camera delivery."""
+
+    def __init__(self, pipe_factory=WindowsPipe):
+        self.pipe = pipe_factory(PIPE_PREFIX + "Preview.v1")
+
+    def read(self):
+        self.pipe.transfer(1, b"F")
+        status, size = decode_header(self.pipe.transfer(HEADER.size))
+        pixels = self.pipe.transfer(size) if size else b""
+        self.pipe.transfer(1, b"A")
+        return status, pixels
+
+    def close(self):
+        self.pipe.close()
 
 
 def request(command="I", pipe_factory=WindowsPipe):

@@ -1,18 +1,14 @@
 from __future__ import annotations
 
 from PySide6.QtCore import (
-    QEasingCurve,
-    QPropertyAnimation,
-    QSequentialAnimationGroup,
     Qt,
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
-    QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -37,6 +33,7 @@ from meeting_assistant.services.settings import AppSettings, SettingsService
 from meeting_assistant.services.yeartext_store import YeartextStore
 from meeting_assistant.services.zoom_hall_service import ZoomHallService
 from meeting_assistant.ui.hall_setup_dialog import HallSetupDialog
+from meeting_assistant.ui.program_preview import ProgramPreview
 from meeting_assistant.ui.settings_dialog import SettingsDialog
 from meeting_assistant.ui.window_geometry import ScreenFitController
 
@@ -83,7 +80,6 @@ class MainWindow(QMainWindow):
         self.display_snapshot: list[DisplayInfo] = []
         self.jwl_snapshot: list[JwlWindowInfo] = []
         self._startup_scene_applied = False
-        self._preview_fade_group: QSequentialAnimationGroup | None = None
         self.telemetry_session_id = ""
 
         self.state.automation_enabled = False
@@ -239,16 +235,9 @@ class MainWindow(QMainWindow):
         controls.addWidget(self._section_label("RETORNO — SALÃO"))
 
         preview_row = QHBoxLayout()
-        self.preview = QLabel("Conectando ao OBS…\n16:9")
+        self.preview = ProgramPreview(self)
         self.preview.setObjectName("Preview")
-        self.preview.setAlignment(Qt.AlignCenter)
-        self.preview.setMinimumSize(160, 40)
         self.preview.setMaximumSize(480, 270)
-        self.preview.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self.preview.setScaledContents(False)
-        self.preview_opacity = QGraphicsOpacityEffect(self.preview)
-        self.preview_opacity.setOpacity(1.0)
-        self.preview.setGraphicsEffect(self.preview_opacity)
         preview_row.addWidget(self.preview, 1)
         controls.addLayout(preview_row, 1)
 
@@ -286,8 +275,6 @@ class MainWindow(QMainWindow):
         self.obs.connected_changed.connect(self._on_obs_connected)
         self.obs.scenes_changed.connect(self._on_obs_scenes)
         self.obs.scene_changed.connect(self._on_obs_scene)
-        self.obs.preview_changed.connect(self._on_obs_preview)
-        self.obs.preview_error.connect(self._on_obs_preview_error)
         self.obs.error.connect(self._on_obs_error)
         self.obs.setup_finished.connect(self._on_obs_setup_finished)
         self.obs.hall_task_finished.connect(self._on_hall_task_finished)
@@ -437,8 +424,6 @@ class MainWindow(QMainWindow):
                     "directory": str(self.yeartext_store.directory), "scene": self.settings.scene_background,
                 })
             self._set_component_status("OBS", "ok", "● OBS", message)
-            self.preview.clear()
-            self.preview.setText("Aguardando preview do OBS…")
             if not self._startup_scene_applied and self.settings.scene_speaker:
                 self._startup_scene_applied = True
                 self.mode_label.setText("Inicializando em Palco…")
@@ -446,8 +431,6 @@ class MainWindow(QMainWindow):
         else:
             self.current_obs_scene = None
             self._set_component_status("OBS", "error", "● OBS", message)
-            self.preview.clear()
-            self.preview.setText("OBS desconectado\n16:9")
             self.mode_label.setText("Salão: aguardando OBS")
 
     def _on_obs_scenes(self, scenes: list[str]) -> None:
@@ -462,53 +445,6 @@ class MainWindow(QMainWindow):
         if mode is not None and not self.zoom_hall.active:
             self.state.set_mode(mode)
         self._refresh_mode()
-        self._start_preview_fade()
-        self.obs.refresh_preview()
-
-    def _start_preview_fade(self) -> None:
-        if self._preview_fade_group is not None:
-            self._preview_fade_group.stop()
-
-        fade_out = QPropertyAnimation(self.preview_opacity, b"opacity", self)
-        fade_out.setDuration(120)
-        fade_out.setStartValue(1.0)
-        fade_out.setEndValue(0.20)
-        fade_out.setEasingCurve(QEasingCurve.Type.InOutQuad)
-
-        fade_in = QPropertyAnimation(self.preview_opacity, b"opacity", self)
-        fade_in.setDuration(230)
-        fade_in.setStartValue(0.20)
-        fade_in.setEndValue(1.0)
-        fade_in.setEasingCurve(QEasingCurve.Type.InOutQuad)
-
-        group = QSequentialAnimationGroup(self)
-        group.addAnimation(fade_out)
-        group.addAnimation(fade_in)
-        self._preview_fade_group = group
-        group.start()
-
-    def _on_obs_preview(self, image_bytes: bytes) -> None:
-        pixmap = QPixmap()
-        if not pixmap.loadFromData(image_bytes):
-            self.preview.clear()
-            self.preview.setText("Preview inválido")
-            return
-        scaled = pixmap.scaled(
-            self.preview.size(),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        self.preview.setPixmap(scaled)
-        self.preview.setToolTip(
-            f"Preview 640×360 do OBS Program • {self.current_obs_scene or 'cena atual'}"
-        )
-
-    def _on_obs_preview_error(self, message: str) -> None:
-        if not self.obs_connected:
-            return
-        self.preview.clear()
-        self.preview.setText("Preview indisponível\nverifique o diagnóstico")
-        self.preview.setToolTip(message)
 
     def _on_displays_changed(self, displays: list[DisplayInfo]) -> None:
         self.display_snapshot = displays
@@ -1024,7 +960,7 @@ class MainWindow(QMainWindow):
                 border: 1px solid #282f3a;
                 border-radius: 9px;
             }
-            QLabel#Preview {
+            QWidget#Preview {
                 background: #080a0e;
                 border: 1px solid #303844;
                 border-radius: 7px;

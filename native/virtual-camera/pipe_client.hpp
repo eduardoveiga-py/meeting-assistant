@@ -26,8 +26,17 @@ inline bool transfer(HANDLE pipe, void* data, DWORD size, bool write) {
     return ok && count == size;
 }
 inline bool read_frame(std::vector<uint8_t>& pixels) {
-    HANDLE pipe = CreateFileW(frames_pipe, GENERIC_READ | GENERIC_WRITE, 0, nullptr,
-                              OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
+    // Keep the connection between samples; preview has its own independent pipe.
+    struct Connection {
+        HANDLE pipe = INVALID_HANDLE_VALUE;
+        void reset() { if (pipe != INVALID_HANDLE_VALUE) CloseHandle(pipe); pipe = INVALID_HANDLE_VALUE; }
+        ~Connection() { reset(); }
+    };
+    static thread_local Connection connection;
+    if (connection.pipe == INVALID_HANDLE_VALUE)
+        connection.pipe = CreateFileW(frames_pipe, GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+                                      OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
+    HANDLE pipe = connection.pipe;
     if (pipe == INVALID_HANDLE_VALUE) return false;
     char command = 'F', ack = 'A';
     Header h{};
@@ -40,7 +49,7 @@ inline bool read_frame(std::vector<uint8_t>& pixels) {
         ok = transfer(pipe, pixels.data(), bytes, false);
         if (ok) transfer(pipe, &ack, 1, true);
     }
-    CloseHandle(pipe);
+    if (!ok) connection.reset();
     return ok;
 }
 // The sample negotiates NV12 only. Padding is respected; stale video becomes black.

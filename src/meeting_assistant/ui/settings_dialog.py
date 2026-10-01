@@ -79,7 +79,7 @@ class SettingsDialog(QDialog):
             tools_layout = QVBoxLayout(tools_group)
             for text, signal in (
                 ("Áudio da mesa e das mídias → Zoom…", self.audio_setup_requested),
-                ("Câmera própria / ponte OBS (experimental)…", self.virtual_camera_requested),
+                ("Câmera para WhatsApp — Windows 11…", self.virtual_camera_requested),
                 ("Observar mídia no JW Library (20 s)", self.observe_requested),
                 ("Calibrar Texto do Ano", self.calibrate_requested),
             ):
