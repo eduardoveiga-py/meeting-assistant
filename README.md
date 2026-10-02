@@ -9,6 +9,17 @@ O **Meeting Assistant** é um orquestrador open-source criado para simplificar e
 
 ---
 
+
+## 📸 Telas do Aplicativo
+
+<p align="center">
+  <img src="docs/screenshots/painel-principal.png" width="32%" alt="Painel Principal">
+  <img src="docs/screenshots/configuracao.png" width="32%" alt="Ajustes">
+  <img src="docs/screenshots/assistente.png" width="32%" alt="Assistente de Instalação">
+</p>
+
+---
+
 ## ✨ Principais Funcionalidades
 
 * **🤖 Automação Inteligente (JW Library & OBS):** 
