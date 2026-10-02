@@ -269,7 +269,7 @@ class MainWindow(QMainWindow):
         system_grid.addWidget(settings_button, 0, 2)
         
         # Row 1
-        self.ext_media_button = QPushButton("🎬 Mídia")
+        self.ext_media_button = QPushButton("🎬 Mídia Externa")
         self.ext_media_button.setCheckable(True)
         self.ext_media_button.setToolTip("Envia o player de vídeo ativo para o telão")
         self.ext_media_button.toggled.connect(self._toggle_ext_media)
