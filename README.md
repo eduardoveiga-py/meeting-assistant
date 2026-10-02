@@ -9,8 +9,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Windows-11%20x64-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Python-runtime%20incluído-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python runtime incluído">
-  <img src="https://img.shields.io/badge/Release-0.5.0-22C55E?style=for-the-badge" alt="Release 0.5.0">
-  <img src="https://img.shields.io/badge/Status-primeira%20release%20instalável-F59E0B?style=for-the-badge" alt="Primeira release instalável">
+  <img src="https://img.shields.io/badge/Release-0.6.0--dev1-22C55E?style=for-the-badge" alt="Release 0.6.0-dev1">
+  <img src="https://img.shields.io/badge/Status-build%20Windows%2011%20em%20validação-F59E0B?style=for-the-badge" alt="Build Windows 11 em validação">
 </p>
 
 <p align="center">
@@ -31,7 +31,8 @@
 | 🎬 Automação | Texto do ano em repouso → **Palco**; mídia → **Mídias**; fim da mídia → **Palco**. |
 | 🎚️ OBS | Controle por WebSocket, mapeamento de cenas, preview e diagnóstico. |
 | 🚀 Iniciar reunião | Detecta/abre OBS, JW Library e Zoom e pode abrir diretamente um link normal de convite do Zoom. |
-| 🎙️ Áudio | Preparação de fontes de microfone/aplicativos e rota OBS → VB-CABLE → Zoom. A configuração física continua explícita. |
+| 🎙️ Áudio | Preparação de fontes de microfone/aplicativos e rota OBS → VB-CABLE → Zoom + WhatsApp, com retorno do WhatsApp silenciado por padrão. |
+| 📹 Câmera | Câmera virtual nativa Windows 11 iniciada automaticamente após a conexão do OBS, com controle na tela principal. |
 | ⚙️ Assistente | Verifica o ambiente, ajuda a configurar o WebSocket e pode instalar OBS/Zoom usando WinGet com autorização. |
 | 🧪 Telemetria | Diagnóstico estruturado, sanitizado e desacoplado da operação. |
 
@@ -41,12 +42,14 @@ O comportamento **JWL ↔ Zoom ↔ Salão** foi validado pelo operador em **21/0
 
 ---
 
-## 📦 Instalação para quem nunca instalou Python
+## 📦 Distribuição final planejada para quem não tem Python
 
-**Você não precisa instalar Python, PySide6, OBS WebSocket ou qualquer biblioteca Python.**
+**O instalador final incluirá Python e as bibliotecas. Durante os testes atuais,
+use o código Python conforme o procedimento abaixo. O instalador ainda precisa
+da validação final; esta seção descreve a distribuição planejada.**
 
 1. Abra a área de **Releases** do repositório.
-2. Baixe `MeetingAssistant-Setup-0.5.0.exe`.
+2. Baixe `MeetingAssistant-Setup-0.6.0-dev1.exe`.
 3. Execute o instalador e siga as etapas.
 4. Abra o **Meeting Assistant** pelo menu Iniciar ou pelo atalho criado.
 5. Na primeira abertura, use o **Assistente de instalação e configuração** para verificar o ambiente.
@@ -64,9 +67,27 @@ O assistente pode ajudar a instalar OBS e Zoom por WinGet, com autorização exp
 
 📘 **Passo a passo:** [docs/installation.md](docs/installation.md)
 
+### Executar o codigo Python durante o desenvolvimento
+
+Atualize a pasta e execute:
+
+```powershell
+git pull --ff-only
+.\scripts\run.ps1
+```
+
+O script cria/reutiliza `.venv`, atualiza as dependencias quando `pyproject.toml`
+muda e executa `python -m meeting_assistant.main` a partir do `src` desta pasta.
+Ele reutiliza a camera/ponte ja instaladas; se faltarem, baixa somente o pacote
+nativo. Use `-Refresh` quando precisar atualizar os componentes nativos.
+
+A camera tem DLLs e pequenos executaveis C++ auxiliares; o aplicativo principal
+continua em Python. O executavel e o instalador finais ficam para a distribuicao.
+Veja [o procedimento completo](docs/installation.md).
+
 ---
 
-## 🎧 Áudio para o Zoom
+## 🎧 Áudio para Zoom e WhatsApp
 
 O caminho usado nesta release é:
 
@@ -81,7 +102,7 @@ JW Library / VLC / Chrome / Edge
               ↓
          CABLE Output
               ↓
-             Zoom
+        Zoom + WhatsApp
 ```
 
 No OBS, o dispositivo de monitoramento deve ser **CABLE Input (VB-Audio Virtual Cable)**. No Zoom, a entrada deve ser **CABLE Output**.
@@ -118,7 +139,7 @@ Depois de instalar:
 | Tecla | Ação |
 |---|---|
 | F1 | Ajuda |
-| F2 | Fundo / Texto do Ano |
+| F2 | Texto do Ano |
 | F3 | Palco |
 | F4 | Mídia |
 | F5 | Zoom → Salão / voltar ao JWL |

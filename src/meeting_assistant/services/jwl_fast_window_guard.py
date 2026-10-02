@@ -328,6 +328,12 @@ class JwlFastWindowGuard(QObject):
         if overlap_area / target_area < 0.70:
             return None
 
+        from meeting_assistant.services.jwl_secondary_window import is_explicit_jwl_secondary_title
+        if title:
+            if title_has_jw_library(title) and not is_explicit_jwl_secondary_title(title):
+                # The user explicitly asked to reject the primary JWL window
+                return None
+
         descendant_identity = self._has_jwl_descendant_identity(root)
         if not title_has_jw_library(title) and not descendant_identity:
             # On this Windows/JWL build the secondary ApplicationFrameWindow

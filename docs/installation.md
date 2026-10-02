@@ -5,10 +5,60 @@
 - Windows 11 x64, build 22000 ou superior (requisito da versão atual em desenvolvimento).
 - OBS Studio.
 - Zoom para desktop.
+- WhatsApp Desktop quando for usar o retorno do salão.
 - JW Library para Windows.
-- VB-CABLE quando for usar o áudio de mídia no Zoom.
+- VB-CABLE quando for usar o áudio de mídia no Zoom ou no WhatsApp.
 
 **Python não é necessário.** O instalador do Meeting Assistant inclui o runtime e as bibliotecas Python usadas pelo aplicativo.
+
+## Execucao em Python durante o desenvolvimento
+
+```powershell
+git pull --ff-only
+.\scripts\run.ps1
+```
+
+Requer Python 3.12 x64. O script prepara `.venv`, instala as dependencias do projeto
+quando necessario e executa o codigo da pasta `src`. Nao abre o aplicativo
+empacotado. `-Source` continua aceito por compatibilidade, mas Python ja e o padrao.
+
+Se camera e ponte estiverem instaladas, o script as reutiliza. Caso faltem, baixa
+`MeetingAssistant-Windows11-native.zip` da release `native-latest`, verifica os
+hashes e solicita elevacao para instalar. Feche OBS e WhatsApp antes da instalacao.
+
+Para atualizar as DLLs/host nativos:
+
+```powershell
+.\scripts\run.ps1 -Refresh
+```
+
+Para usar um pacote nativo que voce ja extraiu:
+
+```powershell
+.\scripts\run.ps1 -NativePackageDirectory 'C:\Camera Meeting Assistant'
+```
+
+Para iniciar agora com os componentes que ja estao instalados, sem download:
+
+```powershell
+.\scripts\run.ps1 -SkipNativeInstall
+```
+
+Essa opcao nao instala nem verifica os componentes nativos. Camera e preview
+dependem de eles estarem instalados e do OBS estar aberto com a ponte carregada.
+
+Se houver bloqueio de scripts:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1
+```
+
+O downloader exige que a release nativa tenha sido publicada pelo workflow
+**Windows 11 video**; alterar o workflow localmente nao publica arquivos.
+Um repositorio privado pode usar GitHub CLI autenticado, ou uma URL acessivel
+em `MEETING_ASSISTANT_NATIVE_URL`. Nenhum token deve ser colocado no codigo.
+
+As instrucoes abaixo sao destinadas ao futuro pacote de distribuicao.
 
 ## 1. Instalar o Meeting Assistant
 
@@ -30,12 +80,13 @@ Na primeira abertura, use **Assistente de instalação e configuração** para v
 4. Em **Configurações → Áudio → Avançado**, defina o dispositivo de monitoramento como **CABLE Input**.
 5. Não capture a mesma saída pelo `Desktop Audio` e pela captura de aplicativo.
 
-## 4. Configurar o Zoom
+## 4. Configurar Zoom e WhatsApp
 
-1. Em **Configurações → Áudio**, selecione **CABLE Output** como microfone quando quiser enviar a mistura monitorada pelo OBS.
-2. Use os alto-falantes físicos do Salão como saída do Zoom.
+1. Em **Configurações → Áudio** dos dois aplicativos, selecione **CABLE Output** como microfone quando quiser enviar a mistura monitorada pelo OBS.
+2. Use os alto-falantes físicos do Salão como saída de ambos. O Meeting Assistant inicia o retorno do WhatsApp silenciado e oferece um botão separado para liberá-lo.
 3. Se precisar de áudio estéreo, teste o modo de áudio original/estéreo do Zoom com outro dispositivo.
 4. Use **OBS Virtual Camera** como câmera quando necessário.
+5. Ao abrir o Meeting Assistant, a câmera nativa do Windows 11 é iniciada depois que o OBS conecta. Na tela principal, use **Parar câmera WhatsApp** ou **Tentar câmera WhatsApp** quando precisar controlá-la.
 
 ## 5. Áudio de mídia
 
@@ -50,7 +101,7 @@ JW Library / VLC / Chrome / Edge
             ↓
        CABLE Output
             ↓
-           Zoom
+      Zoom + WhatsApp
 ```
 
 Para uma fonte somente para o Zoom, prefira **Monitor Only** no OBS.
@@ -88,4 +139,5 @@ Faça o ensaio sem público: voz, JW Library, VLC, Chrome/Edge, voz + mídia, ec
 
 **Eco:** retire o retorno do Zoom da mistura e evite duplicar `Desktop Audio` e captura por aplicativo.
 
-Para a câmera e prévia atualizadas, use o [pacote Windows 11 de desenvolvimento](test-virtual-camera.md).
+Para a câmera e prévia atualizadas, o pacote é obtido automaticamente pelo `run.ps1`.
+O roteiro técnico e os testes manuais continuam em [pacote Windows 11 e câmera](test-virtual-camera.md).

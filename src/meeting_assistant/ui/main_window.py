@@ -57,6 +57,8 @@ class MainWindow(QMainWindow):
         app_icon: QIcon | None = None,
         hall_window_provider=None,
         hall_display_provider=None,
+        whatsapp_audio_guard=None,
+        camera_session=None,
     ) -> None:
         super().__init__()
         self.state = state
@@ -71,6 +73,9 @@ class MainWindow(QMainWindow):
         self.app_icon = app_icon or QIcon()
         self._hall_window_provider = hall_window_provider or (lambda: None)
         self._hall_display_provider = hall_display_provider or (lambda: None)
+        self.whatsapp_audio_guard = whatsapp_audio_guard
+        self.camera_session = camera_session
+        self._camera_auto_start_attempted = False
         self.yeartext_store = YeartextStore(settings_service.path.parent / "yeartext")
         self._latest_media_active = False
         self._setup_assistant = None
@@ -104,6 +109,24 @@ class MainWindow(QMainWindow):
         self._connect_display_signals()
         self._connect_jwl_signals()
         self._connect_launcher_signals()
+        if self.camera_session is not None:
+            self.camera_session.changed.connect(self._on_camera_state)
+            self._on_camera_state()
+        else:
+            self.camera_button.setEnabled(False)
+            self.camera_button.setText("📹 Câmera WhatsApp")
+            self.camera_button.setToolTip(
+                "A câmera virtual nativa do Windows 11 não está disponível nesta execução."
+            )
+        if self.whatsapp_audio_guard is not None:
+            self.whatsapp_audio_guard.state_changed.connect(self._on_whatsapp_audio_state)
+            self.whatsapp_audio_guard.start()
+        else:
+            self.whatsapp_audio_button.setEnabled(False)
+            self.whatsapp_audio_button.setText("🔇 WhatsApp")
+            self.whatsapp_audio_button.setToolTip(
+                "O controle do retorno do WhatsApp fica disponível no Windows 11."
+            )
         self._on_displays_changed(self.displays.snapshot())
         self._on_jwl_snapshot(self.jwl.snapshot())
         self._set_automation_ui(False)
@@ -177,7 +200,7 @@ class MainWindow(QMainWindow):
         mode_grid.setVerticalSpacing(6)
         self.mode_buttons: dict[OperatingMode, QPushButton] = {}
         button_specs = [
-            (OperatingMode.BACKGROUND, "📖 Fundo", 0, 0),
+            (OperatingMode.BACKGROUND, "📖 Texto do Ano", 0, 0),
             (OperatingMode.SPEAKER, "🎤 Palco", 0, 1),
             (OperatingMode.MEDIA, "🎥 Mídia", 1, 0),
             (OperatingMode.ZOOM, "💻 Zoom → Salão", 1, 1),
@@ -206,6 +229,17 @@ class MainWindow(QMainWindow):
         panic.clicked.connect(self._activate_safe_scene)
         automation_row.addWidget(panic, 1)
 
+        self.whatsapp_audio_button = QPushButton("🔇 WhatsApp")
+        self.whatsapp_audio_button.setCheckable(True)
+        self.whatsapp_audio_button.setChecked(False)
+        self.whatsapp_audio_button.setMinimumWidth(0)
+        self.whatsapp_audio_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.whatsapp_audio_button.setToolTip(
+            "Silencia ou libera somente o áudio recebido do WhatsApp nas caixas do salão."
+        )
+        self.whatsapp_audio_button.clicked.connect(self._toggle_whatsapp_audio)
+        automation_row.addWidget(self.whatsapp_audio_button, 1)
+
         controls.addSpacing(2)
         controls.addWidget(self._section_label("SISTEMA"))
 
@@ -225,6 +259,21 @@ class MainWindow(QMainWindow):
         system_grid.addWidget(self.start_meeting_button, 0, 0)
         system_grid.addWidget(diagnostics, 0, 1)
         system_grid.addWidget(settings_button, 0, 2)
+        self.end_meeting_button = QPushButton("⏹️ Encerrar reunião")
+        self.end_meeting_button.setToolTip("Encerra OBS, JW Library, Zoom e WhatsApp.")
+        self.end_meeting_button.clicked.connect(self._end_meeting)
+        system_grid.addWidget(self.end_meeting_button, 1, 0, 1, 3)
+        self.ext_media_button = QPushButton("🎞️ Mídia Externa")
+        self.ext_media_button.setCheckable(True)
+        self.ext_media_button.setToolTip("Envia o player de vídeo (VLC, Fotos) ativo para o telão")
+        self.ext_media_button.toggled.connect(self._toggle_ext_media)
+        system_grid.addWidget(self.ext_media_button, 2, 0, 1, 3)
+        self.camera_button = QPushButton("📹 Iniciar câmera WhatsApp")
+        self.camera_button.setToolTip(
+            "Inicia ou para a câmera virtual nativa que transmite o Program do OBS ao WhatsApp."
+        )
+        self.camera_button.clicked.connect(self._toggle_camera)
+        system_grid.addWidget(self.camera_button, 3, 0, 1, 3)
         controls.addLayout(system_grid)
 
         # Retain the existing probe progress callbacks; the command lives in Settings.
@@ -258,7 +307,8 @@ class MainWindow(QMainWindow):
 
         root.addWidget(controls_card, 1)
 
-        self.footer = QLabel("OBS é a fonte de verdade • Zoom → Salão é uma saída local independente")
+        self.footer = QLabel()
+        self.footer.hide() # Hidden as requested
         self.footer.setObjectName("Footer")
         self.footer.setAlignment(Qt.AlignCenter)
         self.footer.setWordWrap(True)
@@ -385,18 +435,12 @@ class MainWindow(QMainWindow):
 
     def set_telemetry_session(self, session_id: str) -> None:
         self.telemetry_session_id = session_id
-        self.footer.setText(
-            "OBS é a fonte de verdade • Zoom → Salão é local • "
-            f"Telemetria: {session_id}"
-        )
+        pass
 
     def set_telemetry_status(self, ok: bool, message: str) -> None:
         state = "sincronizada" if ok else "local"
         session_id = self.telemetry_session_id or "sessão atual"
-        self.footer.setText(
-            "OBS é a fonte de verdade • Zoom → Salão é local • "
-            f"Telemetria {state}: {session_id}"
-        )
+        pass
         self.footer.setToolTip(message)
 
     def set_automation_signal(
@@ -416,6 +460,15 @@ class MainWindow(QMainWindow):
     def _on_obs_connected(self, connected: bool, message: str) -> None:
         self.obs_connected = connected
         if connected:
+            if (
+                self.camera_session is not None
+                and not self._camera_auto_start_attempted
+                and self.camera_session.state == "off"
+            ):
+                self._camera_auto_start_attempted = True
+                # Give OBS a short moment to finish loading the native bridge
+                # before asking it to publish the first frame.
+                QTimer.singleShot(1200, self._auto_start_camera)
             current = self.yeartext_store.current()
             if current and current.get("obs_pending") and self.settings.obs_host.lower() in {
                 "127.0.0.1", "localhost", "::1",
@@ -531,6 +584,21 @@ class MainWindow(QMainWindow):
         dialog.setDetailedText(report)
         dialog.exec()
 
+
+    def _toggle_ext_media(self, checked: bool) -> None:
+        from meeting_assistant.services.external_media_service import ExternalMediaService
+        if not hasattr(self, "_ext_media_service"):
+            self._ext_media_service = ExternalMediaService(self.hall_display_provider)
+            self._ext_media_service.state_changed.connect(
+                lambda active, msg: self.mode_label.setText(msg)
+            )
+        
+        if checked:
+            if not self._ext_media_service.start_external_media():
+                self.ext_media_button.setChecked(False)
+        else:
+            self._ext_media_service.stop_external_media()
+
     def _start_meeting(self) -> None:
         if not self.settings.zoom_join_url.strip():
             self.mode_label.setText(
@@ -541,6 +609,14 @@ class MainWindow(QMainWindow):
         if not self.launcher.start_meeting():
             self.start_meeting_button.setEnabled(True)
             self.start_meeting_button.setText("▶️ Iniciar reunião")
+
+    def _end_meeting(self) -> None:
+        self.end_meeting_button.setEnabled(False)
+        self.end_meeting_button.setText("⏳ Encerrando…")
+        self.launcher.end_meeting()
+        self.end_meeting_button.setEnabled(True)
+        self.end_meeting_button.setText("⏹️ Encerrar reunião")
+        self.mode_label.setText("Reunião encerrada. Programas fechados.")
 
     def _on_launch_progress(self, message: str) -> None:
         self.mode_label.setText(message)
@@ -571,6 +647,38 @@ class MainWindow(QMainWindow):
 
         self._set_component_status("Zoom", zoom_state, zoom_text, zoom_tooltip)
         self.mode_label.setText(" • ".join(payload.notes[-3:]) or "Inicialização concluída.")
+
+        # Layout organization requested by the user
+        try:
+            import win32gui
+            import win32con
+            import win32api
+            
+            screen_width = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
+            screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
+            app_width = self.width()
+            
+            # Position this app on the left, vertically centered
+            app_height = self.height()
+            self.move(0, (screen_height - app_height) // 2)
+            
+            def arrange_windows(hwnd, _):
+                if not win32gui.IsWindowVisible(hwnd):
+                    return True
+                title = win32gui.GetWindowText(hwnd).strip()
+                class_name = win32gui.GetClassName(hwnd)
+                
+                if class_name == "ApplicationFrameWindow" and "JW Library" in title:
+                    # JWL to the right, full screen minus app width
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                    win32gui.SetWindowPos(hwnd, win32con.HWND_TOP, app_width, 0, screen_width - app_width, screen_height, win32con.SWP_SHOWWINDOW)
+                elif ("Zoom Meeting" in title or "Zoom" == title) and "Zoom" in class_name:
+                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                return True
+
+            win32gui.EnumWindows(arrange_windows, None)
+        except Exception:
+            pass
 
     def _on_zoom_hall_status(self, ok: bool, message: str) -> None:
         self._set_component_status(
@@ -611,6 +719,57 @@ class MainWindow(QMainWindow):
         self.mode_label.setText(message)
 
     def _on_obs_error(self, message: str) -> None:
+        self.mode_label.setText(message)
+
+    def _auto_start_camera(self) -> None:
+        if not self.obs_connected or self.camera_session is None:
+            return
+        if self.camera_session.state == "off":
+            self.camera_session.start()
+
+    def _toggle_camera(self) -> None:
+        if self.camera_session is None:
+            return
+        if self.camera_session.state == "running":
+            self.camera_session.stop()
+        else:
+            self.camera_session.start()
+
+    def _on_camera_state(self) -> None:
+        if self.camera_session is None or not hasattr(self, "camera_button"):
+            return
+        state = self.camera_session.state
+        running = state == "running"
+        busy = state in {"starting", "stopping"}
+        if running:
+            text = "⏹️ Parar câmera WhatsApp"
+        elif state == "error":
+            text = "📹 Tentar câmera WhatsApp"
+        else:
+            text = "📹 Iniciar câmera WhatsApp"
+        self.camera_button.setText(text)
+        self.camera_button.setEnabled(
+            bool(self.camera_session.supported) and not busy
+        )
+        self.camera_button.setToolTip(self.camera_session.message)
+
+    def _toggle_whatsapp_audio(self) -> None:
+        if self.whatsapp_audio_guard is None:
+            return
+        # The guard is fail-closed.  A failed attempt to unmute leaves the
+        # button in its previous safe state and reports the reason below.
+        self.whatsapp_audio_guard.toggle()
+
+    def _on_whatsapp_audio_state(self, muted: bool, message: str) -> None:
+        if not hasattr(self, "whatsapp_audio_button"):
+            return
+        self.whatsapp_audio_button.blockSignals(True)
+        self.whatsapp_audio_button.setChecked(not muted)
+        self.whatsapp_audio_button.setText(
+            "🔇 WhatsApp" if muted else "🔊 WhatsApp"
+        )
+        self.whatsapp_audio_button.setToolTip(message)
+        self.whatsapp_audio_button.blockSignals(False)
         self.mode_label.setText(message)
 
     def _open_virtual_camera(self, parent=None) -> None:
@@ -848,7 +1007,7 @@ class MainWindow(QMainWindow):
             button.setChecked(mode == actual_mode)
 
         readable = {
-            OperatingMode.BACKGROUND: "Fundo",
+            OperatingMode.BACKGROUND: "Texto do Ano",
             OperatingMode.SPEAKER: "Palco",
             OperatingMode.MEDIA: "Mídia",
             OperatingMode.ZOOM: "Zoom → Salão",
@@ -1007,4 +1166,3 @@ class MainWindow(QMainWindow):
             }
             """
         )
-

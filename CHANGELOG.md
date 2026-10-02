@@ -1,5 +1,32 @@
 # Histórico de alterações
 
+## Não lançado — áudio Zoom/WhatsApp e câmera na tela principal — 01/10/2026
+
+- Inicializacao verifica Python 3.12 estavel x64 antes do pip; se `.venv` for
+  incompativel, preserva backup e recria com 3.12. Confirma o interpretador base
+  antes de alterar o ambiente existente. Mesma verificacao no setup de desenvolvimento.
+
+- Corrigida restricao impossivel de versao pycaw no Windows; dependencia fixada
+  em 20240210, com as interfaces de sessao usadas pelo controle de audio.
+
+- Mix único do OBS para Zoom e WhatsApp via VB-CABLE, preservando o nome compatível
+  `Meeting Assistant - Áudio Zoom`.
+- Botão de retorno do WhatsApp na tela principal, silenciado por padrão e controlado
+  por sessão individual do Windows Core Audio.
+- Câmera virtual nativa do Windows 11 integrada à tela principal, com tentativa de
+  inicialização automática depois da conexão do OBS.
+- Botão F2 renomeado para **Texto do Ano**; a câmera deixou de ser uma ferramenta
+  escondida em Ajustes.
+- Pacote PyInstaller preparado para incluir `pycaw` no executável Windows.
+- `scripts/run.ps1` executa o codigo Python atualizado da pasta `src`, prepara
+  `.venv` e atualiza dependencias quando necessario; nao abre um app congelado em cache.
+- Download/instalacao nativa isolada em `ensure-video-native.ps1`; reutiliza camera
+  instalada e permite atualizar DLLs/host com `-Refresh` ou fornecer pacote local.
+- Workflow de video prepara apenas dependencias C++ em `native-latest`; a geracao
+  do executavel/instalador principal permanece reservada para a distribuicao final.
+- Suíte automatizada: 233 testes aprovados; os novos controles de audio/interface
+  aguardam o ensaio fisico desta atualizacao.
+
 ## Não lançado — Windows 11 e vídeo revisão 3 — 30/09/2026
 
 - Windows 11 x64 passa a ser requisito do app e do instalador.
@@ -82,4 +109,3 @@ As entradas históricas abaixo descrevem tentativas anteriores, algumas já remo
 ## Não lançado — desenvolvimento após 21/09/2026
 
 Consulte o histórico anterior desta versão no Git para detalhes de implementação, testes e telemetria.
-

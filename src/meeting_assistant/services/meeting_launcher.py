@@ -107,6 +107,12 @@ class MeetingLauncherService(QObject):
         self._thread.start()
         return True
 
+    def end_meeting(self) -> None:
+        try:
+            subprocess.run(["taskkill", "/F", "/IM", "obs64.exe", "/IM", "obs32.exe", "/IM", "Zoom.exe", "/IM", "JWLibrary.exe", "/IM", "WhatsApp.exe"], creationflags=subprocess.CREATE_NO_WINDOW)
+        except OSError:
+            pass
+
     def _run(self) -> None:
         settings = self._settings_provider()
         notes: list[str] = []
@@ -154,6 +160,12 @@ class MeetingLauncherService(QObject):
                 notes.append("Zoom aberto; link da reunião ainda não configurado")
         else:
             notes.append("Zoom já está em uma reunião")
+
+        self.progress_changed.emit("Abrindo WhatsApp…")
+        if self._open_uri("whatsapp://"):
+            notes.append("WhatsApp solicitado")
+        else:
+            notes.append("Não foi possível abrir o WhatsApp")
 
         # A process appearing once is not a completed startup. In the reported
         # session JWL disappeared 28 seconds after the old success summary.

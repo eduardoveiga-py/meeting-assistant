@@ -78,8 +78,7 @@ class SettingsDialog(QDialog):
             tools_group = QGroupBox("Ferramentas e áudio")
             tools_layout = QVBoxLayout(tools_group)
             for text, signal in (
-                ("Áudio da mesa e das mídias → Zoom…", self.audio_setup_requested),
-                ("Câmera para WhatsApp — Windows 11…", self.virtual_camera_requested),
+                ("Áudio da mesa e das mídias → Zoom + WhatsApp…", self.audio_setup_requested),
                 ("Observar mídia no JW Library (20 s)", self.observe_requested),
                 ("Calibrar Texto do Ano", self.calibrate_requested),
             ):
@@ -243,7 +242,7 @@ class SettingsDialog(QDialog):
         self.media_combo = self._scene_combo(settings.scene_media, available_scenes)
         self.zoom_combo = self._scene_combo(settings.scene_zoom, available_scenes)
 
-        scenes_form.addRow("Fundo", self.background_combo)
+        scenes_form.addRow("Texto do Ano", self.background_combo)
         scenes_form.addRow("Palco", self.speaker_combo)
         scenes_form.addRow("Mídia", self.media_combo)
         scenes_form.addRow("Zoom → Salão", self.zoom_combo)
@@ -321,5 +320,3 @@ class SettingsDialog(QDialog):
         settings.telemetry_enabled = self.telemetry_check.isChecked()
         settings.telemetry_screenshots = self.telemetry_screenshots_check.isChecked()
         settings.telemetry_repo_url = self.telemetry_repo_edit.text().strip()
-
-
