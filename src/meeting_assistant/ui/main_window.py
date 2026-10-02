@@ -450,6 +450,43 @@ class MainWindow(QMainWindow):
         self.telemetry_session_id = session_id
         pass
 
+
+    def closeEvent(self, event) -> None:
+        try:
+            import win32gui
+            import win32process
+            import psutil
+            layouts = getattr(self.settings, "window_layouts", {})
+            if layouts is None:
+                layouts = {}
+                self.settings.window_layouts = layouts
+            
+            # Save our own window
+            layouts["meeting_assistant"] = [self.x(), self.y(), self.width(), self.height()]
+            
+            # Find Zoom and JWL
+            def callback(hwnd, _):
+                if not win32gui.IsWindowVisible(hwnd):
+                    return True
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                try:
+                    pname = psutil.Process(pid).name().casefold()
+                    if pname == "zoom.exe" and win32gui.GetClassName(hwnd) in ("ZPContentViewWndClass", "ZPPTopWndClass"):
+                        wp = win32gui.GetWindowPlacement(hwnd)
+                        layouts["zoom"] = list(wp[4])
+                    elif pname == "jwlibrary.exe" and "Windows.UI.Core.CoreWindow" in win32gui.GetClassName(hwnd):
+                        wp = win32gui.GetWindowPlacement(hwnd)
+                        layouts["jwlibrary"] = list(wp[4])
+                except Exception:
+                    pass
+                return True
+            
+            win32gui.EnumWindows(callback, None)
+            self._settings_service.save(self.settings)
+        except Exception as e:
+            print(f"Error saving layout: {e}")
+        super().closeEvent(event)
+
     def set_telemetry_status(self, ok: bool, message: str) -> None:
         self.footer.setToolTip(message)
 

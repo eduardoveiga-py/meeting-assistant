@@ -213,7 +213,14 @@ def main() -> int:
     )
     telemetry.sync_status_changed.connect(window.set_telemetry_status)
 
+
+    if getattr(settings, "window_layouts", None) and "meeting_assistant" in settings.window_layouts:
+        layout = settings.window_layouts["meeting_assistant"]
+        if len(layout) == 4:
+            window.setGeometry(layout[0], layout[1], layout[2], layout[3])
+    
     if settings.always_on_top:
+
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
     media_automation.status_changed.connect(window.set_automation_status)
