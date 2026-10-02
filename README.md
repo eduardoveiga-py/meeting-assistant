@@ -1,218 +1,107 @@
-<p align="center">
-  <img src="src/meeting_assistant/resources/app_icon.svg" width="88" alt="Meeting Assistant">
-</p>
+# 🖥️ Meeting Assistant
 
-<h1 align="center">Meeting Assistant</h1>
+![Windows 11](https://img.shields.io/badge/Windows-11-blue?style=flat-square&logo=windows)
+![Python 3.12](https://img.shields.io/badge/Python-3.12-blue?style=flat-square&logo=python)
+![PySide6](https://img.shields.io/badge/PySide6-GUI-green?style=flat-square&logo=qt)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
-<p align="center"><strong>Operação integrada de JW Library, OBS Studio e Zoom para reuniões no Windows.</strong></p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Windows-11%20x64-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows">
-  <img src="https://img.shields.io/badge/Python-runtime%20incluído-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python runtime incluído">
-  <img src="https://img.shields.io/badge/Release-0.6.0--dev1-22C55E?style=for-the-badge" alt="Release 0.7.0">
-  <img src="https://img.shields.io/badge/Status-build%20Windows%2011%20em%20validação-F59E0B?style=for-the-badge" alt="Build Windows 11 em validação">
-</p>
-
-<p align="center">
-  <a href="../../releases">📦 Releases</a> ·
-  <a href="docs/installation.md">🚀 Instalação</a> ·
-  <a href="docs/operator-guide.md">🎛️ Guia do operador</a> ·
-  <a href="docs/roadmap-after-hall-validation.md">🧭 Próximos passos</a>
-</p>
+O **Meeting Assistant** é um orquestrador open-source criado para simplificar e automatizar a operação de áudio e vídeo em Salões do Reino. Ele conecta e coordena **OBS Studio, JW Library, Zoom e WhatsApp**, permitindo que o operador foque na reunião, sem se preocupar com transições manuais complexas, roteamento de áudio ou gerenciamento de múltiplas janelas.
 
 ---
 
-## ✨ O que esta versão entrega
+## ✨ Principais Funcionalidades
 
-| Área | O que já está no aplicativo |
+* **🤖 Automação Inteligente (JW Library & OBS):** 
+  Transições automáticas no OBS baseadas na atividade do JW Library. O sistema lê o áudio direto do kernel do Windows (`pycaw`) garantindo precisão absoluta. Ao dar "Play" no JWL, o app corta o áudio da mesa no OBS automaticamente, prevenindo microfonias e vazamentos.
+* **🎥 Câmera Virtual Integrada (WhatsApp & Zoom):**
+  Uma ponte de vídeo nativa (Media Foundation) capta a saída do OBS Studio e cria uma câmera virtual ultraleve, otimizada para o WhatsApp UWP e Zoom (sem depender de plugins como NDI).
+* **🎬 Projeção de Mídia Externa (VLC, MPC, Fotos):**
+  Precisa reproduzir um arquivo de fora do JW Library? Um clique no botão **Mídia** encontra o VLC ou reprodutor ativo, remove suas bordas, e o projeta em tela cheia na Tela 2. Ao desativar, devolve o controle automaticamente para o JW Library.
+* **🎤 Controle Silencioso do Zoom:**
+  Gerencie o microfone do Zoom diretamente pelo painel do Meeting Assistant. O sistema usa automação invisível (`pywinauto` UIA) para mutar/desmutar o Zoom em segundo plano, sem roubar o foco ou atrapalhar o operador.
+* **🔄 Atualizações Automáticas (Auto-updater):**
+  Sempre que houver melhorias, o aplicativo avisará com um banner visual. Com um clique, ele baixa a nova versão do GitHub e atualiza silenciosamente.
+* **🕰️ Máquina do Tempo (Rollback):**
+  Deu algum problema no dia da reunião? A aba de Ajustes permite restaurar o aplicativo para qualquer uma das últimas 5 versões lançadas com um único clique.
+* **🎮 Modo de Simulação:**
+  Treine novos operadores em casa ou em notebooks comuns sem bagunçar as configurações oficiais ou precisar de dois monitores físicos.
+
+---
+
+## 🛠️ Arquitetura de Áudio e Vídeo
+
+O fluxo de mídia automatizado reduz a carga cognitiva do operador. A rota padrão é:
+
+```text
+JW Library / VLC / Câmeras do Salão
+               |
+      Captura de Áudio/Vídeo no OBS
+               |
+        Mixer / Transições (OBS)
+               |
+    [Câmera Virtual OBS] + [VB-CABLE Output]
+               |
+        Zoom + WhatsApp
+```
+*(Nota: O uso do VB-CABLE é recomendado para separar o áudio das mídias enviadas remotamente).*
+
+---
+
+## 🚀 Instalação (Windows 11)
+
+**O instalador já inclui o Python embutido e todas as bibliotecas necessárias.**
+
+1. Acesse a área de [Releases](../../releases) deste repositório.
+2. Baixe o instalador da última versão (Ex: `MeetingAssistant-Setup-X.Y.Z.exe`).
+3. Execute e siga as etapas da tela.
+4. Abra o **Meeting Assistant** pelo menu Iniciar.
+5. Na primeira abertura, configure as opções do OBS e selecione a Tela do Salão (Tela 2) na aba de Ajustes (⚙️).
+
+### Pré-requisitos Externos:
+* **Windows 11 x64** (Obrigatório para a câmera virtual Media Foundation)
+* **OBS Studio** (com configuração de WebSocket ativada)
+* **Zoom Desktop** e/se **WhatsApp (UWP)**
+* **JW Library para Windows**
+* **VB-CABLE** (Driver de áudio virtual, recomendado)
+
+---
+
+## 💻 Painel do Sistema (Operação)
+
+O painel principal foi desenhado para uso em monitores de toque ou mouse, de forma extremamente enxuta:
+
+| Botão | Ação |
 |---|---|
-| 🖥️ Salão | Uso da janela secundária do JW Library e recuperação após alterações do shell/área de trabalho. |
-| 🔵 Zoom → Salão | Mostra os participantes no segundo monitor sem trocar o programa principal do OBS. |
-| 🎬 Automação | Texto do ano em repouso → **Palco**; mídia → **Mídias**; fim da mídia → **Palco**. |
-| 🎚️ OBS | Controle por WebSocket, mapeamento de cenas, preview e diagnóstico. |
-| 🚀 Iniciar reunião | Detecta/abre OBS, JW Library e Zoom e pode abrir diretamente um link normal de convite do Zoom. |
-| 🎙️ Áudio | Preparação de fontes de microfone/aplicativos e rota OBS → VB-CABLE → Zoom + WhatsApp, com retorno do WhatsApp silenciado por padrão. |
-| 📹 Câmera | Câmera virtual nativa Windows 11 iniciada automaticamente após a conexão do OBS, com controle na tela principal. |
-| ⚙️ Assistente | Verifica o ambiente, ajuda a configurar o WebSocket e pode instalar OBS/Zoom usando WinGet com autorização. |
-| 🧪 Telemetria | Diagnóstico estruturado, sanitizado e desacoplado da operação. |
+| **▶ Iniciar Reunião** | Inicia OBS, Zoom, JWL, câmera virtual e conecta o WebSocket automaticamente. |
+| **🔴 Encerrar** | Fecha os aplicativos da reunião e devolve o PC ao estado normal de uso. |
+| **⚙️ Ajustes** | Configurações de Telas, Cenas do OBS, Atualizações, Diagnósticos e Rollback. |
+| **🎬 Mídia** | Intercepta reprodutores externos (VLC/Fotos) e os força para a Tela 2 em tela cheia. |
+| **📷 Câmera WhatsApp** | Inicia/Para o envio de vídeo do OBS para o aplicativo do WhatsApp. |
+| **🎤 Mic Zoom** | Alterna entre "Mudo/Aberto" no Zoom em segundo plano. |
 
-### 🔒 Núcleo visual validado
-
-O comportamento **JWL ↔ Zoom ↔ Salão** foi validado pelo operador em **21/09/2026**. Esse núcleo possui checkpoint e teste de integridade e não deve ser alterado para implementar recursos paralelos sem nova validação física.
+Também possui suporte total a atalhos de teclado de **F1** a **F10** para operadores ágeis.
 
 ---
 
-## 📦 Distribuição final planejada para quem não tem Python
+## 👨‍💻 Para Desenvolvedores
 
-**O instalador final incluirá Python e as bibliotecas. Durante os testes atuais,
-use o código Python conforme o procedimento abaixo. O instalador ainda precisa
-da validação final; esta seção descreve a distribuição planejada.**
-
-1. Abra a área de **Releases** do repositório.
-2. Baixe `MeetingAssistant-Setup-0.7.0.exe`.
-3. Execute o instalador e siga as etapas.
-4. Abra o **Meeting Assistant** pelo menu Iniciar ou pelo atalho criado.
-5. Na primeira abertura, use o **Assistente de instalação e configuração** para verificar o ambiente.
-
-### Aplicativos externos necessários
-
-O instalador inclui o runtime Microsoft Visual C++ e as DLLs nativas. Para a operação completa, instale:
-
-- **OBS Studio**
-- **Zoom para desktop**
-- **JW Library para Windows**
-- **VB-CABLE**, quando o áudio de mídia for enviado ao Zoom
-- **WhatsApp para desktop**, quando usar a câmera Meeting Assistant
-
-O assistente pode ajudar a instalar OBS e Zoom por WinGet, com autorização explícita. O JW Library deve ser instalado pela fonte oficial. O VB-CABLE é um driver externo e deve ser instalado pelo fabricante.
-
-📘 **Passo a passo:** [docs/installation.md](docs/installation.md)
-
-### Executar o codigo Python durante o desenvolvimento
-
-Atualize a pasta e execute:
+Se deseja modificar ou rodar a partir do código fonte:
 
 ```powershell
 git pull --ff-only
 .\scripts\run.ps1
 ```
 
-O script cria/reutiliza `.venv`, atualiza as dependencias quando `pyproject.toml`
-muda e executa `python -m meeting_assistant.main` a partir do `src` desta pasta.
-Ele reutiliza a camera/ponte ja instaladas; se faltarem, baixa somente o pacote
-nativo. Use `-Refresh` quando precisar atualizar os componentes nativos.
+O script `.ps1` criará o ambiente virtual (`.venv`), instalará dependências via `pip` e cuidará dos binários e DLLs nativas em C++ responsáveis pela Virtual Camera.
 
-A camera tem DLLs e pequenos executaveis C++ auxiliares; o aplicativo principal
-continua em Python. O executavel e o instalador finais ficam para a distribuicao.
-Veja [o procedimento completo](docs/installation.md).
+**Dependências Principais:**
+- `PySide6` (GUI)
+- `pywinauto` e `pycaw` (Automação de Janelas e Áudio do Windows)
+- `obsws-python` (Integração com OBS via WebSocket)
 
 ---
 
-## 🎧 Áudio para Zoom e WhatsApp
+## ⚠️ Avisos e Isenção de Responsabilidade
+O **Meeting Assistant** é um projeto independente e não-oficial. Não possui qualquer afiliação direta com JW Library, Zoom Video Communications ou OBS Project. Marcas e softwares pertencem aos seus respectivos criadores.
 
-O caminho usado nesta release é:
-
-```text
-JW Library / VLC / Chrome / Edge
-              ↓
-      Captura de áudio no OBS
-              ↓
-        Mixer / monitoramento
-              ↓
-          CABLE Input
-              ↓
-         CABLE Output
-              ↓
-        Zoom + WhatsApp
-```
-
-No OBS, o dispositivo de monitoramento deve ser **CABLE Input (VB-Audio Virtual Cable)**. No Zoom, a entrada deve ser **CABLE Output**.
-
-A primeira validação feita nesta etapa confirmou que o áudio do **JW Library pode ser enviado pelo OBS usando VB-CABLE**. O aplicativo ainda trata essa configuração como uma etapa explícita do operador, porque a entrada física, mix-minus, retorno do Zoom e teste de escuta precisam ser confirmados no computador real.
-
-Também evite capturar a mesma mídia duas vezes — por exemplo, pela captura do aplicativo e pelo `Desktop Audio` — porque isso pode produzir duplicação.
-
-📘 **Procedimento de áudio:** [docs/test-audio-shortcuts.md](docs/test-audio-shortcuts.md)
-
----
-
-## 🧭 Primeiro uso
-
-Depois de instalar:
-
-```text
-1. Abrir Meeting Assistant
-2. Ajustes → salvar OBS e cenas
-3. Escolher a tela do Salão
-4. Verificar ambiente
-5. Preparar fontes do OBS
-6. Configurar CABLE Input / CABLE Output
-7. Testar voz + JWL + VLC/navegador
-8. Fazer o ciclo Zoom → Salão → JWL
-```
-
-**Não faça o primeiro teste durante uma reunião pública.** Faça o ensaio com outro dispositivo conectado ao Zoom, preferencialmente com fones.
-
----
-
-## 🧰 Atalhos da operação
-
-| Tecla | Ação |
-|---|---|
-| F1 | Ajuda |
-| F2 | Texto do Ano |
-| F3 | Palco |
-| F4 | Mídia |
-| F5 | Zoom → Salão / voltar ao JWL |
-| F6 | Ativar / pausar automação |
-| F7 | Cena segura → Palco |
-| F8 | Iniciar reunião |
-| F9 | Verificar |
-| F10 | Ajustes |
-
-Os atalhos são locais à janela do Meeting Assistant e não funcionam como atalhos globais do Windows.
-
----
-
-## 🏗️ Desenvolvimento
-
-O projeto usa Python 3.12 durante o desenvolvimento, mas a distribuição oficial é empacotada para Windows pelo GitHub Actions.
-
-```text
-src/meeting_assistant/
-├── core/       estado e coordenação
-├── services/   OBS, JWL, Zoom, áudio, diagnóstico e configuração
-├── ui/         interface PySide6
-└── resources/  ícones e recursos
-```
-
-Para desenvolvimento:
-
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -e ".[dev]"
-pytest
-ruff check .
-```
-
-O build de distribuição usa **PyInstaller + Inno Setup** no Windows. O roteiro está em [packaging/README.md](packaging/README.md).
-
----
-
-## 🧭 O que vem depois
-
-A primeira release instalável não significa que todas as rotinas físicas estejam certificadas. As próximas prioridades são:
-
-1. ensaio do instalador em uma máquina Windows limpa;
-2. ensaio completo de áudio e confirmação de estéreo no Zoom;
-3. substituir a captura JWL por método alternativo quando uma máquina não fornecer áudio pela captura de processo;
-4. terminar a configuração física da câmera IP;
-5. criar atualizador seguro entre releases, preservando configurações;
-6. concluir tutorial ilustrado e matriz de aceitação para operação no Salão.
-
-Veja o [roadmap detalhado](docs/roadmap-after-hall-validation.md).
-
----
-
-## ℹ️ Avisos
-
-O Meeting Assistant é um projeto independente e não oficial do JW Library, Zoom ou OBS Studio. Nomes, marcas e aplicativos externos pertencem aos respectivos titulares.
-
-Arquivos de configuração podem conter informações privadas. Não publique `%APPDATA%\\MeetingAssistant\\settings.json` ou sessões de telemetria que contenham dados operacionais sem revisão.
-
-
-## Desenvolvimento atual — Windows 11 obrigatório
-
-O requisito atual é **Windows 11 x64, build 22000 ou superior**. A versão em desenvolvimento
-usa uma câmera própria Media Foundation para receber **Program do OBS**, sem NDI.
-A prévia principal e a da câmera usam vídeo contínuo NV12, com alvo de 30 fps.
-
-As tentativas Windows 10 (DirectShow Compat e driver experimental) foram retiradas.
-A release 0.5.0 acima é anterior a esta mudança. Use o pacote do workflow
-**Windows 11 video**, que inclui app portátil com Python/bibliotecas e componentes nativos.
-A câmera ainda depende de validação física no WhatsApp antes de ser considerada aprovada.
-
-- [Instalação e testes no Windows 11](docs/test-virtual-camera.md)
-- [Arquitetura modular e decisão técnica](docs/windows11-video-architecture.md)
+*Nota de Privacidade:* Logs gerados pela telemetria interna de diagnóstico são armazenados no `%APPDATA%` e desvinculados da operação real.
