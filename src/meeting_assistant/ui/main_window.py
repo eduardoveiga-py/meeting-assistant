@@ -257,33 +257,37 @@ class MainWindow(QMainWindow):
 
         system_grid = QGridLayout()
         system_grid.setHorizontalSpacing(6)
-        settings_button = QPushButton("⚙️ Ajustes")
-        settings_button.clicked.connect(self._show_settings)
-        system_grid.addWidget(self.start_meeting_button, 0, 0, 1, 2)
-        system_grid.addWidget(settings_button, 0, 2)
         
+        # Row 0
+        system_grid.addWidget(self.start_meeting_button, 0, 0)
         self.end_meeting_button = QPushButton("🔴 Encerrar")
         self.end_meeting_button.setToolTip("Encerra OBS, JW Library, Zoom e WhatsApp.")
         self.end_meeting_button.clicked.connect(self._end_meeting)
-        system_grid.addWidget(self.end_meeting_button, 1, 0)
+        system_grid.addWidget(self.end_meeting_button, 0, 1)
+        settings_button = QPushButton("⚙️ Ajustes")
+        settings_button.clicked.connect(self._show_settings)
+        system_grid.addWidget(settings_button, 0, 2)
         
+        # Row 1
         self.ext_media_button = QPushButton("🎬 Mídia")
         self.ext_media_button.setCheckable(True)
         self.ext_media_button.setToolTip("Envia o player de vídeo ativo para o telão")
         self.ext_media_button.toggled.connect(self._toggle_ext_media)
-        system_grid.addWidget(self.ext_media_button, 1, 1)
-
+        system_grid.addWidget(self.ext_media_button, 1, 0)
+        
         self.zoom_mic_button = QPushButton("🎤 Mic Zoom")
         self.zoom_mic_button.setToolTip("Muta ou desmuta o microfone no Zoom")
         self.zoom_mic_button.clicked.connect(self._toggle_zoom_mic)
         system_grid.addWidget(self.zoom_mic_button, 1, 2)
 
+        # Row 2
         self.camera_button = QPushButton("📷 Iniciar câmera WhatsApp")
         self.camera_button.setToolTip(
             "Inicia ou para a câmera virtual nativa que transmite o Program do OBS ao WhatsApp."
         )
         self.camera_button.clicked.connect(self._toggle_camera)
-        system_grid.addWidget(self.camera_button, 2, 0, 1, 3)
+        system_grid.addWidget(self.camera_button, 2, 1)
+        
         controls.addLayout(system_grid)
 
         # Retain the existing probe progress callbacks; the command lives in Settings.
