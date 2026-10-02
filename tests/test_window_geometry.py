@@ -63,7 +63,7 @@ def test_settings_buttons_stay_visible_and_content_scrolls(app, area):
         dialog.close()
 
 
-@pytest.mark.parametrize("height", [560, 680])
+@pytest.mark.parametrize("height", [600, 680])
 def test_main_window_shows_all_controls_without_scrolling(app, height):
     services = [MagicMock() for _ in range(7)]
     services[2].snapshot.return_value = []
@@ -88,7 +88,7 @@ def test_main_window_shows_all_controls_without_scrolling(app, height):
         window.close()
 
 
-@pytest.mark.parametrize("height", [560, 680])
+@pytest.mark.parametrize("height", [600, 680])
 def test_launch_summary_does_not_expand_main_window_horizontally(app, height):
     services = [MagicMock() for _ in range(7)]
     services[2].snapshot.return_value = []

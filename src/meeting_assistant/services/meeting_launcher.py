@@ -109,7 +109,15 @@ class MeetingLauncherService(QObject):
 
     def end_meeting(self) -> None:
         try:
-            subprocess.run(["taskkill", "/F", "/IM", "obs64.exe", "/IM", "obs32.exe", "/IM", "Zoom.exe", "/IM", "JWLibrary.exe", "/IM", "WhatsApp.exe"], creationflags=subprocess.CREATE_NO_WINDOW)
+            subprocess.run(
+                [
+                    "taskkill", "/F",
+                    "/IM", "obs64.exe", "/IM", "obs32.exe",
+                    "/IM", "Zoom.exe", "/IM", "JWLibrary.exe",
+                    "/IM", "WhatsApp.exe",
+                ],
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
         except OSError:
             pass
 

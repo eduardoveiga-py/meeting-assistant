@@ -1,5 +1,5 @@
+
 from PySide6.QtCore import QObject, Signal
-import time
 
 try:
     import win32api
@@ -11,6 +11,7 @@ except ImportError:
     win32gui = None
 
 from meeting_assistant.services.display_service import DisplayInfo
+
 
 class ExternalMediaService(QObject):
     state_changed = Signal(bool, str)
@@ -33,7 +34,12 @@ class ExternalMediaService(QObject):
             class_name = win32gui.GetClassName(hwnd)
             title = win32gui.GetWindowText(hwnd)
             # Detect VLC, MPC-HC, Windows Photos, Movies & TV
-            if "VLC" in title or "MediaPlayerClassicW" in class_name or "ApplicationFrameWindow" in class_name and ("Fotos" in title or "Filmes" in title or "Photos" in title or "Movies" in title):
+            media_titles = ("Fotos", "Filmes", "Photos", "Movies")
+            is_media_frame = (
+                "ApplicationFrameWindow" in class_name
+                and any(t in title for t in media_titles)
+            )
+            if "VLC" in title or "MediaPlayerClassicW" in class_name or is_media_frame:
                 candidates.append(hwnd)
             return True
         win32gui.EnumWindows(callback, None)

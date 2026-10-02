@@ -438,9 +438,6 @@ class MainWindow(QMainWindow):
         pass
 
     def set_telemetry_status(self, ok: bool, message: str) -> None:
-        state = "sincronizada" if ok else "local"
-        session_id = self.telemetry_session_id or "sessão atual"
-        pass
         self.footer.setToolTip(message)
 
     def set_automation_signal(
@@ -650,9 +647,9 @@ class MainWindow(QMainWindow):
 
         # Layout organization requested by the user
         try:
-            import win32gui
-            import win32con
             import win32api
+            import win32con
+            import win32gui
             
             screen_width = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
             screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
@@ -671,7 +668,12 @@ class MainWindow(QMainWindow):
                 if class_name == "ApplicationFrameWindow" and "JW Library" in title:
                     # JWL to the right, full screen minus app width
                     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                    win32gui.SetWindowPos(hwnd, win32con.HWND_TOP, app_width, 0, screen_width - app_width, screen_height, win32con.SWP_SHOWWINDOW)
+                    win32gui.SetWindowPos(
+                        hwnd, win32con.HWND_TOP,
+                        app_width, 0,
+                        screen_width - app_width, screen_height,
+                        win32con.SWP_SHOWWINDOW,
+                    )
                 elif ("Zoom Meeting" in title or "Zoom" == title) and "Zoom" in class_name:
                     win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
                 return True
