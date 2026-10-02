@@ -11,7 +11,7 @@ from obsws_python.error import OBSSDKRequestError
 
 BUS = "Meeting Assistant - Áudio Zoom"
 MIC = "Meeting Assistant - Mesa"
-APPS = {"JW Library": "jwlibrary.exe", "VLC": "vlc.exe", "Chrome": "chrome.exe", "Edge": "msedge.exe"}
+APPS = {"JW Library": "jwlibrary.exe", "Zoom": "zoom.exe", "VLC": "vlc.exe", "Chrome": "chrome.exe", "Edge": "msedge.exe"}
 MIC_KIND = "wasapi_input_capture"
 APP_KIND = "wasapi_process_output_capture"
 NONE = "OBS_MONITORING_TYPE_NONE"
