@@ -64,7 +64,11 @@ As instrucoes abaixo sao destinadas ao futuro pacote de distribuicao.
 
 Baixe `MeetingAssistant-Setup-<versão>.exe` na Release do GitHub e execute.
 
-O instalador é por usuário e normalmente não exige uma senha de administrador. Aceite o local padrão e crie o atalho desejado.
+Feche app, OBS e WhatsApp. O instalador solicita permissão de administrador para
+registrar a câmera e instalar a ponte OBS. Selecione a pasta do OBS e mantenha os
+componentes câmera/ponte habilitados. Se ainda não tiver OBS, desmarque a ponte;
+depois use o assistente para instalar OBS e instalar os componentes nativos.
+Python, bibliotecas e Microsoft Visual C++ x64 estão incluídos.
 
 ## 2. Instalar os aplicativos externos
 
@@ -104,7 +108,7 @@ JW Library / VLC / Chrome / Edge
       Zoom + WhatsApp
 ```
 
-Para uma fonte somente para o Zoom, prefira **Monitor Only** no OBS.
+Para as fontes da mesa e mídias enviadas aos dois aplicativos, use **Monitor Only** no OBS.
 
 Não selecione o retorno do Zoom como parte da mistura enviada ao Zoom. Se a mesa já inclui o retorno, use uma saída mix-minus.
 

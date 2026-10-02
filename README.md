@@ -56,12 +56,13 @@ da validação final; esta seção descreve a distribuição planejada.**
 
 ### Aplicativos externos necessários
 
-O instalador não redistribui softwares de terceiros. Para a operação completa, instale:
+O instalador inclui o runtime Microsoft Visual C++ e as DLLs nativas. Para a operação completa, instale:
 
 - **OBS Studio**
 - **Zoom para desktop**
 - **JW Library para Windows**
 - **VB-CABLE**, quando o áudio de mídia for enviado ao Zoom
+- **WhatsApp para desktop**, quando usar a câmera Meeting Assistant
 
 O assistente pode ajudar a instalar OBS e Zoom por WinGet, com autorização explícita. O JW Library deve ser instalado pela fonte oficial. O VB-CABLE é um driver externo e deve ser instalado pelo fabricante.
 

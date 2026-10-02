@@ -87,6 +87,7 @@ class SetupAssistantDialog(QDialog):
             )
         self._button(layout, "Obter JW Library — Microsoft Store", self._store)
         self._button(layout, "Configurar WebSocket local (OBS fechado)", self._websocket)
+        self._button(layout, "Instalar/atualizar câmera e ponte nativas (OBS fechado)", self._native)
         self._button(layout, "Abrir OBS", self._open_obs)
         self._button(layout, "Criar cenas padrão, preservando as existentes", self._scenes)
         self._button(layout, "Preparar câmera IP em Palco", self._camera)
@@ -219,6 +220,13 @@ class SetupAssistantDialog(QDialog):
         if self._authorized():
             settings = replace(self.owner.settings)
             self._run(lambda: service.configure_websocket(settings))
+
+    def _native(self):
+        if self._authorized():
+            from meeting_assistant.services.packaged_native import install_bundled
+
+            settings = replace(self.owner.settings)
+            self._run(lambda: install_bundled(settings))
 
     def _open_obs(self):
         if self._authorized():

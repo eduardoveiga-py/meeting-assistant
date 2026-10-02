@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 
-datas = collect_data_files("meeting_assistant.resources")
+datas = collect_data_files("meeting_assistant.resources") + copy_metadata("meeting-assistant")
 source = Path(SPECPATH).resolve().parent / "src"
 
 a = Analysis(
