@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover - Windows-only
     win32process = None
 
 
-_ZOOM_WINDOW_CLASS = "ConfMultiTabContentWndClass"
+_ZOOM_WINDOW_CLASS = "ZPContentViewWndClass"
 _ZOOM_CONTROL_PANEL_CLASS = "ZPControlPanelClass"
 
 
@@ -91,6 +91,7 @@ class ZoomHallService(QObject):
         self._active = False
         self._zoom_hwnd = 0
         self._jwl_hwnd = 0
+        self._original_zoom_placement = None
         self._show_started = 0.0
         self._show_rect = None
         self._show_confirmed = False
@@ -126,7 +127,7 @@ class ZoomHallService(QObject):
             self.status_changed.emit(False, "Tela do Salão física não está disponível.")
             return False
 
-        zoom = self._find_secondary_zoom_window()
+        zoom = self._find_zoom_window()
         if zoom is None:
             self.status_changed.emit(
                 False,
@@ -160,13 +161,16 @@ class ZoomHallService(QObject):
     def _request_show(self) -> None:
         rect = self._show_rect
         try:
+            if self._is_window(self._zoom_hwnd):
+                self._original_zoom_placement = win32gui.GetWindowPlacement(self._zoom_hwnd)
+                
             if self._is_window(self._jwl_hwnd):
                 win32gui.SetWindowPos(
                     self._jwl_hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
                     win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE
                     | win32con.SWP_NOSIZE | win32con.SWP_ASYNCWINDOWPOS,
                 )
-            show_window_async(self._zoom_hwnd, win32con.SW_SHOWNOACTIVATE)
+            show_window_async(self._zoom_hwnd, win32con.SW_MAXIMIZE)
             win32gui.SetWindowPos(
                 self._zoom_hwnd, win32con.HWND_TOPMOST,
                 rect.left, rect.top, rect.width, rect.height,
@@ -266,9 +270,8 @@ class ZoomHallService(QObject):
     def _request_return(self) -> None:
         rect = self._return_rect
         try:
-            if self._is_window(self._zoom_hwnd):
-                # Keep Zoom alive and discoverable underneath JWL. SW_HIDE
-                # outlives this app's HWND cache and strands it after a restart.
+            if self._is_window(self._zoom_hwnd) and self._original_zoom_placement:
+                win32gui.SetWindowPlacement(self._zoom_hwnd, self._original_zoom_placement)
                 win32gui.SetWindowPos(
                     self._zoom_hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
                     win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE
@@ -377,7 +380,7 @@ class ZoomHallService(QObject):
     def toggle(self) -> bool:
         return self.restore_jwl() if self._active else self.show_on_hall()
 
-    def _find_secondary_zoom_window(self) -> ZoomHallWindow | None:
+    def _find_zoom_window(self) -> ZoomHallWindow | None:
         if win32gui is None or win32process is None:
             return None
 
@@ -404,7 +407,7 @@ class ZoomHallService(QObject):
                     "visible": visible, "width": rect.width, "height": rect.height,
                     "has_controls": controls,
                 })
-                if class_name != _ZOOM_WINDOW_CLASS or controls:
+                if class_name not in (_ZOOM_WINDOW_CLASS, "ZPPTopWndClass") or controls:
                     return True
                 # A previous app instance may have hidden this window. Its
                 # process/class/controls identify it even without our HWND cache.
