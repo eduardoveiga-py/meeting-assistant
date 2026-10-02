@@ -274,20 +274,19 @@ class MainWindow(QMainWindow):
         self.ext_media_button.setToolTip("Envia o player de vídeo ativo para o telão")
         self.ext_media_button.toggled.connect(self._toggle_ext_media)
         system_grid.addWidget(self.ext_media_button, 1, 0)
+
+        self.camera_button = QPushButton("📷 Câmera WhatsApp")
+        self.camera_button.setToolTip(
+            "Inicia ou para a câmera virtual nativa que transmite o Program do OBS ao WhatsApp."
+        )
+        self.camera_button.clicked.connect(self._toggle_camera)
+        system_grid.addWidget(self.camera_button, 1, 1)
         
         self.zoom_mic_button = QPushButton("🎤 Mic Zoom")
         self.zoom_mic_button.setToolTip("Muta ou desmuta o microfone no Zoom")
         self.zoom_mic_button.clicked.connect(self._toggle_zoom_mic)
         system_grid.addWidget(self.zoom_mic_button, 1, 2)
 
-        # Row 2
-        self.camera_button = QPushButton("📷 Iniciar câmera WhatsApp")
-        self.camera_button.setToolTip(
-            "Inicia ou para a câmera virtual nativa que transmite o Program do OBS ao WhatsApp."
-        )
-        self.camera_button.clicked.connect(self._toggle_camera)
-        system_grid.addWidget(self.camera_button, 2, 1)
-        
         controls.addLayout(system_grid)
 
         # Retain the existing probe progress callbacks; the command lives in Settings.
