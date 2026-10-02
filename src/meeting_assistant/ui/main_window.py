@@ -598,7 +598,7 @@ class MainWindow(QMainWindow):
     def _toggle_ext_media(self, checked: bool) -> None:
         from meeting_assistant.services.external_media_service import ExternalMediaService
         if not hasattr(self, "_ext_media_service"):
-            self._ext_media_service = ExternalMediaService(self.hall_display_provider)
+            self._ext_media_service = ExternalMediaService(self._hall_display_provider)
             self._ext_media_service.state_changed.connect(
                 lambda active, msg: self.mode_label.setText(msg)
             )
