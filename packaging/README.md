@@ -122,7 +122,7 @@ New-Item -ItemType Directory -Force .\release | Out-Null
 & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" .\packaging\MeetingAssistant.iss
 ```
 
-O instalador será criado em `release\MeetingAssistant-Setup-0.6.0-dev1.exe`.
+O instalador será criado em `release\MeetingAssistant-Setup-0.7.0.exe`.
 
 Para gerar hashes:
 

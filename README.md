@@ -9,7 +9,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Windows-11%20x64-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Python-runtime%20incluído-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python runtime incluído">
-  <img src="https://img.shields.io/badge/Release-0.6.0--dev1-22C55E?style=for-the-badge" alt="Release 0.6.0-dev1">
+  <img src="https://img.shields.io/badge/Release-0.6.0--dev1-22C55E?style=for-the-badge" alt="Release 0.7.0">
   <img src="https://img.shields.io/badge/Status-build%20Windows%2011%20em%20validação-F59E0B?style=for-the-badge" alt="Build Windows 11 em validação">
 </p>
 
@@ -49,7 +49,7 @@ use o código Python conforme o procedimento abaixo. O instalador ainda precisa
 da validação final; esta seção descreve a distribuição planejada.**
 
 1. Abra a área de **Releases** do repositório.
-2. Baixe `MeetingAssistant-Setup-0.6.0-dev1.exe`.
+2. Baixe `MeetingAssistant-Setup-0.7.0.exe`.
 3. Execute o instalador e siga as etapas.
 4. Abra o **Meeting Assistant** pelo menu Iniciar ou pelo atalho criado.
 5. Na primeira abertura, use o **Assistente de instalação e configuração** para verificar o ambiente.

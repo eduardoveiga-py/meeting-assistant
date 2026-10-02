@@ -2,7 +2,7 @@
 #define MyAppPublisher "Meeting Assistant"
 #define MyAppURL "https://github.com/eduardoveiga-py/meeting-assistant"
 #define MyAppExeName "MeetingAssistant.exe"
-#define MyAppVersion "0.6.0-dev1"
+#define MyAppVersion "0.7.0"
 
 [Setup]
 AppId={{E23B3DD7-1D83-4BD0-AF6E-1A5E27DD98F1}
@@ -45,7 +45,7 @@ Source: "{#SourcePath}..\README.md"; DestDir: "{app}\documentation"; Flags: igno
 Source: "{#SourcePath}..\CHANGELOG.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
 Source: "{#SourcePath}..\docs\operator-guide.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
 Source: "{#SourcePath}..\docs\installation.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
-Source: "{#SourcePath}..\docs\releases\v0.6.0-rc1.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
+Source: "{#SourcePath}..\docs\releases\v0.7.0.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
 Source: "{#SourcePath}..\build\video-native\package\*"; DestDir: "{app}\native"; Flags: ignoreversion
 Source: "{#SourcePath}..\build\prerequisites\vc_redist.x64.exe"; Flags: dontcopy
 Source: "{#SourcePath}installer-preflight.ps1"; Flags: dontcopy
