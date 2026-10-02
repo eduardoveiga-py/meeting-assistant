@@ -66,9 +66,9 @@ jobs:
           $process = Start-Process dist/MeetingAssistant/MeetingAssistant.exe -ArgumentList '--self-check runtime-check.json' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw 'Packaged runtime failed' }
           $check = Get-Content runtime-check.json -Raw | ConvertFrom-Json
-          if (-not $check.ok -or -not $check.frozen -or $check.app_version -ne '0.7.0') { throw 'Invalid runtime report' }
+          if (-not $check.ok -or -not $check.frozen -or $check.app_version -ne '0.8.0') { throw 'Invalid runtime report' }
           Copy-Item -Recurse build/video-native/package dist/MeetingAssistant/native
-          Compress-Archive -Path dist/MeetingAssistant -DestinationPath build/MeetingAssistant-0.7.0-Windows11-x64-portable.zip
+          Compress-Archive -Path dist/MeetingAssistant -DestinationPath build/MeetingAssistant-0.8.0-Windows11-x64-portable.zip
       - name: Install Inno Setup if missing
         shell: pwsh
         run: |
@@ -81,9 +81,9 @@ jobs:
         run: |
           & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" packaging/MeetingAssistant.iss
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
-          Copy-Item build/MeetingAssistant-0.7.0-Windows11-x64-portable.zip release
+          Copy-Item build/MeetingAssistant-0.8.0-Windows11-x64-portable.zip release
           Copy-Item runtime-check.json release
-          Copy-Item docs/releases/v0.7.0.md release/RELEASE-NOTES.md
+          Copy-Item docs/releases/v0.8.0.md release/RELEASE-NOTES.md
           Get-ChildItem release -File | Sort-Object Name | ForEach-Object {
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($_.Name)"
@@ -111,7 +111,7 @@ jobs:
           New-Item -ItemType Directory -Force (Split-Path $settings) | Out-Null
           '{"release_test_marker":"preserve"}' | Set-Content $settings
           $settingsHash = (Get-FileHash $settings).Hash
-          $installer = Resolve-Path release/MeetingAssistant-Setup-0.7.0.exe
+          $installer = Resolve-Path release/MeetingAssistant-Setup-0.8.0.exe
           $process = Start-Process $installer -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /COMPONENTS=app /DIR=`"$target`" /LOG=installer-check.log" -Wait -PassThru
           if ($process.ExitCode -notin @(0,3010)) { throw "Installer failed: $($process.ExitCode)" }
           $process = Start-Process "$target/MeetingAssistant.exe" -ArgumentList '--self-check installed-runtime-check.json' -Wait -PassThru
@@ -146,4 +146,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release create v0.7.0 release/* --target "$GITHUB_SHA" --title 'Meeting Assistant 0.7.0 — Windows 11' --notes-file release/RELEASE-NOTES.md
+          gh release create v0.8.0 release/* --target "$GITHUB_SHA" --title 'Meeting Assistant 0.8.0 — Windows 11' --notes-file release/RELEASE-NOTES.md

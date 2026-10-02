@@ -36,6 +36,7 @@ class SettingsDialog(QDialog):
     calibrate_requested = Signal()
     hall_setup_requested = Signal()
     setup_assistant_requested = Signal()
+    update_history_requested = Signal()
 
     def __init__(
         self,
@@ -89,6 +90,10 @@ class SettingsDialog(QDialog):
                           "Salve antes se tiver editado algum campo. F1 na tela principal mostra os atalhos.")
             hint.setWordWrap(True)
             tools_layout.addWidget(hint)
+            
+            update_btn = QPushButton("Versões Anteriores (Restaurar App)")
+            update_btn.clicked.connect(self.update_history_requested.emit)
+            tools_layout.addWidget(update_btn)
             root.addWidget(tools_group)
 
         output_group = QGroupBox("Saída do Salão")

@@ -59,6 +59,7 @@ class MainWindow(QMainWindow):
         hall_display_provider=None,
         whatsapp_audio_guard=None,
         camera_session=None,
+        update_service=None,
     ) -> None:
         super().__init__()
         self.state = state
@@ -75,6 +76,10 @@ class MainWindow(QMainWindow):
         self._hall_display_provider = hall_display_provider or (lambda: None)
         self.whatsapp_audio_guard = whatsapp_audio_guard
         self.camera_session = camera_session
+        self.update_service = update_service
+        
+        if self.update_service:
+            self.update_service.update_available.connect(self._on_update_available)
         self._camera_auto_start_attempted = False
         self.yeartext_store = YeartextStore(settings_service.path.parent / "yeartext")
         self._latest_media_active = False
@@ -252,28 +257,33 @@ class MainWindow(QMainWindow):
 
         system_grid = QGridLayout()
         system_grid.setHorizontalSpacing(6)
-        diagnostics = QPushButton("🩺 Verificar")
-        diagnostics.clicked.connect(self._show_diagnostics)
         settings_button = QPushButton("⚙️ Ajustes")
         settings_button.clicked.connect(self._show_settings)
-        system_grid.addWidget(self.start_meeting_button, 0, 0)
-        system_grid.addWidget(diagnostics, 0, 1)
+        system_grid.addWidget(self.start_meeting_button, 0, 0, 1, 2)
         system_grid.addWidget(settings_button, 0, 2)
-        self.end_meeting_button = QPushButton("⏹️ Encerrar reunião")
+        
+        self.end_meeting_button = QPushButton("🔴 Encerrar")
         self.end_meeting_button.setToolTip("Encerra OBS, JW Library, Zoom e WhatsApp.")
         self.end_meeting_button.clicked.connect(self._end_meeting)
-        system_grid.addWidget(self.end_meeting_button, 1, 0, 1, 3)
-        self.ext_media_button = QPushButton("🎞️ Mídia Externa")
+        system_grid.addWidget(self.end_meeting_button, 1, 0)
+        
+        self.ext_media_button = QPushButton("🎬 Mídia")
         self.ext_media_button.setCheckable(True)
-        self.ext_media_button.setToolTip("Envia o player de vídeo (VLC, Fotos) ativo para o telão")
+        self.ext_media_button.setToolTip("Envia o player de vídeo ativo para o telão")
         self.ext_media_button.toggled.connect(self._toggle_ext_media)
-        system_grid.addWidget(self.ext_media_button, 2, 0, 1, 3)
-        self.camera_button = QPushButton("📹 Iniciar câmera WhatsApp")
+        system_grid.addWidget(self.ext_media_button, 1, 1)
+
+        self.zoom_mic_button = QPushButton("🎤 Mic Zoom")
+        self.zoom_mic_button.setToolTip("Muta ou desmuta o microfone no Zoom")
+        self.zoom_mic_button.clicked.connect(self._toggle_zoom_mic)
+        system_grid.addWidget(self.zoom_mic_button, 1, 2)
+
+        self.camera_button = QPushButton("📷 Iniciar câmera WhatsApp")
         self.camera_button.setToolTip(
             "Inicia ou para a câmera virtual nativa que transmite o Program do OBS ao WhatsApp."
         )
         self.camera_button.clicked.connect(self._toggle_camera)
-        system_grid.addWidget(self.camera_button, 3, 0, 1, 3)
+        system_grid.addWidget(self.camera_button, 2, 0, 1, 3)
         controls.addLayout(system_grid)
 
         # Retain the existing probe progress callbacks; the command lives in Settings.
@@ -596,6 +606,21 @@ class MainWindow(QMainWindow):
         else:
             self._ext_media_service.stop_external_media()
 
+    def _on_update_available(self, version: str, download_url: str, release_notes: str) -> None:
+        self.update_banner.setText(f"✨ Nova versão disponível (v{version}) - Clique para instalar")
+        self.update_banner.download_url = download_url
+        self.update_banner.version = version
+        self.update_banner.show()
+
+    def _trigger_update(self) -> None:
+        if hasattr(self.update_banner, "download_url") and self.update_service:
+            self.update_banner.setText("Baixando atualização... Por favor, aguarde.")
+            self.update_banner.setEnabled(False)
+            self.update_service.download_and_install_async(
+                self.update_banner.download_url,
+                self.update_banner.version
+            )
+
     def _start_meeting(self) -> None:
         if not self.settings.zoom_join_url.strip():
             self.mode_label.setText(
@@ -728,6 +753,25 @@ class MainWindow(QMainWindow):
             return
         if self.camera_session.state == "off":
             self.camera_session.start()
+
+    def _toggle_zoom_mic(self) -> None:
+        def worker():
+            try:
+                import pywinauto
+                desktop = pywinauto.Desktop(backend="uia")
+                zoom_windows = [w for w in desktop.windows() if "Zoom" in w.window_text()]
+                for w in zoom_windows:
+                    mute_btns = w.descendants(
+                        control_type="Button", 
+                        title_re=".*[aA]udio.*|.*[áÁ]udio.*|.*[mM]ute.*"
+                    )
+                    for btn in mute_btns:
+                        btn.invoke()
+                        return
+            except Exception:
+                pass
+        import threading
+        threading.Thread(target=worker, daemon=True).start()
 
     def _toggle_camera(self) -> None:
         if self.camera_session is None:
