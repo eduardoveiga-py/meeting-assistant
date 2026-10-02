@@ -14,7 +14,7 @@ def setup_windows(monkeypatch, rows):
     def class_name(hwnd):
         if hwnd >= 1000:
             return "ZPControlPanelClass"
-        return rows[hwnd].get("class", "ConfMultiTabContentWndClass")
+        return rows[hwnd].get("class", "ZPContentViewWndClass")
 
     gui = SimpleNamespace(
         EnumWindows=lambda callback, _: [callback(hwnd, None) for hwnd in rows],
@@ -43,7 +43,7 @@ def setup_windows(monkeypatch, rows):
 
 def test_secondary_window_selected_without_english_title(monkeypatch):
     service, records = setup_windows(monkeypatch, {1: {"controls": True}, 2: {}})
-    assert service._find_secondary_zoom_window().hwnd == 2
+    assert service._find_zoom_window().hwnd == 2
     assert records[-1]["result"] == "selected"
     assert all("title" not in row for row in records[-1]["windows"])
 
@@ -52,12 +52,12 @@ def test_main_window_and_other_processes_are_never_selected(monkeypatch):
     service, _ = setup_windows(monkeypatch, {
         1: {"controls": True}, 2: {"process": "other.exe"}, 3: {"unreadable": True},
     })
-    assert service._find_secondary_zoom_window() is None
+    assert service._find_zoom_window() is None
 
 
 def test_ambiguous_windows_are_reported_not_guessed(monkeypatch):
     service, records = setup_windows(monkeypatch, {1: {}, 2: {}})
-    assert service._find_secondary_zoom_window() is None
+    assert service._find_zoom_window() is None
     assert records[-1]["result"] == "ambiguous"
 
 
@@ -65,18 +65,18 @@ def test_hidden_secondary_can_be_reused_after_returning_to_jwl(monkeypatch):
     service, _ = setup_windows(monkeypatch, {1: {"controls": True}, 2: {"visible": False}})
     # A fresh app instance must recover the window hidden by the previous one.
     assert service._zoom_hwnd == 0
-    assert service._find_secondary_zoom_window().hwnd == 2
+    assert service._find_zoom_window().hwnd == 2
 
 
 def test_cached_handle_revalidated_against_process_and_controls(monkeypatch):
     service, _ = setup_windows(monkeypatch, {1: {"controls": True}, 2: {"process": "other.exe"}})
     service._zoom_hwnd = 2
-    assert service._find_secondary_zoom_window() is None
+    assert service._find_zoom_window() is None
 
 
 def test_unknown_zoom_window_class_is_included_in_diagnostics(monkeypatch):
     service, records = setup_windows(monkeypatch, {1: {"class": "NewZoomClass"}})
-    assert service._find_secondary_zoom_window() is None
+    assert service._find_zoom_window() is None
     assert records[-1]["windows"][0]["class_name"] == "NewZoomClass"
 
 
@@ -84,7 +84,7 @@ def test_position_failure_restores_jwl_and_releases_automation_pause(monkeypatch
     service, _ = setup_windows(monkeypatch, {1: {"controls": True}, 2: {}})
     monkeypatch.setattr(module.sys, "platform", "win32")
     monkeypatch.setattr(module, "win32con", SimpleNamespace(
-        SW_RESTORE=1, SW_SHOW=2, SW_SHOWNOACTIVATE=4, SW_HIDE=0, SWP_NOACTIVATE=16,
+        SW_RESTORE=1, SW_SHOW=2, SW_SHOWNOACTIVATE=4, SW_MAXIMIZE=3, SW_HIDE=0, SWP_NOACTIVATE=16,
         SWP_SHOWWINDOW=64, SWP_ASYNCWINDOWPOS=32, HWND_TOPMOST=-1, HWND_NOTOPMOST=-2,
         SWP_NOMOVE=2, SWP_NOSIZE=1,
     ))
@@ -95,6 +95,8 @@ def test_position_failure_restores_jwl_and_releases_automation_pause(monkeypatch
         raise OSError("window disappeared")
 
     module.win32gui.SetWindowPos = fail_position
+    module.win32gui.GetWindowPlacement = lambda hwnd: (0, 0, (0,0), (0,0), (0,0,100,100))
+    module.win32gui.SetWindowPlacement = lambda hwnd, placement: None
     service._jwl_window_provider = lambda: jwl_info()
     service._display_provider = lambda: object()
     monkeypatch.setattr(service, "_native_target_rect", lambda _: module.WindowRect(0, 0, 1280, 720))
@@ -125,7 +127,7 @@ def test_enter_zoom_recovers_hidden_window_after_restart_and_keeps_jwl_visible(m
     service, _ = setup_windows(monkeypatch, {1: {"controls": True}, 2: {"visible": False}})
     monkeypatch.setattr(module.sys, "platform", "win32")
     monkeypatch.setattr(module, "win32con", SimpleNamespace(
-        SW_RESTORE=1, SW_SHOW=2, SW_SHOWNOACTIVATE=4, SWP_NOACTIVATE=16,
+        SW_RESTORE=1, SW_SHOW=2, SW_SHOWNOACTIVATE=4, SW_MAXIMIZE=3, SWP_NOACTIVATE=16,
         SWP_SHOWWINDOW=64, SWP_ASYNCWINDOWPOS=32, HWND_TOPMOST=-1, HWND_NOTOPMOST=-2,
         SWP_NOMOVE=2, SWP_NOSIZE=1,
     ))
@@ -133,6 +135,8 @@ def test_enter_zoom_recovers_hidden_window_after_restart_and_keeps_jwl_visible(m
     module.win32gui.IsWindow = lambda hwnd: hwnd in {1, 2}
     monkeypatch.setattr(module, "show_window_async", lambda hwnd, mode: calls.append((hwnd, mode)))
     module.win32gui.SetWindowPos = lambda *args: None
+    module.win32gui.GetWindowPlacement = lambda hwnd: (0, 0, (0,0), (0,0), (0,0,100,100))
+    module.win32gui.SetWindowPlacement = lambda hwnd, placement: None
     service._jwl_window_provider = lambda: jwl_info()
     service._display_provider = lambda: object()
     monkeypatch.setattr(service, "_native_target_rect", lambda _: module.WindowRect(0, 0, 1280, 720))
@@ -147,7 +151,7 @@ def setup_return(monkeypatch):
     service, _ = setup_windows(monkeypatch, {1: {}, 2: {}})
     monkeypatch.setattr(module.sys, "platform", "win32")
     monkeypatch.setattr(module, "win32con", SimpleNamespace(
-        SW_SHOWNOACTIVATE=4, SW_HIDE=0, SWP_NOACTIVATE=16,
+        SW_SHOWNOACTIVATE=4, SW_MAXIMIZE=3, SW_HIDE=0, SWP_NOACTIVATE=16,
         SWP_SHOWWINDOW=64, SWP_ASYNCWINDOWPOS=32, HWND_TOPMOST=-1, HWND_NOTOPMOST=-2,
         SWP_NOMOVE=2, SWP_NOSIZE=1,
     ))
@@ -159,6 +163,8 @@ def setup_return(monkeypatch):
     module.win32gui.ShowWindow = lambda *args: pytest.fail("Synchronous show must never be called")
     monkeypatch.setattr(module, "show_window_async", lambda hwnd, mode: calls.append(("show", hwnd, mode)))
     module.win32gui.SetWindowPos = lambda *args: calls.append(("position", args[0], args[-1]))
+    module.win32gui.GetWindowPlacement = lambda hwnd: (0, 0, (0,0), (0,0), (0,0,100,100))
+    module.win32gui.SetWindowPlacement = lambda hwnd, placement: None
     monkeypatch.setattr(module.JwlFastWindowGuard, "_cloak_state", lambda _: state["cloaked"])
     monkeypatch.setattr(module.JwlFastWindowGuard, "_is_exposed_at_center", lambda *_: state["exposed"])
     service._display_provider = lambda: object()
@@ -239,7 +245,7 @@ def test_guard_and_media_policy_through_entire_zoom_cycle(enabled):
 
 def test_multiple_hidden_secondaries_are_not_guessed(monkeypatch):
     service, records = setup_windows(monkeypatch, {1: {"visible": False}, 2: {"visible": False}})
-    assert service._find_secondary_zoom_window() is None
+    assert service._find_zoom_window() is None
     assert records[-1]["result"] == "ambiguous"
 
 
@@ -248,7 +254,7 @@ def test_repeated_zoom_cycles_never_hide_secondary(monkeypatch):
     module.win32con.SW_RESTORE = 9
     module.win32con.SW_SHOW = 5
     service._jwl_window_provider = jwl_info
-    monkeypatch.setattr(service, "_find_secondary_zoom_window", lambda: module.ZoomHallWindow(
+    monkeypatch.setattr(service, "_find_zoom_window", lambda: module.ZoomHallWindow(
         2, 2, module.WindowRect(0, 0, 1280, 720),
     ))
     for _ in range(3):
@@ -265,9 +271,11 @@ def test_zoom_is_demoted_and_promoted_symmetrically_and_confirmed(monkeypatch):
     service, state, _, events = setup_return(monkeypatch)
     positions = []
     module.win32gui.SetWindowPos = lambda hwnd, order, *args: positions.append((hwnd, order))
+    module.win32gui.GetWindowPlacement = lambda hwnd: (0, 0, (0,0), (0,0), (0,0,100,100))
+    module.win32gui.SetWindowPlacement = lambda hwnd, placement: None
     service._active = False
     service._jwl_window_provider = jwl_info
-    monkeypatch.setattr(service, "_find_secondary_zoom_window", lambda: module.ZoomHallWindow(
+    monkeypatch.setattr(service, "_find_zoom_window", lambda: module.ZoomHallWindow(
         2, 2, module.WindowRect(0, 0, 1280, 720),
     ))
     changes = []

@@ -9,9 +9,15 @@ separate concern handled by the Windows audio-session guard.
 
 from obsws_python.error import OBSSDKRequestError
 
-BUS = "Meeting Assistant - Áudio Zoom"
+BUS = "Meeting Assistant - Áudio"
 MIC = "Meeting Assistant - Mesa"
-APPS = {"JW Library": "jwlibrary.exe", "Zoom": "zoom.exe", "VLC": "vlc.exe", "Chrome": "chrome.exe", "Edge": "msedge.exe"}
+APPS = {
+    "JW Library": "jwlibrary.exe",
+    "Zoom": "zoom.exe",
+    "VLC": "vlc.exe",
+    "Chrome": "chrome.exe",
+    "Edge": "msedge.exe",
+}
 MIC_KIND = "wasapi_input_capture"
 APP_KIND = "wasapi_process_output_capture"
 NONE = "OBS_MONITORING_TYPE_NONE"
@@ -144,8 +150,7 @@ def discover(client):
 def validate_selection(client, data):
     if data.get("routing_confirmed") is not True:
         raise ValueError(
-            "Confirme CABLE Input no OBS, CABLE Output no Zoom e no WhatsApp, "
-            "e o retorno separado da mesa."
+            "Confirme CABLE Input no OBS, CABLE Output no Zoom e no WhatsApp, e o retorno separado da mesa."
         )
     mic = data.get("microphone", "")
     if mic not in {x["itemValue"] for x in physical_choices(client)}:
