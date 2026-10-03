@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from PySide6.QtCore import QObject, QRect, Signal
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QFontMetrics, QIcon
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 
 import meeting_assistant.ui.program_preview as preview_module
@@ -74,6 +74,7 @@ result = {
     "vertical_scroll": scroll.verticalScrollBar().maximum(),
 }
 try:
+    assert QFontMetrics(title.font()).inFontUcs4(ord("M")), "Header font has no Latin glyphs"
     assert work_area.contains(window.frameGeometry()), result
     for label in (title, subtitle, badge):
         assert label.isVisible() and label.width() > 0, result
@@ -109,7 +110,10 @@ finally:
 @pytest.mark.parametrize("scale", ["1", "1.25", "1.5", "2"])
 def test_operator_header_and_controls_render_at_desktop_scale(tmp_path, scale):
     env = dict(os.environ)
-    env["QT_QPA_PLATFORM"] = "offscreen"
+    # The Windows offscreen plugin renders missing-glyph boxes instead of
+    # system fonts. Use the native Qt platform for representative Windows
+    # text metrics and images; services remain isolated from real devices.
+    env["QT_QPA_PLATFORM"] = "windows" if sys.platform == "win32" else "offscreen"
     env["QT_SCALE_FACTOR"] = scale
     env["PYTHONPATH"] = str(ROOT / "src")
     command = [sys.executable, "-c", PROBE, str(tmp_path), scale]

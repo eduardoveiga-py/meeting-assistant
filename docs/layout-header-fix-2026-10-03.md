@@ -27,6 +27,10 @@ aspectos; houve uma regressão no ajuste e uma lacuna na verificação.
 - Processos Qt separados renderizam a janela real em 100%, 125%, 150% e 200%,
   usando uma área útil Full HD convertida em coordenadas lógicas. OBS, janelas
   externas e o conteúdo de vídeo são simulados; nenhuma chamada é iniciada.
+- No Windows, essas renderizações usam o plugin nativo do Qt e verificam a
+  presença de letras na fonte. O plugin offscreen usado na primeira tentativa
+  gerava quadrados no lugar das letras e métricas que não representavam a tela
+  real. No Linux, a verificação mantém offscreen com suas fontes disponíveis.
 - O CI Windows guarda as quatro imagens em **Artifacts → operator-layout** para
   inspeção visual. O resultado da execução deve ser consultado em Actions para
   o commit desta correção. Não há compilação de câmera, executável ou instalador.
