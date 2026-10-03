@@ -107,6 +107,7 @@ class AccessibleMicrophone:
     # The logical own-microphone role is bound to a process instance and meeting
     # HWND. Zoom may recreate its accessible button when its mute state changes.
     identity: tuple
+    window: object = None
 
     def invoke(self):
         from pywinauto.uia_defines import NoPatternInterfaceError
@@ -176,7 +177,8 @@ def find_control(*, windows=None, pids=None, diagnostic=None):
     if windows is None:
         from pywinauto import Desktop
 
-        windows = Desktop(backend="uia").windows()
+        desktop = Desktop(backend="uia")
+        windows = [window for pid in pids for window in desktop.windows(process=pid)]
     candidates = []
     enumerated = {}
     for window in windows:
@@ -236,7 +238,7 @@ def find_control(*, windows=None, pids=None, diagnostic=None):
                         )
                     continue
                 enumerated[key] = state
-            candidates.append((AccessibleMicrophone(button, identity), state))
+            candidates.append((AccessibleMicrophone(button, identity, window), state))
     details["window_classes"] = sorted(set(details["window_classes"]))
     details["candidates"] = len(candidates)
     if len(candidates) > 1:

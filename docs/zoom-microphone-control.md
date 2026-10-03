@@ -1,8 +1,9 @@
 # Microfone do operador no Zoom — correção de 03/10/2026
 
 Entrega para execução pelo Python, a partir de `e9d4597`. Sem mudança de versão,
-compilação nativa, instalador ou release. A validação física do novo controle ainda
-depende de testar o Zoom instalado no PC do operador.
+compilação nativa, instalador ou release. O operador confirmou que abrir/silenciar
+funciona após a correção de identidade, mas relatou demora de aproximadamente
+cinco segundos. A otimização descrita abaixo ainda precisa de teste físico.
 
 ## Falhas reproduzidas
 
@@ -43,6 +44,38 @@ verifica/cancela operações e informa falhas. Usa Invoke quando disponível ou 
 ação LegacyIAccessible quando esse padrão estiver ausente **antes do envio**.
 Não tenta uma segunda ação após um envio cujo resultado seja incerto.
 
+## Otimização após o retorno do operador
+
+O caminho anterior enumerava todas as janelas do desktop e percorria os botões do
+Zoom antes de agir e novamente ao confirmar. Também recriava thread/COM a cada
+consulta; um clique durante a consulta precisava esperar e refazer a busca.
+Isso é trabalho repetido identificado no código, não uma medição detalhada do PC.
+
+- A descoberta inicial agora filtra as janelas pelo processo do Zoom.
+- `zoom_audio_session.py` mantém o elemento encontrado em um único worker MTA,
+  que permanece disponível entre consultas e comandos. Referências COM não são
+  passadas à GUI nem a novos workers.
+- A leitura direta confere instância do processo, janela, papel próprio,
+  disponibilidade e estado atual. Desativa a memorização de propriedades do
+  pywinauto antes de ler Name/visibilidade. Não reutiliza o estado de mute anterior.
+- Elemento inválido, reinício ou mudança de papel descartam a referência e fazem
+  nova descoberta. Reconstrução na mesma reunião pode confirmar; outra reunião
+  continua recusada depois de um envio. Nunca se repete a ação para recuperar uma
+  confirmação ou um erro de Invoke.
+- A primeira confirmação é imediata; só as leituras sem confirmação esperam até
+  100 ms entre tentativas. O orçamento de observação é 1,8 s; uma chamada síncrona
+  do provedor pode ultrapassá-lo, mas não são agendadas novas buscas após o prazo.
+- Sair cancela a fila, acorda o worker ocioso e libera elementos antes de encerrar
+  COM. Falha na liberação registra apenas o tipo do erro no log, sem sinais Qt
+  tardios nem o texto privado da exceção.
+
+A regressão de integração com dois cliques faz uma descoberta, em lugar das quatro
+do caminho anterior. Outros testes cobrem estado alterado no próprio Zoom,
+propriedades memorizadas, reinício, participante, confirmação lenta e cancelamento.
+Essa evidência comprova menos varreduras no backend simulado; não promete um tempo
+fixo no Zoom real. A primeira descoberta e a recuperação de uma janela podem ser
+mais lentas que os comandos seguintes.
+
 A interface recebe resultados em slots Qt na thread principal. Ao sair, o serviço
 cancela ações pendentes e suprime notificações tardias para objetos Qt já destruídos.
 Essa condição foi reproduzida e coberta por uma regressão de encerramento.
@@ -70,6 +103,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1
    deve alternar o estado real, mesmo antes da próxima consulta periódica.
 5. Repita com o Zoom minimizado. Se ele não expuser o controle nessa condição,
    o app deve informar a falha, liberar o botão e permitir tentar com a janela aberta.
+6. Faça três ciclos de abrir/silenciar. Observe separadamente o tempo até o ícone
+   no **Zoom** mudar e até o botão do **app** atualizar. Informe os tempos aproximados.
+7. Feche/reabra o Zoom e entre novamente na reunião. O controle deve ser
+   redescoberto, sem reaproveitar o elemento da reunião anterior.
 
 Esses testes não exigem a segunda tela. Confira também que microfones dos demais
 participantes permanecem como estavam. Não se declara sucesso pela simples
@@ -84,6 +121,12 @@ de erro. Consultas iguais não geram eventos repetidos. Não registra títulos d
 reunião, nomes de participantes, rótulos brutos, credenciais ou atalhos digitados.
 Também registra o método de identidade e contagens de RuntimeId disponível,
 indisponível ou com erro; não registra seus valores nem o HWND/PID.
+Na revisão 2 do diagnóstico, registra `queue_wait_ms`, `backend_setup_ms`,
+`read_state_ms`, `invoke_ms`, `confirmation_ms`, `elapsed_ms` e `request_elapsed_ms`,
+além de `discovery_calls`, `refresh_calls`, `cache_invalidations` e `lookup_path`.
+As contagens de RuntimeId na leitura direta descrevem a última descoberta; não é
+consultado de novo só para medir. Tempos diferentes de consultas iguais não
+geram eventos repetidos; cada comando explícito é registrado.
 
 Se não funcionar, informe o horário do clique e a mensagem completa. Códigos como
 `state_unavailable`, `control_not_found`, `ambiguous_control`, `control_changed` e `not_confirmed`
@@ -97,6 +140,6 @@ Uma nova regressão percorre clique Qt → worker/COM → descoberta Desktop/UIA
 Invoke → confirmação sem RuntimeId. Também cobre arrays, falha dessa propriedade,
 reconstrução do controle, candidatos ambíguos e outra instância/janela do Zoom.
 
-No momento da correção, o último diagnóstico sincronizado no repositório do
-operador era de 02/10/2026. Não há telemetria disponível desse novo ensaio físico;
-a investigação usa a mensagem da imagem e as regressões descritas acima.
+No momento da otimização, o último diagnóstico sincronizado no repositório do
+operador era de 02/10/2026. Não há medidas de fases disponíveis do ensaio de cinco
+segundos; a investigação usa o retorno do operador e a análise/regressões do código.

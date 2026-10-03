@@ -243,3 +243,9 @@ Nova correção candidata remove a exigência de RuntimeId sem perder o vínculo
 janela/processo e microfone próprio. Regressão do clique atravessa o backend Windows
 simulado, incluindo COM/descoberta UIA e confirmação; ambiguidade e troca de reunião
 continuam recusadas. Validar abrir/silenciar no Zoom instalado após atualizar o Python.
+
+Retorno seguinte: o operador confirmou funcionamento, com demora de cerca de
+cinco segundos. Otimização candidata mantém worker/elemento, lê o estado atual
+diretamente e redescobre quando necessário; confirmação imediata e tempos por
+fase no diagnóstico. Validar três ciclos, mudança manual no Zoom e reinício do
+Zoom, comparando tempo até o ícone no Zoom mudar e tempo até o botão do app mudar.

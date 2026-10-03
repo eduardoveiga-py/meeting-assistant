@@ -27,3 +27,13 @@ acessível consistente. RuntimeId disponível serve somente à deduplicação; c
 sem ele não são fundidos. Regressões reproduziram o bloqueio e cobrem o fluxo Qt/COM/
 UIA, reconstrução do botão, ambiguidade e troca de janela/processo. Novo teste do
 Zoom real permanece pendente; não há telemetria sincronizada desse ensaio.
+
+**Retorno e otimização:** o operador confirmou que abrir/silenciar funcionou após
+a correção de identidade, com aproximadamente cinco segundos de demora. Manter
+um único worker COM MTA e a referência do microfone; reler propriedades atuais,
+processo/janela/papel a cada ação, com nova descoberta quando invalidado. A busca
+fria é filtrada pelo processo Zoom. Confirmar imediatamente, esperando apenas
+entre leituras sem confirmação, e registrar os tempos por fase. Não transferir
+elementos COM entre workers nem usar o cache de mute da GUI para decidir a ação.
+Os testes medem a redução de varreduras no backend simulado; a latência real desta
+nova revisão permanece pendente. O núcleo de telas/áudio/vídeo não foi alterado.

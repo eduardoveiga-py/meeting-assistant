@@ -424,7 +424,9 @@ def test_actual_ui_click_without_runtime_id_opens_and_mutes_own_audio(tmp_path, 
     # rather than bypassing discovery with a preselected microphone wrapper.
     com = SimpleNamespace(CoInitializeEx=Mock(), COINIT_MULTITHREADED=0, CoUninitialize=Mock())
     monkeypatch.setitem(sys.modules, "pythoncom", com)
-    desktop = Mock(return_value=SimpleNamespace(windows=lambda: [meeting]))
+    windows = Mock(return_value=[meeting])
+    desktop = Mock(return_value=SimpleNamespace(windows=windows))
+    meeting.descendants = Mock(wraps=meeting.descendants)
     monkeypatch.setitem(sys.modules, "pywinauto", SimpleNamespace(Desktop=desktop))
     monkeypatch.setattr("meeting_assistant.services.zoom_audio.find_control", find_control)
     monkeypatch.setattr(psutil, "process_iter", lambda fields: iter([
@@ -444,13 +446,21 @@ def test_actual_ui_click_without_runtime_id_opens_and_mutes_own_audio(tmp_path, 
         assert own.iface_invoke.Invoke.call_count == 2
         participant.iface_invoke.Invoke.assert_not_called()
         assert "identidade" not in app.mode_label.text()
-        assert com.CoInitializeEx.call_count == com.CoUninitialize.call_count == 2
+        assert com.CoInitializeEx.call_count == 1
+        com.CoUninitialize.assert_not_called()
         desktop.assert_called_with(backend="uia")
+        windows.assert_called_once_with(process=7)
+        meeting.descendants.assert_called_once_with(control_type="Button")
         assert all(report["code"] == "confirmed" for report in reports)
         assert all(report["runtime_ids_unavailable"] == 1 for report in reports)
     finally:
+        worker = app.zoom_audio._thread
         app.close()
+        if worker is not None:
+            worker.join(1)
         QApplication.processEvents()
+    assert not worker.is_alive()
+    com.CoUninitialize.assert_called_once()
 
 
 def test_missing_runtime_id_never_allows_another_meeting_to_confirm(monkeypatch):
@@ -587,12 +597,17 @@ def test_com_lifecycle_and_sanitized_diagnostics_are_connected(monkeypatch):
     for _ in range(2):
         assert service.request()
         wait_until(lambda: not service.busy)
-    assert com.CoInitializeEx.call_count == com.CoUninitialize.call_count == 2
+    assert com.CoInitializeEx.call_count == 1
+    com.CoUninitialize.assert_not_called()
     com.CoInitializeEx.assert_called_with(com.COINIT_MULTITHREADED)
     assert len(reports) == 1
     assert reports[0]["code"] == "observed" and reports[0]["state"] == "muted"
     assert outcomes[-1][0] == "muted"
+    worker = service._thread
     service.stop()
+    worker.join(1)
+    assert not worker.is_alive()
+    com.CoUninitialize.assert_called_once()
 
 
 def test_backend_failure_exposes_reason_but_never_private_exception_text():
@@ -626,10 +641,10 @@ def test_missing_meeting_window_identity_is_refused_before_any_command():
     button.iface_invoke.Invoke.assert_not_called()
 
 
-def test_failed_com_cleanup_reports_failure_and_releases_service(monkeypatch):
+def test_failed_com_cleanup_is_sanitized_and_releases_worker(monkeypatch, caplog):
     com = SimpleNamespace(
         CoInitializeEx=Mock(), COINIT_MULTITHREADED=0,
-        CoUninitialize=Mock(side_effect=RuntimeError("cleanup")),
+        CoUninitialize=Mock(side_effect=RuntimeError("private participant cleanup")),
     )
     reports, outcomes = [], []
     monkeypatch.setitem(sys.modules, "pythoncom", com)
@@ -639,9 +654,15 @@ def test_failed_com_cleanup_reports_failure_and_releases_service(monkeypatch):
     service.result.connect(lambda state, message: outcomes.append((state, message)))
     service.request()
     wait_until(lambda: not service.busy)
-    assert reports[0]["code"] == "com_cleanup_error"
-    assert outcomes[0][0] == "unknown"
+    assert reports[0]["code"] == "observed"
+    assert outcomes[0][0] == "muted"
+    worker = service._thread
     service.stop()
+    worker.join(1)
+    assert not worker.is_alive() and not service.busy
+    assert "COM cleanup failed (RuntimeError)" in caplog.text
+    assert "private participant" not in caplog.text
+    assert len(reports) == 1
 
 
 def test_worker_start_failure_is_reported_and_can_be_retried(monkeypatch):
