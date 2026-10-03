@@ -209,6 +209,15 @@ def activate(client, data):
                 set_item(client, scene, matches[0]["sceneItemId"], True)
             else:
                 call(client, "CreateSceneItem", sceneName=scene, sourceName=BUS, sceneItemEnabled=True)
+        try:
+            filters = call(client, "GetSourceFilterList", sourceName=MIC)["filters"]
+            if not any(f["filterName"] == "Gain (WhatsApp)" for f in filters):
+                call(client, "CreateSourceFilter", sourceName=MIC, filterName="Gain (WhatsApp)", filterKind="gain_filter", filterSettings={"db": 8.0})
+            if not any(f["filterName"] == "Limiter (WhatsApp)" for f in filters):
+                call(client, "CreateSourceFilter", sourceName=MIC, filterName="Limiter (WhatsApp)", filterKind="limiter_filter", filterSettings={"threshold": -3.0, "release_time": 60})
+        except Exception:
+            pass
+
         for name in selected:
             call(client, "SetInputAudioMonitorType", inputName=name, monitorType=MONITOR)
             call(client, "SetInputMute", inputName=name, inputMuted=False)
