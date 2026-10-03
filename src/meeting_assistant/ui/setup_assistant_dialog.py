@@ -91,7 +91,7 @@ class SetupAssistantDialog(QDialog):
         self.manual_checks = []
         for label in (
             "Áudio e câmera IP conferidos no equipamento atual",
-            "Duas janelas Zoom e retorno ao JWL conferidos",
+            "Projeção do Zoom e retorno ao JWL conferidos",
         ):
             checkbox = QCheckBox(label)
             checkbox.setToolTip("Confirmação do operador nesta sessão; não é um teste automático.")

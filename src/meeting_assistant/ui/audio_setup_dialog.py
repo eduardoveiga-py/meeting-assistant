@@ -85,7 +85,8 @@ class AudioSetupDialog(QDialog):
             form.addRow("Ganho: " + name.removeprefix("Meeting Assistant - "), gain)
         body.addLayout(form)
         advanced = QLabel(
-            "O perfil com participantes Zoom requer dois cabos virtuais e o plugin "
+            "O perfil com participantes Zoom requer dois cabos virtuais (como o pacote CABLE A+B disponível em "
+            '<a href="https://vb-audio.com/Cable/">vb-audio.com/Cable</a>) e o plugin '
             '<a href="https://github.com/exeldro/obs-audio-monitor/releases/tag/0.10.1">'
             "Audio Monitor 0.10.1</a> instalado no OBS. "
             "OBS monitora mesa + mídias no primeiro cabo (microfone do Zoom); "
