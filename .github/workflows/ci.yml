@@ -13,7 +13,6 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
       MEETING_ASSISTANT_TESTING: "1"
-      MEETING_ASSISTANT_LAYOUT_CAPTURE_DIRECTORY: ${{ runner.temp }}/operator-layout
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,6 +45,8 @@ jobs:
 
       - name: Pytest
         timeout-minutes: 8
+        env:
+          MEETING_ASSISTANT_LAYOUT_CAPTURE_DIRECTORY: ${{ runner.temp }}/operator-layout
         run: python -m pytest -vv --durations=15 -o faulthandler_timeout=60
 
       - name: Save operator layout renders
