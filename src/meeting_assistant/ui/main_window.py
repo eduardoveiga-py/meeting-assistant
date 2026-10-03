@@ -275,11 +275,6 @@ class MainWindow(QMainWindow):
         panic.clicked.connect(self._activate_safe_scene)
         automation_row.addWidget(panic, 1)
 
-        self.zoom_mic_button = QPushButton("🎙 Microfone Zoom · verificar")
-        self.zoom_mic_button.setObjectName("ZoomMic")
-        self.zoom_mic_button.setToolTip("Controla seu microfone no Zoom; não silencia participantes.")
-        self.zoom_mic_button.clicked.connect(self._zoom_microphone)
-        controls.addWidget(self.zoom_mic_button)
         self.whatsapp_audio_button = QPushButton("🔇 WhatsApp")
         self.whatsapp_audio_button.setCheckable(True)
         self.whatsapp_audio_button.setChecked(False)
@@ -329,9 +324,10 @@ class MainWindow(QMainWindow):
         self.camera_button.clicked.connect(self._toggle_camera)
         system_grid.addWidget(self.camera_button, 1, 1)
 
-        self.zoom_mic_button = QPushButton("🎤 Mic Zoom")
-        self.zoom_mic_button.setToolTip("Muta ou desmuta o microfone no Zoom")
-        self.zoom_mic_button.clicked.connect(self._toggle_zoom_mic)
+        self.zoom_mic_button = QPushButton("🎙 Microfone Zoom … verificar")
+        self.zoom_mic_button.setObjectName("ZoomMic")
+        self.zoom_mic_button.setToolTip("Controla seu microfone no Zoom; não silencia participantes.")
+        self.zoom_mic_button.clicked.connect(self._zoom_microphone)
         system_grid.addWidget(self.zoom_mic_button, 1, 2)
 
         controls.addLayout(system_grid)
@@ -350,7 +346,6 @@ class MainWindow(QMainWindow):
         preview_row.addWidget(self.preview, 1)
         controls.addLayout(preview_row, 1)
 
-        self.zoom_output_label = QLabel("Envio previsto: OBS Virtual Camera • confira a recepção no Zoom")
         self.zoom_output_label = QLabel("Zoom recebe: OBS Virtual Camera • transições feitas pelo OBS")
         self.zoom_output_label.setObjectName("ZoomOutputLabel")
         self.zoom_output_label.setAlignment(Qt.AlignCenter)
@@ -372,6 +367,12 @@ class MainWindow(QMainWindow):
         self.footer.setAlignment(Qt.AlignCenter)
         self.footer.setWordWrap(True)
         root.addWidget(self.footer)
+
+        self.update_banner = QPushButton()
+        self.update_banner.setObjectName("UpdateBanner")
+        self.update_banner.hide()
+        self.update_banner.clicked.connect(self._trigger_update)
+        root.addWidget(self.update_banner)
 
         scroll = QScrollArea()
         scroll.setObjectName("MainContentScroll")
@@ -602,7 +603,7 @@ class MainWindow(QMainWindow):
                 return True
 
             win32gui.EnumWindows(callback, None)
-            self._settings_service.save(self.settings)
+            self.settings_service.save(self.settings)
         except Exception as e:
             print(f"Error saving layout: {e}")
         super().closeEvent(event)
@@ -955,27 +956,6 @@ class MainWindow(QMainWindow):
             return
         if self.camera_session.state == "off":
             self.camera_session.start()
-
-    def _toggle_zoom_mic(self) -> None:
-        def worker():
-            try:
-                import pywinauto
-
-                desktop = pywinauto.Desktop(backend="uia")
-                zoom_windows = [w for w in desktop.windows() if "Zoom" in w.window_text()]
-                for w in zoom_windows:
-                    mute_btns = w.descendants(
-                        control_type="Button", title_re=".*[aA]udio.*|.*[áÁ]udio.*|.*[mM]ute.*"
-                    )
-                    for btn in mute_btns:
-                        btn.invoke()
-                        return
-            except Exception:
-                pass
-
-        import threading
-
-        threading.Thread(target=worker, daemon=True).start()
 
     def _toggle_camera(self) -> None:
         if self.camera_session is None:

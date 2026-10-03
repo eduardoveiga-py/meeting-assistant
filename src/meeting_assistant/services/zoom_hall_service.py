@@ -68,7 +68,7 @@ def hall_runtime_flags(
     returning: bool,
     switching_to_zoom: bool = False,
 ) -> tuple[bool, bool]:
-    protect_jwl = returning or not (zoom_active or switching_to_zoom)
+    protect_jwl = returning or (enabled and not (zoom_active or switching_to_zoom))
     media_enabled = enabled and protect_jwl and not returning
     return protect_jwl, media_enabled
 
@@ -167,7 +167,7 @@ class ZoomHallService(QObject):
     def _request_show(self) -> None:
         rect = self._show_rect
         try:
-            if self._is_window(self._zoom_hwnd):
+            if self._is_window(self._zoom_hwnd) and self._original_zoom_placement is None:
                 self._original_zoom_placement = win32gui.GetWindowPlacement(self._zoom_hwnd)
 
             if self._is_window(self._jwl_hwnd):
@@ -408,6 +408,7 @@ class ZoomHallService(QObject):
         )
         if ok:
             self._active = False
+            self._original_zoom_placement = None
         self.returning_changed.emit(False)
         if not ok:
             if self._show_rect is not None:

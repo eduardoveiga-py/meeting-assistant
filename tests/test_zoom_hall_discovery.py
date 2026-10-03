@@ -291,11 +291,11 @@ def test_missing_jwl_does_not_hide_zoom(monkeypatch):
 
 @pytest.mark.parametrize("enabled", [False, True])
 def test_guard_and_media_policy_through_entire_zoom_cycle(enabled):
-    assert module.hall_runtime_flags(enabled, False, False) == (True, enabled)
+    assert module.hall_runtime_flags(enabled, False, False) == (enabled, enabled)
     assert module.hall_runtime_flags(enabled, False, False, True) == (False, False)
     assert module.hall_runtime_flags(enabled, True, False) == (False, False)
     assert module.hall_runtime_flags(enabled, True, True) == (True, False)
-    assert module.hall_runtime_flags(enabled, False, False) == (True, enabled)
+    assert module.hall_runtime_flags(enabled, False, False) == (enabled, enabled)
 
 
 def test_multiple_hidden_secondaries_are_not_guessed(monkeypatch):
