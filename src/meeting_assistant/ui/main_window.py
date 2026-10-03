@@ -186,6 +186,7 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         central = QWidget()
         root = QVBoxLayout(central)
+        self._root_layout = root
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(5)
 
@@ -243,12 +244,14 @@ class MainWindow(QMainWindow):
         controls_card = QFrame()
         controls_card.setObjectName("Card")
         controls = QVBoxLayout(controls_card)
+        self._controls_layout = controls
         controls.setContentsMargins(10, 9, 10, 10)
         controls.setSpacing(4)
 
         controls.addWidget(self._section_label("CONTROLE DA APRESENTAÇÃO"))
 
         mode_grid = QGridLayout()
+        self._mode_grid = mode_grid
         mode_grid.setHorizontalSpacing(6)
         mode_grid.setVerticalSpacing(6)
         self.mode_buttons: dict[OperatingMode, QPushButton] = {}
@@ -305,7 +308,9 @@ class MainWindow(QMainWindow):
         self.start_meeting_button.clicked.connect(self._start_meeting)
 
         system_grid = QGridLayout()
+        self._system_grid = system_grid
         system_grid.setHorizontalSpacing(6)
+        system_grid.setVerticalSpacing(6)
         diagnostics = QPushButton("🩺 Operação")
         diagnostics.clicked.connect(self._show_diagnostics)
 
@@ -407,6 +412,27 @@ class MainWindow(QMainWindow):
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setWidget(central)
         self.setCentralWidget(scroll)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "_root_layout") and hasattr(self, "_system_grid"):
+            self._update_layout_spacing()
+
+    def _update_layout_spacing(self) -> None:
+        # Full HD at 200% has about 500 logical pixels of usable height.
+        # Compress gaps rather than fonts or button heights; restore them
+        # when the window grows or moves to a screen with more logical space.
+        tight = self.height() < 560
+        if tight == getattr(self, "_tight_operator_layout", None):
+            return
+        self._tight_operator_layout = tight
+        vertical_margin = 6 if tight else 10
+        self._root_layout.setContentsMargins(12, vertical_margin, 12, vertical_margin)
+        self._root_layout.setSpacing(3 if tight else 5)
+        self._controls_layout.setContentsMargins(10, 5 if tight else 9, 10, 6 if tight else 10)
+        self._controls_layout.setSpacing(2 if tight else 4)
+        self._mode_grid.setVerticalSpacing(4 if tight else 6)
+        self._system_grid.setVerticalSpacing(4 if tight else 6)
 
     def _connect_obs_signals(self) -> None:
         self.obs.connected_changed.connect(self._on_obs_connected)

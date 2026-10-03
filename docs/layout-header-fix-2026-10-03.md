@@ -21,6 +21,10 @@ aspectos; houve uma regressão no ajuste e uma lacuna na verificação.
 - A coluna de título recebe a largura restante; a mola separada foi removida.
 - Título e subtítulo podem quebrar linhas dentro da largura atribuída.
 - O indicador de automação usa sua altura natural, alinhado ao centro da linha.
+- Abaixo de 560 pixels lógicos de altura, margens e intervalos ficam menores;
+  fontes e alturas dos botões são preservadas. Os intervalos normais voltam ao
+  aumentar a janela. A verificação nativa em Full HD/200% detectou a necessidade
+  dessa adaptação, mantendo o requisito de não esconder controles ou exigir rolagem.
 - Uma regressão reproduziu a largura zero antes do patch e passou depois dele.
 - Casos ativos e pausados verificam títulos expostos, indicador compacto, prévia
   com altura útil e controles dentro da janela em diferentes alturas.

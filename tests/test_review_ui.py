@@ -102,6 +102,33 @@ def test_launch_summary_does_not_run_legacy_native_layout_on_gui(tmp_path, monke
     window.close()
 
 
+def test_short_window_keeps_controls_readable_and_restores_preview_when_grown(tmp_path):
+    window = make_window(tmp_path)
+    window.show()
+    window._screen_fit._timer.stop()
+    QApplication.processEvents()
+    fonts = {button: button.font().pixelSize() for button in window.findChildren(QPushButton)}
+    button_heights = {button: button.sizeHint().height() for button in fonts}
+    try:
+        for height in (480, 780, 480):
+            window.resize(520, height)
+            QApplication.processEvents()
+            scroll = window.centralWidget()
+            assert scroll.horizontalScrollBar().maximum() == 0, layout_details(window)
+            assert scroll.verticalScrollBar().maximum() == 0, layout_details(window)
+            assert window.preview.height() >= (100 if height >= 600 else 40)
+            for button in fonts:
+                assert button.font().pixelSize() == fonts[button]
+                assert button.sizeHint().height() == button_heights[button]
+                if button.isVisible():
+                    assert button.sizeHint().width() <= button.width(), layout_details(window)
+                    assert scroll.viewport().rect().contains(
+                        button.mapTo(scroll.viewport(), button.rect().bottomRight())
+                    ), layout_details(window)
+    finally:
+        window.close()
+
+
 def test_end_meeting_pauses_automation_and_waits_for_verified_result(tmp_path):
     window = make_window(tmp_path)
     window.state.automation_enabled = True
