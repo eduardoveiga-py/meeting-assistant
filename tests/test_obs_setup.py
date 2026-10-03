@@ -48,9 +48,13 @@ def test_url_encodes_credentials_without_changing_host():
     assert url.endswith(":554/cam/realmonitor?channel=1&subtype=0")
 
 
-@pytest.mark.parametrize("host,user,password", [
-    ("10.0.0.40/path", "user", "secret"), ("10.0.0.40", "", ""),
-])
+@pytest.mark.parametrize(
+    "host,user,password",
+    [
+        ("10.0.0.40/path", "user", "secret"),
+        ("10.0.0.40", "", ""),
+    ],
+)
 def test_invalid_configuration_never_calls_obs(host, user, password):
     client = FakeObs()
     config = AppSettings(camera_ip=host, camera_username=user, camera_password=password)
@@ -65,8 +69,9 @@ def test_repeated_setup_keeps_single_camera_and_does_not_switch_program():
     prepare_obs(client, settings())
     assert len(client.inputs) == len(client.items) == 1
     assert sum(name == "CreateInput" for name, _ in client.calls) == 1
-    assert not any(name in {"SetCurrentProgramScene", "RemoveInput", "RemoveScene"}
-                   for name, _ in client.calls)
+    assert not any(
+        name in {"SetCurrentProgramScene", "RemoveInput", "RemoveScene"} for name, _ in client.calls
+    )
     assert ("SetInputMute", {"inputName": CAMERA_SOURCE, "inputMuted": True}) in client.calls
 
 

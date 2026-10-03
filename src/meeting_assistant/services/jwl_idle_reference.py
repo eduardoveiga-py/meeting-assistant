@@ -23,9 +23,11 @@ def retain_confirmed_variants(
     current: JwlIdleReference,
 ) -> JwlIdleReference:
     """Retain up to four operator-confirmed appearances, newest first."""
-    if previous is None or (
-        previous.sample_width, previous.sample_height, previous.crop_version
-    ) != (current.sample_width, current.sample_height, current.crop_version):
+    if previous is None or (previous.sample_width, previous.sample_height, previous.crop_version) != (
+        current.sample_width,
+        current.sample_height,
+        current.crop_version,
+    ):
         return current
     variants = tuple(dict.fromkeys((current.pixels, previous.pixels, *previous.alternate_pixels)))
     return JwlIdleReference(
@@ -62,8 +64,7 @@ class JwlIdleReferenceStore:
             if width <= 0 or height <= 0 or len(pixels) != width * height:
                 return None
             alternates = tuple(
-                base64.b64decode(value, validate=True)
-                for value in data.get("alternate_pixels", [])[:3]
+                base64.b64decode(value, validate=True) for value in data.get("alternate_pixels", [])[:3]
             )
             if any(len(frame) != width * height for frame in alternates):
                 return None
@@ -81,8 +82,7 @@ class JwlIdleReferenceStore:
         if (
             reference.sample_width <= 0
             or reference.sample_height <= 0
-            or len(reference.pixels)
-            != reference.sample_width * reference.sample_height
+            or len(reference.pixels) != reference.sample_width * reference.sample_height
             or len(reference.alternate_pixels) > 3
             or any(len(frame) != len(reference.pixels) for frame in reference.alternate_pixels)
         ):

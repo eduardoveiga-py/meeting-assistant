@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-runtime_info = runpy.run_path(
-    str(Path(__file__).resolve().parents[1] / "scripts/python-runtime-check.py")
-)["runtime_info"]
+runtime_info = runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts/python-runtime-check.py"))[
+    "runtime_info"
+]
 
 
 @pytest.mark.parametrize(

@@ -59,7 +59,9 @@ def verify_visual_exposure(hwnd, target_rect, diagnostic=None, *, allow_taskbar_
     root = win32gui.GetAncestor(hwnd, 2) or hwnd
     try:
         handles = windows_above_target(
-            root, lambda handle: win32gui.GetWindow(handle, 3), win32gui.IsWindow  # GW_HWNDPREV
+            root,
+            lambda handle: win32gui.GetWindow(handle, 3),
+            win32gui.IsWindow,  # GW_HWNDPREV
         )
     except Exception:
         if diagnostic:
@@ -103,15 +105,19 @@ def verify_visual_exposure(hwnd, target_rect, diagnostic=None, *, allow_taskbar_
             }
         )
     shell_rows = [
-        row for row in rows
+        row
+        for row in rows
         if row.get("class_name") in SHELL_PREVIEW_SURFACES and overlaps(row["rect"], target_rect)
     ]
-    blocker = first_covering_window(
-        root, target_rect, rows, allow_taskbar_preview=allow_taskbar_preview
-    )
+    blocker = first_covering_window(root, target_rect, rows, allow_taskbar_preview=allow_taskbar_preview)
     if diagnostic:
-        detail = {"hwnd": hwnd, "root_hwnd": root, "visual_blocker": blocker,
-                  "exposure_check": "anchored_z_order", "windows_checked": len(handles)}
+        detail = {
+            "hwnd": hwnd,
+            "root_hwnd": root,
+            "visual_blocker": blocker,
+            "exposure_check": "anchored_z_order",
+            "windows_checked": len(handles),
+        }
         if shell_rows:
             detail["shell_surfaces"] = shell_rows
             detail["shell_preview_allowed"] = allow_taskbar_preview

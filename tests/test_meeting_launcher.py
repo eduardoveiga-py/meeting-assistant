@@ -7,9 +7,7 @@ from meeting_assistant.services.meeting_launcher import (
 
 
 def test_zoom_join_uri_converts_standard_invite_link() -> None:
-    uri = zoom_join_uri(
-        "https://example.zoom.us/j/12345678901?pwd=secret-token"
-    )
+    uri = zoom_join_uri("https://example.zoom.us/j/12345678901?pwd=secret-token")
 
     assert uri.startswith("zoommtg://zoom.us/join?")
     assert "confno=12345678901" in uri

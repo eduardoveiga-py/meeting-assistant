@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, fields, field
+from dataclasses import asdict, dataclass, field, fields
 from json import dumps, loads
 from os import environ
 from pathlib import Path
@@ -77,4 +77,3 @@ class SettingsService:
             encoding="utf-8",
         )
         temp_path.replace(self.path)
-

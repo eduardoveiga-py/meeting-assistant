@@ -17,9 +17,7 @@ def test_confirmed_variants_survive_restart_and_return_media_to_palco(tmp_path):
     original = bytes([0] * 95 + [220] * 5)
     restored = bytes([220] * 5 + [0] * 95)
     assert pixel_difference(original, restored) > 3
-    ref = retain_confirmed_variants(
-        JwlIdleReference(original, 10, 10), JwlIdleReference(restored, 10, 10)
-    )
+    ref = retain_confirmed_variants(JwlIdleReference(original, 10, 10), JwlIdleReference(restored, 10, 10))
     store = JwlIdleReferenceStore(tmp_path / "idle.json")
     store.save(ref)
     ref = store.load()

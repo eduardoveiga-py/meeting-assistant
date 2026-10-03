@@ -127,9 +127,14 @@ class ProgramVideo(QObject):
         self.last_status = "Aguardando ponte de vídeo do OBS…"
         self.last_received = 0.0
         self.diagnostic = {
-            "protocol": 1, "video_revision": 3, "target_fps": 30,
-            "bridge_fps": 0.0, "preview_fps": 0.0, "transport_errors": 0,
-            "preview_channel": "Preview.v1", "preview_paused_for_camera": False,
+            "protocol": 1,
+            "video_revision": 3,
+            "target_fps": 30,
+            "bridge_fps": 0.0,
+            "preview_fps": 0.0,
+            "transport_errors": 0,
+            "preview_channel": "Preview.v1",
+            "preview_paused_for_camera": False,
             "preview_measurement": "frames_submitted_to_Qt_video_renderer",
         }
         self.timer = QTimer(self)

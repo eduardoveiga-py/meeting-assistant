@@ -88,13 +88,15 @@ def test_controller_reports_disconnection_and_sanitizes_audio_errors(monkeypatch
     controller = ObsController()
     received = []
     controller.audio_task_finished.connect(lambda *args: received.append(args))
-    controller._handle_audio_task('token', 'prepare', {})
+    controller._handle_audio_task("token", "prepare", {})
     assert received[-1][2] is False
-    assert 'desconectado' in received[-1][3]['message']
+    assert "desconectado" in received[-1][3]["message"]
     controller._client = object()
-    monkeypatch.setattr('meeting_assistant.services.obs_audio.run_audio_task',
-                        Mock(side_effect=RuntimeError('private SDK request contents')))
-    controller._handle_audio_task('token', 'prepare', {})
+    monkeypatch.setattr(
+        "meeting_assistant.services.obs_audio.run_audio_task",
+        Mock(side_effect=RuntimeError("private SDK request contents")),
+    )
+    controller._handle_audio_task("token", "prepare", {})
     assert received[-1][2] is False
-    assert 'private' not in received[-1][3]['message']
+    assert "private" not in received[-1][3]["message"]
     controller._client = None

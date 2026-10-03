@@ -1,4 +1,5 @@
 """Explicit OBS provisioning; never invoked by the window automation."""
+
 from __future__ import annotations
 
 import ipaddress
@@ -44,8 +45,9 @@ def prepare_obs(client, settings) -> None:
 
 def _prepare_obs(client, settings, renamed) -> None:
     # Validate everything that can be checked before changing OBS.
-    url = camera_url(settings.camera_ip, settings.camera_username,
-                     settings.camera_password, settings.camera_rtsp_port)
+    url = camera_url(
+        settings.camera_ip, settings.camera_username, settings.camera_password, settings.camera_rtsp_port
+    )
     scenes = {s["sceneName"] for s in client.send("GetSceneList", raw=True)["scenes"]}
     old_names = (settings.scene_background, settings.scene_speaker, settings.scene_media)
     if len(set(old_names)) != 3:
@@ -70,19 +72,35 @@ def _prepare_obs(client, settings, renamed) -> None:
         if name not in scenes:
             client.send("CreateScene", {"sceneName": name}, raw=True)
     source_settings = {
-        "is_local_file": False, "input": url, "input_format": "rtsp",
-        "ffmpeg_options": "rtsp_transport=tcp", "restart_on_activate": False,
+        "is_local_file": False,
+        "input": url,
+        "input_format": "rtsp",
+        "ffmpeg_options": "rtsp_transport=tcp",
+        "restart_on_activate": False,
         "close_when_inactive": False,
     }
     if camera:
-        client.send("SetInputSettings", {
-            "inputName": CAMERA_SOURCE, "inputSettings": source_settings, "overlay": True,
-        }, raw=True)
+        client.send(
+            "SetInputSettings",
+            {
+                "inputName": CAMERA_SOURCE,
+                "inputSettings": source_settings,
+                "overlay": True,
+            },
+            raw=True,
+        )
     else:
-        client.send("CreateInput", {
-            "sceneName": "Palco", "inputName": CAMERA_SOURCE, "inputKind": "ffmpeg_source",
-            "inputSettings": source_settings, "sceneItemEnabled": True,
-        }, raw=True)
+        client.send(
+            "CreateInput",
+            {
+                "sceneName": "Palco",
+                "inputName": CAMERA_SOURCE,
+                "inputKind": "ffmpeg_source",
+                "inputSettings": source_settings,
+                "sceneItemEnabled": True,
+            },
+            raw=True,
+        )
     # Avoid accidental inclusion of the camera microphone in the existing audio mix.
     client.send("SetInputMute", {"inputName": CAMERA_SOURCE, "inputMuted": True}, raw=True)
     items = client.send("GetSceneItemList", {"sceneName": "Palco"}, raw=True)["sceneItems"]
@@ -90,22 +108,43 @@ def _prepare_obs(client, settings, renamed) -> None:
     if camera_item:
         item_id = camera_item["sceneItemId"]
     else:
-        item_id = client.send("CreateSceneItem", {
-            "sceneName": "Palco", "sourceName": CAMERA_SOURCE, "sceneItemEnabled": True,
-        }, raw=True)["sceneItemId"]
+        item_id = client.send(
+            "CreateSceneItem",
+            {
+                "sceneName": "Palco",
+                "sourceName": CAMERA_SOURCE,
+                "sceneItemEnabled": True,
+            },
+            raw=True,
+        )["sceneItemId"]
     video = client.send("GetVideoSettings", raw=True)
-    client.send("SetSceneItemTransform", {
-        "sceneName": "Palco", "sceneItemId": item_id,
-        "sceneItemTransform": {
-            "positionX": 0.0, "positionY": 0.0, "rotation": 0.0,
-            "alignment": 5, "boundsType": "OBS_BOUNDS_SCALE_INNER",
-            "boundsAlignment": 0, "boundsWidth": float(video["baseWidth"]),
-            "boundsHeight": float(video["baseHeight"]),
+    client.send(
+        "SetSceneItemTransform",
+        {
+            "sceneName": "Palco",
+            "sceneItemId": item_id,
+            "sceneItemTransform": {
+                "positionX": 0.0,
+                "positionY": 0.0,
+                "rotation": 0.0,
+                "alignment": 5,
+                "boundsType": "OBS_BOUNDS_SCALE_INNER",
+                "boundsAlignment": 0,
+                "boundsWidth": float(video["baseWidth"]),
+                "boundsHeight": float(video["baseHeight"]),
+            },
         },
-    }, raw=True)
-    client.send("SetSceneItemEnabled", {
-        "sceneName": "Palco", "sceneItemId": item_id, "sceneItemEnabled": True,
-    }, raw=True)
+        raw=True,
+    )
+    client.send(
+        "SetSceneItemEnabled",
+        {
+            "sceneName": "Palco",
+            "sceneItemId": item_id,
+            "sceneItemEnabled": True,
+        },
+        raw=True,
+    )
     # Do not change Program, delete existing sources, or claim the stream was tested.
 
 

@@ -111,10 +111,18 @@ class MeetingLauncherService(QObject):
         try:
             subprocess.run(
                 [
-                    "taskkill", "/F",
-                    "/IM", "obs64.exe", "/IM", "obs32.exe",
-                    "/IM", "Zoom.exe", "/IM", "JWLibrary.exe",
-                    "/IM", "WhatsApp.exe",
+                    "taskkill",
+                    "/F",
+                    "/IM",
+                    "obs64.exe",
+                    "/IM",
+                    "obs32.exe",
+                    "/IM",
+                    "Zoom.exe",
+                    "/IM",
+                    "JWLibrary.exe",
+                    "/IM",
+                    "WhatsApp.exe",
                 ],
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
@@ -224,13 +232,14 @@ class MeetingLauncherService(QObject):
             notes=tuple(notes),
             jwl_exited_during_startup=jwl_exited,
         )
-        
+
         try:
+            import win32con
             import win32gui
             import win32process
-            import win32con
+
             layouts = getattr(settings, "window_layouts", {}) or {}
-            
+
             def apply_layout(hwnd, _):
                 if not win32gui.IsWindowVisible(hwnd):
                     return True
@@ -238,36 +247,54 @@ class MeetingLauncherService(QObject):
                 try:
                     pname = psutil.Process(pid).name().casefold()
                     cname = win32gui.GetClassName(hwnd)
-                    
+
                     if pname == "whatsapp.exe" and cname == "ApplicationFrameWindow":
                         # Push WhatsApp to bottom instead of minimizing to prevent PiP crash
-                        win32gui.SetWindowPos(hwnd, win32con.HWND_BOTTOM, 0, 0, 0, 0,
-                                              win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
+                        win32gui.SetWindowPos(
+                            hwnd,
+                            win32con.HWND_BOTTOM,
+                            0,
+                            0,
+                            0,
+                            0,
+                            win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE,
+                        )
                     elif pname in ("obs64.exe", "obs32.exe") and cname == "Qt5QWindowIcon":
                         # Push OBS to bottom or minimize
-                        win32gui.SetWindowPos(hwnd, win32con.HWND_BOTTOM, 0, 0, 0, 0,
-                                              win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
-                    
+                        win32gui.SetWindowPos(
+                            hwnd,
+                            win32con.HWND_BOTTOM,
+                            0,
+                            0,
+                            0,
+                            0,
+                            win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE,
+                        )
+
                     elif pname == "zoom.exe" and cname in ("ZPContentViewWndClass", "ZPPTopWndClass"):
                         if "zoom" in layouts:
-                            l = layouts["zoom"]
+                            ly = layouts["zoom"]
                             wp = win32gui.GetWindowPlacement(hwnd)
                             # Update rcNormalPosition
-                            win32gui.SetWindowPlacement(hwnd, (wp[0], wp[1], wp[2], wp[3], (l[0], l[1], l[2], l[3])))
+                            win32gui.SetWindowPlacement(
+                                hwnd, (wp[0], wp[1], wp[2], wp[3], (ly[0], ly[1], ly[2], ly[3]))
+                            )
                     elif pname == "jwlibrary.exe" and "Windows.UI.Core.CoreWindow" in cname:
                         if "jwlibrary" in layouts:
-                            l = layouts["jwlibrary"]
+                            ly = layouts["jwlibrary"]
                             wp = win32gui.GetWindowPlacement(hwnd)
-                            win32gui.SetWindowPlacement(hwnd, (wp[0], wp[1], wp[2], wp[3], (l[0], l[1], l[2], l[3])))
+                            win32gui.SetWindowPlacement(
+                                hwnd, (wp[0], wp[1], wp[2], wp[3], (ly[0], ly[1], ly[2], ly[3]))
+                            )
                 except Exception:
                     pass
                 return True
+
             win32gui.EnumWindows(apply_layout, None)
         except Exception:
             pass
 
         self.progress_changed.emit(
-
             "Verificação concluída; há pendências na abertura dos programas."
             if jwl_exited or not all((obs_running, jwl_running, zoom_running))
             else "Programas detectados; confira o OBS conectado e a entrada no Zoom."
@@ -425,4 +452,3 @@ class MeetingLauncherService(QObject):
         except (OSError, RuntimeError):
             return False
         return active
-

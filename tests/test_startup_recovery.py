@@ -95,13 +95,16 @@ def test_repeated_connection_status_is_deduplicated_but_recovery_is_reported():
     assert states == [(False, "aguardando"), (True, "conectado"), (False, "aguardando")]
 
 
-@pytest.mark.parametrize("exc,expected", [
-    (TimeoutError("timed out"), False),
-    (ConnectionRefusedError("refused"), False),
-    (OBSSDKRequestError("GetVersion", 207, "not ready"), False),
-    (OBSSDKRequestError("GetVersion", 500, "unexpected"), True),
-    (ValueError("authentication failed"), True),
-])
+@pytest.mark.parametrize(
+    "exc,expected",
+    [
+        (TimeoutError("timed out"), False),
+        (ConnectionRefusedError("refused"), False),
+        (OBSSDKRequestError("GetVersion", 207, "not ready"), False),
+        (OBSSDKRequestError("GetVersion", 500, "unexpected"), True),
+        (ValueError("authentication failed"), True),
+    ],
+)
 def test_log_filter_only_removes_handled_transient_errors(exc, expected):
     record = logging.LogRecord("obs", logging.ERROR, "", 0, str(exc), (), (type(exc), exc, None))
     assert obs_controller._TransientObsLogFilter().filter(record) is expected

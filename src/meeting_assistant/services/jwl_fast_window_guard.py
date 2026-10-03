@@ -236,22 +236,14 @@ class JwlFastWindowGuard(QObject):
         if win32gui is None or win32con is None:
             return
         try:
-            if (
-                win32gui.IsIconic(hwnd)
-                or not win32gui.IsWindowVisible(hwnd)
-                or cloaked
-            ):
+            if win32gui.IsIconic(hwnd) or not win32gui.IsWindowVisible(hwnd) or cloaked:
                 # Show Desktop can make a top-level window disappear without
                 # changing IsIconic/IsWindowVisible. Calling ShowWindow again
                 # followed by SetWindowPos makes Explorer/DWM surface it again
                 # without activating the operator's main JW Library window.
                 show_window_async(hwnd, win32con.SW_SHOWNOACTIVATE)
 
-            flags = (
-                win32con.SWP_NOACTIVATE
-                | win32con.SWP_SHOWWINDOW
-                | win32con.SWP_ASYNCWINDOWPOS
-            )
+            flags = win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW | win32con.SWP_ASYNCWINDOWPOS
             win32gui.SetWindowPos(
                 hwnd,
                 win32con.HWND_TOPMOST,
@@ -283,11 +275,7 @@ class JwlFastWindowGuard(QObject):
         self,
         target: DisplayInfo,
     ) -> JwlSecondaryWindowInfo | None:
-        if (
-            win32gui is None
-            or win32con is None
-            or win32process is None
-        ):
+        if win32gui is None or win32con is None or win32process is None:
             return None
         if not self._jwl_process_running():
             return None
@@ -329,6 +317,7 @@ class JwlFastWindowGuard(QObject):
             return None
 
         from meeting_assistant.services.jwl_secondary_window import is_explicit_jwl_secondary_title
+
         if title:
             if title_has_jw_library(title) and not is_explicit_jwl_secondary_title(title):
                 # The user explicitly asked to reject the primary JWL window
@@ -439,9 +428,7 @@ class JwlFastWindowGuard(QObject):
                 "reason": "dwm_cloaked_shell_waiting_pin",
                 "cloak_state": cloak_state,
                 "attempt": self._recovery_attempts,
-                "elapsed_ms": round(
-                    max(0.0, now - self._recovery_started_at) * 1000
-                ),
+                "elapsed_ms": round(max(0.0, now - self._recovery_started_at) * 1000),
             }
         )
 
@@ -491,9 +478,7 @@ class JwlFastWindowGuard(QObject):
                 target_rect.top,
                 target_rect.width,
                 target_rect.height,
-                win32con.SWP_NOACTIVATE
-                | win32con.SWP_SHOWWINDOW
-                | win32con.SWP_ASYNCWINDOWPOS,
+                win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW | win32con.SWP_ASYNCWINDOWPOS,
             )
             return True
         except Exception:  # noqa: BLE001 - best-effort shell normalization
@@ -614,4 +599,3 @@ class JwlFastWindowGuard(QObject):
             self._recovery_started_at = 0.0
             self._recovery_attempts = 0
         self.recovery_changed.emit(recovering)
-

@@ -73,9 +73,11 @@ class VirtualCameraDialog(QDialog):
         self.last_diagnostic = {
             "diagnostic_revision": 3,
             "app_version": __version__,
-            "platform": platform.system(), "release": platform.release(),
+            "platform": platform.system(),
+            "release": platform.release(),
             "windows_version": platform.version(),
-            **self.monitor.diagnostic, **self.session.diagnostic(),
+            **self.monitor.diagnostic,
+            **self.session.diagnostic(),
         }
 
     def copy_diagnostic(self):

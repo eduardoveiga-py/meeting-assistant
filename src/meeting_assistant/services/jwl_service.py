@@ -124,10 +124,7 @@ class JwlService(QObject):
         return processes
 
     def _has_candidate_process(self) -> bool:
-        return any(
-            looks_like_jw_library(name, "")
-            for name in self._process_map().values()
-        )
+        return any(looks_like_jw_library(name, "") for name in self._process_map().values())
 
     def _discover_windows(self, include_hidden: bool = False) -> list[JwlWindowInfo]:
         if win32gui is None or win32process is None:

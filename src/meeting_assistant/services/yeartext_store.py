@@ -20,6 +20,7 @@ def synchronized(function):
     def wrapped(*args, **kwargs):
         with _LOCK:
             return function(*args, **kwargs)
+
     return wrapped
 
 

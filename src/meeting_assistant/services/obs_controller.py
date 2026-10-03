@@ -208,10 +208,15 @@ class ObsController(QObject):
         except ValueError as exc:
             self.audio_task_finished.emit(token, action, False, {"message": str(exc)})
         except Exception:
-            self.audio_task_finished.emit(token, action, False, {
-                "message": "Configuração de áudio incompleta. Confira o OBS e, se necessário, "
-                           "silencie o microfone no Zoom antes de tentar novamente."
-            })
+            self.audio_task_finished.emit(
+                token,
+                action,
+                False,
+                {
+                    "message": "Configuração de áudio incompleta. Confira o OBS e, se necessário, "
+                    "silencie o microfone no Zoom antes de tentar novamente."
+                },
+            )
 
     def ensure_virtual_camera(self) -> None:
         self._commands.put(("virtual_camera", None))
@@ -410,8 +415,9 @@ class ObsController(QObject):
             prepare_obs(self._client, settings)
             self._refresh_scene_list()
             self.setup_finished.emit(
-                True, "Cenas padronizadas e fonte IP configurada. A imagem da câmera ainda não foi validada. "
-                "Confira fontes de Texto do Ano/Mídias e possíveis fontes antigas em Palco."
+                True,
+                "Cenas padronizadas e fonte IP configurada. A imagem da câmera ainda não foi validada. "
+                "Confira fontes de Texto do Ano/Mídias e possíveis fontes antigas em Palco.",
             )
         except ValueError as exc:
             self.setup_finished.emit(False, str(exc))

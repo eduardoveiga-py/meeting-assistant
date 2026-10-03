@@ -57,8 +57,7 @@ def verified_hall_target(candidate, display, blocked: bool, diagnostic=None) -> 
     actual = WindowRect(*win32gui.GetWindowRect(hwnd))
     monitor_rect = (target.left, target.top, target.right, target.bottom)
     client = win32gui.GetClientRect(hwnd)
-    client_rect = (*win32gui.ClientToScreen(hwnd, client[:2]),
-                   *win32gui.ClientToScreen(hwnd, client[2:]))
+    client_rect = (*win32gui.ClientToScreen(hwnd, client[:2]), *win32gui.ClientToScreen(hwnd, client[2:]))
     from ctypes import wintypes
 
     frame = wintypes.RECT()
@@ -67,13 +66,15 @@ def verified_hall_target(candidate, display, blocked: bool, diagnostic=None) -> 
     )
     frame_rect = (frame.left, frame.top, frame.right, frame.bottom) if frame_hr == 0 else None
     if diagnostic is not None:
-        diagnostic({
-            "hwnd": hwnd,
-            "monitor_rect": monitor_rect,
-            "outer_rect": (actual.left, actual.top, actual.right, actual.bottom),
-            "client_rect": client_rect,
-            "visible_frame_rect": frame_rect,
-        })
+        diagnostic(
+            {
+                "hwnd": hwnd,
+                "monitor_rect": monitor_rect,
+                "outer_rect": (actual.left, actual.top, actual.right, actual.bottom),
+                "client_rect": client_rect,
+                "visible_frame_rect": frame_rect,
+            }
+        )
     require_full_coverage(client_rect, monitor_rect)
     if frame_rect is not None:
         require_full_coverage(frame_rect, monitor_rect)
@@ -88,9 +89,7 @@ def verified_hall_target(candidate, display, blocked: bool, diagnostic=None) -> 
         raise ValueError("O JWL ainda não ocupa a Tela do Salão selecionada.")
     from meeting_assistant.services.window_exposure import verify_visual_exposure
 
-    taskbar_preview = verify_visual_exposure(
-        hwnd, monitor_rect, diagnostic, allow_taskbar_preview=True
-    )
+    taskbar_preview = verify_visual_exposure(hwnd, monitor_rect, diagnostic, allow_taskbar_preview=True)
     related = [hwnd]
     win32gui.EnumChildWindows(hwnd, lambda child, _: related.append(child), None)
     selectors = []

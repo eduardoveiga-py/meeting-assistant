@@ -55,9 +55,7 @@ class _PycawSession:
         self.key = "|".join((str(pid or ""), self.identifier, self.display_name, self.process_name))
 
     def matches_whatsapp(self) -> bool:
-        haystack = " ".join(
-            (self.process_name, self.display_name, self.identifier)
-        ).casefold()
+        haystack = " ".join((self.process_name, self.display_name, self.identifier)).casefold()
         return "whatsapp" in haystack
 
     def get_muted(self) -> bool:

@@ -27,9 +27,7 @@ except ImportError:  # pragma: no cover - dependency is installed in production
     mss = None
 
 
-DEFAULT_DIAGNOSTICS_REPO = (
-    "https://github.com/eduardoveiga-py/meeting-assistant-diagnostics.git"
-)
+DEFAULT_DIAGNOSTICS_REPO = "https://github.com/eduardoveiga-py/meeting-assistant-diagnostics.git"
 _SENSITIVE_KEY = re.compile(
     r"(password|passwd|pwd|secret|token|authorization|cookie|api[_-]?key)",
     re.IGNORECASE,
@@ -221,9 +219,7 @@ class TelemetryService(QObject):
                 severity="error",
                 exception_type=getattr(exc_type, "__name__", str(exc_type)),
                 message=str(exc_value),
-                traceback="".join(
-                    traceback.format_exception(exc_type, exc_value, exc_traceback)
-                ),
+                traceback="".join(traceback.format_exception(exc_type, exc_value, exc_traceback)),
             )
             self.request_sync()
             if self._old_excepthook is not None:
@@ -339,9 +335,7 @@ class TelemetryService(QObject):
                 }
             )
             return
-        safe_reason = (
-            re.sub(r"[^A-Za-z0-9_-]+", "-", reason).strip("-")[:50] or "event"
-        )
+        safe_reason = re.sub(r"[^A-Za-z0-9_-]+", "-", reason).strip("-")[:50] or "event"
         filename = f"{datetime.now().strftime('%H%M%S-%f')[:-3]}-{safe_reason}.png"
         target = self.screenshots_path / filename
         try:

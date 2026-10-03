@@ -56,8 +56,10 @@ def test_settings_buttons_stay_visible_and_content_scrolls(app, area):
         assert scroll.verticalScrollBar().maximum() > 0
         scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
         app.processEvents()
-        assert scroll.viewport().rect().contains(
-            dialog.zoom_combo.mapTo(scroll.viewport(), dialog.zoom_combo.rect().center())
+        assert (
+            scroll.viewport()
+            .rect()
+            .contains(dialog.zoom_combo.mapTo(scroll.viewport(), dialog.zoom_combo.rect().center()))
         )
     finally:
         dialog.close()
@@ -81,8 +83,10 @@ def test_main_window_shows_all_controls_without_scrolling(app, height):
         scroll = window.centralWidget()
         assert scroll.verticalScrollBar().maximum() == 0
         assert scroll.horizontalScrollBar().maximum() == 0
-        assert scroll.viewport().rect().contains(
-            window.footer.mapTo(scroll.viewport(), window.footer.rect().center())
+        assert (
+            scroll.viewport()
+            .rect()
+            .contains(window.footer.mapTo(scroll.viewport(), window.footer.rect().center()))
         )
     finally:
         window.close()
@@ -101,22 +105,29 @@ def test_launch_summary_does_not_expand_main_window_horizontally(app, height):
     app.processEvents()
     width = window.width()
     try:
-        window._on_launch_finished(LaunchSummary(
-            obs_running=True, jwl_running=True, zoom_running=True, zoom_meeting_active=False,
-            notes=(
-                "JW Library já estava aberto",
-                "Entrada na reunião do Zoom solicitada",
-                "Zoom aberto; entrada na reunião ainda não confirmada",
-            ),
-        ))
+        window._on_launch_finished(
+            LaunchSummary(
+                obs_running=True,
+                jwl_running=True,
+                zoom_running=True,
+                zoom_meeting_active=False,
+                notes=(
+                    "JW Library já estava aberto",
+                    "Entrada na reunião do Zoom solicitada",
+                    "Zoom aberto; entrada na reunião ainda não confirmada",
+                ),
+            )
+        )
         for _ in range(5):
             app.processEvents()
         scroll = window.centralWidget()
         assert window.width() == width
         assert scroll.horizontalScrollBar().maximum() == 0
         assert scroll.verticalScrollBar().maximum() == 0
-        assert scroll.viewport().rect().contains(
-            window.mode_label.mapTo(scroll.viewport(), window.mode_label.rect().bottomRight())
+        assert (
+            scroll.viewport()
+            .rect()
+            .contains(window.mode_label.mapTo(scroll.viewport(), window.mode_label.rect().bottomRight()))
         )
     finally:
         window.close()

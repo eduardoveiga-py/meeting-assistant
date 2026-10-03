@@ -72,8 +72,6 @@ def test_stopped_frame_returns_no_stale_pixels_and_acknowledges():
     pipe.close.assert_called_once()
 
 
-
-
 def test_preview_reuses_connection_and_never_sends_camera_controls():
     from meeting_assistant.services.virtual_camera import PreviewConnection
 

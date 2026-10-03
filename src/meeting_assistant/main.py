@@ -105,11 +105,7 @@ def main() -> int:
         )
 
     def current_media_automation_config() -> MediaAutomationConfig:
-        eligible = tuple(
-            scene
-            for scene in (settings.scene_background, settings.scene_speaker)
-            if scene
-        )
+        eligible = tuple(scene for scene in (settings.scene_background, settings.scene_speaker) if scene)
         return MediaAutomationConfig(
             obs=current_obs_config(),
             sensor_source=settings.scene_media,
@@ -213,14 +209,12 @@ def main() -> int:
     )
     telemetry.sync_status_changed.connect(window.set_telemetry_status)
 
-
     if getattr(settings, "window_layouts", None) and "meeting_assistant" in settings.window_layouts:
         layout = settings.window_layouts["meeting_assistant"]
         if len(layout) == 4:
             window.setGeometry(layout[0], layout[1], layout[2], layout[3])
-    
-    if settings.always_on_top:
 
+    if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
     media_automation.status_changed.connect(window.set_automation_status)
@@ -288,9 +282,7 @@ def main() -> int:
             message=message,
         )
     )
-    obs_controller.scene_changed.connect(
-        lambda scene: telemetry.event("obs_program_scene", scene=scene)
-    )
+    obs_controller.scene_changed.connect(lambda scene: telemetry.event("obs_program_scene", scene=scene))
     obs_controller.error.connect(
         lambda message: (
             telemetry.event("obs_error", severity="error", message=message),
@@ -353,9 +345,7 @@ def main() -> int:
 
     jwl_fast_guard.recovery_changed.connect(record_jwl_recovery)
     jwl_fast_guard.candidate_changed.connect(record_jwl_candidate)
-    jwl_fast_guard.shell_recovery_requested.connect(
-        jwl_virtual_desktop.recover_shell_cloak
-    )
+    jwl_fast_guard.shell_recovery_requested.connect(jwl_virtual_desktop.recover_shell_cloak)
     jwl_virtual_desktop.result.connect(
         lambda result: (
             telemetry.event(
@@ -394,6 +384,7 @@ def main() -> int:
             telemetry.request_sync(),
         )
     )
+
     def apply_automation_runtime(enabled: bool, *, switching_to_zoom: bool = False) -> None:
         protect_jwl, effective = hall_runtime_flags(
             enabled, zoom_hall.active, zoom_hall.returning, switching_to_zoom
@@ -401,7 +392,7 @@ def main() -> int:
         # O usuário solicitou que o guardião só atue se a automação global estiver ligada,
         # e que o guardião deve isolar a tela secundária do JWL.
         protect_jwl = enabled and not zoom_hall.active and not switching_to_zoom
-        
+
         telemetry.event(
             "automation_runtime",
             requested=enabled,
@@ -413,18 +404,12 @@ def main() -> int:
         media_automation.set_enabled(effective and not jwl_fast_guard.recovering)
 
     zoom_hall.returning_changed.connect(lambda _: apply_automation_runtime(state.automation_enabled))
-    zoom_hall.transition_diagnostic.connect(
-        lambda detail: telemetry.event("zoom_hall_transition", **detail)
-    )
+    zoom_hall.transition_diagnostic.connect(lambda detail: telemetry.event("zoom_hall_transition", **detail))
     window.automation_enabled_changed.connect(apply_automation_runtime)
     window.idle_reference_requested.connect(media_automation.reset_idle_reference)
-    zoom_hall.about_to_show.connect(
-        lambda: apply_automation_runtime(False, switching_to_zoom=True)
-    )
+    zoom_hall.about_to_show.connect(lambda: apply_automation_runtime(False, switching_to_zoom=True))
     zoom_hall.active_changed.connect(
-        lambda active, _message: (
-            apply_automation_runtime(state.automation_enabled) if not active else None
-        )
+        lambda active, _message: apply_automation_runtime(state.automation_enabled) if not active else None
     )
     jwl_secondary.status_changed.connect(
         lambda _ok, message: (
