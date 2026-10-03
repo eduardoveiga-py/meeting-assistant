@@ -363,10 +363,7 @@ class MainWindow(QMainWindow):
 
         controls.addLayout(system_grid)
 
-        # Retain the existing probe progress callbacks; the command lives in Settings.
-        self.jwl_probe_button = QPushButton("Observar mídia (20 s)", self)
-        self.jwl_probe_button.hide()
-
+        # Probe command lives in Settings; no local button needed here.
         controls.addSpacing(2)
         controls.addWidget(self._section_label("PREVIEW DO OBS — NÃO É RETORNO REMOTO"))
 

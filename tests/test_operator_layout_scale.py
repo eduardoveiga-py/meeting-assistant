@@ -123,6 +123,7 @@ def test_operator_header_and_controls_render_at_desktop_scale(tmp_path, scale):
     # system fonts. Use the native Qt platform for representative Windows
     # text metrics and images; services remain isolated from real devices.
     env["QT_QPA_PLATFORM"] = "windows" if sys.platform == "win32" else "offscreen"
+    env["QT_ENABLE_HIGHDPI_SCALING"] = "0"
     env["QT_SCALE_FACTOR"] = scale
     env["PYTHONPATH"] = str(ROOT / "src")
     command = [sys.executable, "-c", PROBE, str(tmp_path), scale]
