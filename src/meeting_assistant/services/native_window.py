@@ -1,4 +1,5 @@
 """Native window commands with explicit activation separate from asynchronous showing."""
+
 import ctypes
 from ctypes import wintypes
 

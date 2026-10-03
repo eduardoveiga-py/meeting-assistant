@@ -233,8 +233,7 @@ class JwlProbeService(QObject):
         if selected_hwnds:
             unique = list(dict.fromkeys(selected_hwnds))
             lines.append(
-                "HWND selecionado pelo motor durante o teste: "
-                + ", ".join(str(hwnd) for hwnd in unique)
+                "HWND selecionado pelo motor durante o teste: " + ", ".join(str(hwnd) for hwnd in unique)
             )
         else:
             lines.append("O motor não selecionou nenhum HWND durante o teste.")

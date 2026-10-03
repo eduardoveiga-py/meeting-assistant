@@ -10,6 +10,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from meeting_assistant.core.state import AppState
+from meeting_assistant.services.camera_session import camera_session
 from meeting_assistant.services.display_service import DisplayService, resolve_hall_display
 from meeting_assistant.services.hall_monitor_sensor import HallMonitorSensorRegionProvider
 from meeting_assistant.services.jwl_fast_window_guard import JwlFastWindowGuard
@@ -28,6 +29,8 @@ from meeting_assistant.services.meeting_launcher import MeetingLauncherService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.settings import SettingsService
 from meeting_assistant.services.telemetry_service import TelemetryService
+from meeting_assistant.services.virtual_camera import camera_support
+from meeting_assistant.services.windows_audio import WhatsAppAudioGuard
 from meeting_assistant.services.zoom_hall_service import ZoomHallService, hall_runtime_flags
 from meeting_assistant.ui.main_window import MainWindow
 
@@ -58,6 +61,16 @@ def main() -> int:
     # The JW Library UIA service intentionally performs that import lazily on
     # its own STA worker thread, after Qt has established OLE and DPI awareness.
     app = QApplication(sys.argv)
+    if sys.argv[1:2] == ["--self-check"]:
+        from meeting_assistant.services.startup_diagnostic import write_startup_diagnostic
+
+        if len(sys.argv) != 3:
+            return 2
+        return write_startup_diagnostic(sys.argv[2], _load_app_icon())
+    supported, reason = camera_support()
+    if not supported:
+        QMessageBox.critical(None, "Windows 11 necessário", reason)
+        return 1
     app.setApplicationName("Meeting Assistant")
     app.setOrganizationName("Meeting Assistant")
 
@@ -93,11 +106,7 @@ def main() -> int:
         )
 
     def current_media_automation_config() -> MediaAutomationConfig:
-        eligible = tuple(
-            scene
-            for scene in (settings.scene_background, settings.scene_speaker)
-            if scene
-        )
+        eligible = tuple(scene for scene in (settings.scene_background, settings.scene_speaker) if scene)
         return MediaAutomationConfig(
             obs=current_obs_config(),
             sensor_source=settings.scene_media,
@@ -107,7 +116,7 @@ def main() -> int:
         )
 
     obs_config = current_obs_config()
-    obs_controller = ObsController(poll_interval=0.5, preview_interval=0.15)
+    obs_controller = ObsController(poll_interval=0.5, screenshot_preview=False)
     display_service = DisplayService(app)
     jwl_service = JwlService(interval_ms=2000)
 
@@ -156,6 +165,24 @@ def main() -> int:
         display_provider=current_hall_display,
         jwl_window_provider=lambda: jwl_secondary.current or jwl_fast_guard.cached_candidate,
     )
+    whatsapp_audio_guard = WhatsAppAudioGuard()
+    whatsapp_camera_session = camera_session()
+    # Connect before MainWindow starts the fail-closed guard so the initial
+    # WhatsApp state is included in telemetry, even when no call is active.
+    whatsapp_audio_guard.state_changed.connect(
+        lambda muted, message: telemetry.event(
+            "whatsapp_audio_output",
+            muted=muted,
+            message=message,
+        )
+    )
+    whatsapp_camera_session.changed.connect(
+        lambda: telemetry.event(
+            "whatsapp_camera_state",
+            **whatsapp_camera_session.diagnostic(),
+        )
+    )
+    telemetry.event("whatsapp_camera_state", **whatsapp_camera_session.diagnostic())
 
     window = MainWindow(
         state=state,
@@ -170,6 +197,8 @@ def main() -> int:
         app_icon=app_icon,
         hall_window_provider=lambda: jwl_secondary.current or jwl_fast_guard.cached_candidate,
         hall_display_provider=current_hall_display,
+        whatsapp_audio_guard=whatsapp_audio_guard,
+        camera_session=whatsapp_camera_session,
     )
     # Startup routing belongs to the media automation now. Preserving the OBS
     # scene here is essential when Meeting Assistant is reopened mid-video.
@@ -180,6 +209,11 @@ def main() -> int:
         telemetry.status_message,
     )
     telemetry.sync_status_changed.connect(window.set_telemetry_status)
+
+    if getattr(settings, "window_layouts", None) and "meeting_assistant" in settings.window_layouts:
+        layout = settings.window_layouts["meeting_assistant"]
+        if len(layout) == 4:
+            window.setGeometry(layout[0], layout[1], layout[2], layout[3])
 
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
@@ -249,9 +283,7 @@ def main() -> int:
             message=message,
         )
     )
-    obs_controller.scene_changed.connect(
-        lambda scene: telemetry.event("obs_program_scene", scene=scene)
-    )
+    obs_controller.scene_changed.connect(lambda scene: telemetry.event("obs_program_scene", scene=scene))
     obs_controller.error.connect(
         lambda message: (
             telemetry.event("obs_error", severity="error", message=message),
@@ -314,9 +346,7 @@ def main() -> int:
 
     jwl_fast_guard.recovery_changed.connect(record_jwl_recovery)
     jwl_fast_guard.candidate_changed.connect(record_jwl_candidate)
-    jwl_fast_guard.shell_recovery_requested.connect(
-        jwl_virtual_desktop.recover_shell_cloak
-    )
+    jwl_fast_guard.shell_recovery_requested.connect(jwl_virtual_desktop.recover_shell_cloak)
     jwl_virtual_desktop.result.connect(
         lambda result: (
             telemetry.event(
@@ -360,6 +390,10 @@ def main() -> int:
         protect_jwl, effective = hall_runtime_flags(
             enabled, zoom_hall.active, zoom_hall.returning, switching_to_zoom
         )
+        # O usuário solicitou que o guardião só atue se a automação global estiver ligada,
+        # e que o guardião deve isolar a tela secundária do JWL.
+        protect_jwl = enabled and not zoom_hall.active and not switching_to_zoom
+
         telemetry.event(
             "automation_runtime",
             requested=enabled,
@@ -371,18 +405,12 @@ def main() -> int:
         media_automation.set_enabled(effective and not jwl_fast_guard.recovering)
 
     zoom_hall.returning_changed.connect(lambda _: apply_automation_runtime(state.automation_enabled))
-    zoom_hall.transition_diagnostic.connect(
-        lambda detail: telemetry.event("zoom_hall_transition", **detail)
-    )
+    zoom_hall.transition_diagnostic.connect(lambda detail: telemetry.event("zoom_hall_transition", **detail))
     window.automation_enabled_changed.connect(apply_automation_runtime)
     window.idle_reference_requested.connect(media_automation.reset_idle_reference)
-    zoom_hall.about_to_show.connect(
-        lambda: apply_automation_runtime(False, switching_to_zoom=True)
-    )
+    zoom_hall.about_to_show.connect(lambda: apply_automation_runtime(False, switching_to_zoom=True))
     zoom_hall.active_changed.connect(
-        lambda active, _message: (
-            apply_automation_runtime(state.automation_enabled) if not active else None
-        )
+        lambda active, _message: apply_automation_runtime(state.automation_enabled) if not active else None
     )
     jwl_secondary.status_changed.connect(
         lambda _ok, message: (
@@ -398,6 +426,7 @@ def main() -> int:
     app.aboutToQuit.connect(jwl_virtual_desktop.stop)
     app.aboutToQuit.connect(jwl_secondary.stop)
     app.aboutToQuit.connect(obs_controller.stop)
+    app.aboutToQuit.connect(whatsapp_audio_guard.stop)
     app.aboutToQuit.connect(jwl_probe.stop)
     app.aboutToQuit.connect(jwl_service.stop)
     app.aboutToQuit.connect(lambda: telemetry.event("qt_about_to_quit"))

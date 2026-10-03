@@ -109,10 +109,7 @@ class DisplayService(QObject):
 
     def snapshot(self) -> list[DisplayInfo]:
         primary = self._app.primaryScreen()
-        return [
-            display_info_from_screen(screen, primary=screen is primary)
-            for screen in self._app.screens()
-        ]
+        return [display_info_from_screen(screen, primary=screen is primary) for screen in self._app.screens()]
 
     def _emit_snapshot(self, *_args: object) -> None:
         self.displays_changed.emit(self.snapshot())

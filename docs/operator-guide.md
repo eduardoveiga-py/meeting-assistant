@@ -17,6 +17,8 @@ As configurações ficam em `%APPDATA%\MeetingAssistant`. Faça backup com o app
 5. Habilite dois monitores no Zoom antes de entrar na reunião. As duas janelas precisam existir para Zoom → Salão.
 6. Iniciar reunião solicita e verifica a câmera virtual, inclusive com OBS aberto. Também há botão para isso na tela de Texto do Ano/fontes OBS. Selecione OBS Virtual Camera no Zoom; ativação no OBS não prova seleção no Zoom.
 7. Use o assistente de áudio e confira o roteamento. O retorno dos participantes não deve compor o áudio enviado de volta ao Zoom. Áudio e câmera IP foram confirmados pelo responsável no equipamento atual em 24/09/2026.
+6. A câmera virtual nativa é iniciada automaticamente depois que o OBS conecta. O botão **Câmera WhatsApp** na tela principal permite parar, iniciar ou tentar novamente. Selecione Meeting Assistant no WhatsApp; o estado ativo no OBS não prova a seleção dentro do WhatsApp.
+7. Configure o áudio separadamente. O retorno dos participantes não deve compor o áudio enviado de volta ao Zoom; a solução integrada ainda está pendente.
 
 ## Operar
 
@@ -24,7 +26,7 @@ As configurações ficam em `%APPDATA%\MeetingAssistant`. Faça backup com o app
 - **Verificar:** confere conexão OBS, nomes de cenas e informações de monitores/JWL.
 - **Ativar automação:** acompanha mídia; repouso com texto do ano corresponde a Palco.
 - **Zoom → Salão:** mostra participantes no monitor local; clicar novamente deve restaurar JWL.
-- **Fundo / Palco / Mídia:** seleção manual da cena.
+- **Texto do Ano / Palco / Mídia:** seleção manual da cena.
 - **Cena segura → Palco:** pausa a automação e solicita Palco.
 - **Observar mídia / Calibrar Texto do Ano:** ferramentas técnicas atualmente na tela principal, com mudança para Ajustes planejada. Calibrar altera referências do detector e ativa a automação; não salva a foto de apresentação do OBS.
 

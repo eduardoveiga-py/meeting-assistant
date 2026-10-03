@@ -47,21 +47,11 @@ class _Guid(ctypes.Structure):
         )
 
 
-_CLSID_IMMERSIVE_SHELL = _Guid.from_text(
-    "{C2F03A33-21F5-47FA-B4BB-156362A2F239}"
-)
-_IID_SERVICE_PROVIDER = _Guid.from_text(
-    "{6D5140C1-7436-11CE-8034-00AA006009FA}"
-)
-_IID_APPLICATION_VIEW_COLLECTION = _Guid.from_text(
-    "{1841C6D7-4F9D-42C0-AF41-8747538F10E5}"
-)
-_CLSID_VIRTUAL_DESKTOP_PINNED_APPS = _Guid.from_text(
-    "{B5A399E7-1C87-46B8-88E9-FC5747B171BD}"
-)
-_IID_VIRTUAL_DESKTOP_PINNED_APPS = _Guid.from_text(
-    "{4CE81583-1E4C-4632-A621-07A53543148F}"
-)
+_CLSID_IMMERSIVE_SHELL = _Guid.from_text("{C2F03A33-21F5-47FA-B4BB-156362A2F239}")
+_IID_SERVICE_PROVIDER = _Guid.from_text("{6D5140C1-7436-11CE-8034-00AA006009FA}")
+_IID_APPLICATION_VIEW_COLLECTION = _Guid.from_text("{1841C6D7-4F9D-42C0-AF41-8747538F10E5}")
+_CLSID_VIRTUAL_DESKTOP_PINNED_APPS = _Guid.from_text("{B5A399E7-1C87-46B8-88E9-FC5747B171BD}")
+_IID_VIRTUAL_DESKTOP_PINNED_APPS = _Guid.from_text("{4CE81583-1E4C-4632-A621-07A53543148F}")
 
 _CLSCTX_ALL = 0x17
 _COINIT_APARTMENTTHREADED = 0x2
@@ -340,9 +330,7 @@ class _VirtualDesktopPinSession:
             )
         )
         if _failed(hr) or not pointer.value:
-            raise RuntimeError(
-                f"QueryService failed: HRESULT 0x{hr & 0xFFFFFFFF:08X}"
-            )
+            raise RuntimeError(f"QueryService failed: HRESULT 0x{hr & 0xFFFFFFFF:08X}")
         return pointer
 
     @staticmethod

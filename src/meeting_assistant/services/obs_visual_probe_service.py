@@ -162,10 +162,7 @@ def classify_samples(samples: list[VisualSample] | tuple[VisualSample, ...]) -> 
             "de repouso até o fim do teste."
         )
     if peak >= 2.0:
-        return (
-            "Mudança visual moderada detectada. Será necessário calibrar o limiar antes de "
-            "automatizar."
-        )
+        return "Mudança visual moderada detectada. Será necessário calibrar o limiar antes de automatizar."
     return "Pouca mudança visual foi detectada nesta fonte."
 
 
@@ -300,9 +297,7 @@ class ObsVisualProbeService(QObject):
                 if source_name not in targets:
                     targets.append(source_name)
 
-                source_type = str(
-                    item.get("sourceType") or item.get("source_type") or ""
-                ).upper()
+                source_type = str(item.get("sourceType") or item.get("source_type") or "").upper()
                 if bool(item.get("isGroup") or item.get("is_group")):
                     visit(source_name, is_group=True)
                 elif source_type == "OBS_SOURCE_TYPE_SCENE":
@@ -371,9 +366,7 @@ class ObsVisualProbeService(QObject):
     ) -> list[SourceProbeResult]:
         started_at = time.monotonic()
         duration_ms = int(self._duration_seconds * 1000)
-        sample_map: dict[str, list[VisualSample]] = {
-            source_name: [] for source_name in baselines
-        }
+        sample_map: dict[str, list[VisualSample]] = {source_name: [] for source_name in baselines}
         previous_frames = dict(baselines)
 
         while not self._stop_event.is_set():

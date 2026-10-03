@@ -1,14 +1,23 @@
 """Explicit, isolated OBS audio provisioning; never changes Program or windows.
 
-The monitoring device and Zoom devices require operator confirmation. OBS owns
-persistence. Discovery/preparation mutes our sources; activation is never automatic.
+The monitoring device and Zoom/WhatsApp devices require operator confirmation.
+OBS owns persistence. Discovery/preparation mutes our sources; activation is
+never automatic. Both call applications intentionally receive the same mix via
+the shared VB-CABLE recording endpoint; their physical speakers remain a
+separate concern handled by the Windows audio-session guard.
 """
 
 from obsws_python.error import OBSSDKRequestError
 
-BUS = "Meeting Assistant - Áudio Zoom"
+BUS = "Meeting Assistant - Áudio"
 MIC = "Meeting Assistant - Mesa"
-APPS = {"JW Library": "jwlibrary.exe", "VLC": "vlc.exe", "Chrome": "chrome.exe", "Edge": "msedge.exe"}
+APPS = {
+    "JW Library": "jwlibrary.exe",
+    "Zoom": "zoom.exe",
+    "VLC": "vlc.exe",
+    "Chrome": "chrome.exe",
+    "Edge": "msedge.exe",
+}
 MIC_KIND = "wasapi_input_capture"
 APP_KIND = "wasapi_process_output_capture"
 NONE = "OBS_MONITORING_TYPE_NONE"
@@ -49,10 +58,13 @@ def mute_managed(client):
         except Exception:
             failed.append(name)
     if failed:
-        raise ValueError("Silêncio não confirmado. Silencie o microfone no Zoom e confira o OBS.")
+        raise ValueError(
+            "Silêncio do mix não confirmado. Silencie o microfone no Zoom/WhatsApp "
+            "e confira o monitoramento do OBS."
+        )
     return {
         "message": "Fontes de áudio do app silenciadas. Para voltar à ligação antiga, "
-        "selecione a entrada física da mesa no microfone do Zoom."
+        "selecione a entrada física da mesa no microfone do Zoom e do WhatsApp."
     }
 
 
@@ -137,7 +149,9 @@ def discover(client):
 
 def validate_selection(client, data):
     if data.get("routing_confirmed") is not True:
-        raise ValueError("Confirme CABLE Input no OBS, CABLE Output no Zoom e o retorno separado da mesa.")
+        raise ValueError(
+            "Confirme CABLE Input no OBS, CABLE Output no Zoom e no WhatsApp, e o retorno separado da mesa."
+        )
     mic = data.get("microphone", "")
     if mic not in {x["itemValue"] for x in physical_choices(client)}:
         raise ValueError("Selecione a entrada física da mesa conectada; atualize as listas se necessário.")
@@ -207,8 +221,9 @@ def activate(client, data):
         mute_managed(client)
         raise
     return {
-        "message": "OBS confirmou as fontes e o monitoramento. Faça o teste de escuta remota no Zoom. "
-        "O OBS mantém essa configuração ao fechar o app."
+        "message": "OBS confirmou as fontes e o monitoramento. Selecione CABLE Output "
+        "como microfone no Zoom e no WhatsApp; o retorno do WhatsApp começa silenciado "
+        "pelo Meeting Assistant. O OBS mantém essa configuração ao fechar o app."
     }
 
 
@@ -221,6 +236,12 @@ def run_audio_task(client, action, data):
             raise
     if action == "activate":
         return activate(client, data)
+    if action == "mute_mesa":
+        call(client, "SetInputMute", inputName="Meeting Assistant - Mesa", inputMuted=True)
+        return {"ok": True}
+    if action == "unmute_mesa":
+        call(client, "SetInputMute", inputName="Meeting Assistant - Mesa", inputMuted=False)
+        return {"ok": True}
     if action == "mute":
         return mute_managed(client)
     raise ValueError("Operação de áudio desconhecida.")

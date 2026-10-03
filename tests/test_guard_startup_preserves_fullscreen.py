@@ -7,17 +7,24 @@ from meeting_assistant.services import jwl_fast_window_guard as module
 from meeting_assistant.services.jwl_secondary_window import WindowRect
 
 
-@pytest.mark.parametrize('minimized,visible,covered,expected', [
-    (False, True, False, 0),
-    (True, True, False, 1),
-    (False, False, False, 1),
-    (False, True, True, 1),
-])
+@pytest.mark.parametrize(
+    "minimized,visible,covered,expected",
+    [
+        (False, True, False, 0),
+        (True, True, False, 1),
+        (False, False, False, 1),
+        (False, True, True, 1),
+    ],
+)
 def test_startup_preserves_healthy_output_but_still_recovers(
-    monkeypatch, minimized, visible, covered, expected,
+    monkeypatch,
+    minimized,
+    visible,
+    covered,
+    expected,
 ):
-    monkeypatch.setattr(module, 'win32gui', Mock())
-    monkeypatch.setattr(module, 'win32con', Mock())
+    monkeypatch.setattr(module, "win32gui", Mock())
+    monkeypatch.setattr(module, "win32con", Mock())
     candidate = SimpleNamespace(hwnd=7, monitor_primary=False)
     display = SimpleNamespace(primary=False)
     guard = module.JwlFastWindowGuard(lambda: candidate, lambda: display)

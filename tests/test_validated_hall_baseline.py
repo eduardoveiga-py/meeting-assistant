@@ -1,4 +1,5 @@
 """Protect the operator-validated Hall engine from accidental changes."""
+
 import hashlib
 import json
 from pathlib import Path
@@ -19,6 +20,7 @@ def test_validated_hall_engine_is_unchanged():
         if actual != expected:
             changed.append(path)
     assert not changed, (
-        "Operator-validated Hall engine changed: " + ", ".join(changed)
+        "Operator-validated Hall engine changed: "
+        + ", ".join(changed)
         + ". Follow AGENTS.md; do not refresh fingerprints merely to pass CI."
     )

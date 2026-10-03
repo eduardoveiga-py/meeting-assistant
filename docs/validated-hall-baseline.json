@@ -3,17 +3,17 @@
   "checkpoint_branch": "checkpoint/zoom-jwl-validated-20260921",
   "normalization": "UTF-8, LF newlines, one final newline",
   "sha256": {
-    "src/meeting_assistant/services/zoom_hall_service.py": "2a23eb270080b92d4841491b06e2119b93913c1bf28d22e64ccf61ece99419d5",
-    "src/meeting_assistant/services/native_window.py": "31714d099bffacf6bcd94d21ba861b59a9a639e2f308b9215542782a5fc73045",
-    "src/meeting_assistant/services/jwl_fast_window_guard.py": "b446222d883c6050ff7c7e44ec91cd4065f1e6cd3b6d47649f125112bf1117ce",
-    "src/meeting_assistant/services/jwl_uia_secondary_window.py": "76a78d08ed0563f9d57f4663bb547fcb985ed8e9fd0d9dce837ceb330a17ac67",
-    "src/meeting_assistant/services/jwl_virtual_desktop_pin.py": "6f91dfd3fa074dda86d3f355b4d439c35569381495ff4ee5649a70e85745126f",
-    "src/meeting_assistant/services/jwl_secondary_window.py": "4c719a37b910fa0e409c5a8f3f3470fe8c367d175cf06c7f875ca29d501ee0bd",
-    "src/meeting_assistant/services/media_automation_service.py": "b388d03e9d28dd65ceee9808d888b9d39999665cfa6c0f00d4709e9ad4d47c3a",
-    "src/meeting_assistant/services/jwl_idle_reference.py": "e841a9dc0f96e924606d069a375f27089ac45a7b23c1d7a8c882481146d7af75",
+    "src/meeting_assistant/services/zoom_hall_service.py": "514a8a3d878eae28273ea43fb9806de006818c59f7a9a70572c7cd092fa78482",
+    "src/meeting_assistant/services/native_window.py": "8b87daa6681167e979ee67534741a1a67df54fcaafc9c9eb7983cb48efb08edf",
+    "src/meeting_assistant/services/jwl_fast_window_guard.py": "ee53065f7ba09b435279d7c12073b5cda68f73b2e57e35cd449414f62e39a4ab",
+    "src/meeting_assistant/services/jwl_uia_secondary_window.py": "3356c99566c23a8f4745494322245c2e2c2cce38e8fd7500b16cea45d533ad7a",
+    "src/meeting_assistant/services/jwl_virtual_desktop_pin.py": "995024e03c8870e7e8a85d402482218fe6a3fb9c69f1393d2778e13a35400a67",
+    "src/meeting_assistant/services/jwl_secondary_window.py": "ab1c515a401f26c4cee844ddf3faae50ebd7812d44aa315db6e443d4ed36c990",
+    "src/meeting_assistant/services/media_automation_service.py": "83aaa9d4ae9091a3221511c258786127646bf5f6312edc1db8627cbb5a84589d",
+    "src/meeting_assistant/services/jwl_idle_reference.py": "b63fe78827c405969605b4da4739af2d9e2b7b277c4ba780006951092869a428",
     "src/meeting_assistant/services/hall_monitor_sensor.py": "ddeb9363866c071ec1cd989d4e063a8d4cbaffe895be6fd853fda19dac25a2d4",
     "src/meeting_assistant/services/jwl_screen_sensor.py": "1cf32cd9dd3a6a0a63cf64e14fca998d85d1611c7e32403e44034ada026fcb80",
-    "tests/test_zoom_hall_discovery.py": "386d9be68d0e9015fb4f881c4da7002a211f5f924ef17114ca50423ef1beece9"
+    "tests/test_zoom_hall_discovery.py": "8e4f312eb2b1b2ac10783c04eeeb9c9ab724fa896e5012262dbe78d2306620c3"
   },
   "validation_note": "Operador confirmou Testes 1, 2 e 3 OK em 21/09/2026; checkpoint original preservado."
 }

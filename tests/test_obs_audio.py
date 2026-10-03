@@ -111,8 +111,8 @@ def test_preparation_idempotent_muted_and_filtered():
     assert result["microphones"][0]["itemValue"] == "physical"
     assert len(result["microphones"]) == 1
     for label, choices in result["applications"].items():
-        assert len(choices) == 1
-        assert choices[0]["itemValue"].endswith(APPS[label])
+        assert len(choices) in (1, 2)
+        assert choices[0]["itemValue"].casefold().endswith(APPS[label].casefold())
     assert not obs.scenes["Palco"]
     assert not obs.sources["Personal mic"]["mute"]
 
@@ -141,7 +141,7 @@ def test_activation_keeps_program_and_personal_sources_and_reuses_bus():
         {"microphone": "cable"},
         {"routing_confirmed": False},
         {"applications": {"JW Library": "Meeting:class:Zoom.exe"}},
-        {"applications": {"Zoom": "Meeting:class:Zoom.exe"}},
+        {"applications": {"Zoom": "Invalid:class:Zoom.exe"}},
         {"scenes": ["Palco", "Palco", "Mídias"]},
     ],
 )

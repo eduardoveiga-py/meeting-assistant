@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, fields
 from hashlib import sha256
+from dataclasses import asdict, dataclass, field, fields
 from json import dumps, loads
 from os import environ
 from pathlib import Path
@@ -38,7 +39,9 @@ class AppSettings:
     telemetry_enabled: bool = True
     telemetry_sync_enabled: bool = False
     telemetry_screenshots: bool = False
-    telemetry_repo_url: str = ""
+    telemetry_sync_enabled: bool = False
+    telemetry_repo_url: str = "https://github.com/eduardoveiga-py/meeting-assistant-diagnostics.git"
+    window_layouts: dict = field(default_factory=dict)
 
 
 class SettingsService:

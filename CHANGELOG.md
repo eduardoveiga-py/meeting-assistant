@@ -27,6 +27,82 @@
 - Empacotamento em pasta consistente, metadados de versão e teste do executável no CI/release.
 - Pesquisa comparativa e critérios objetivos para concluir a versão operacional.
 - Núcleo validado JWL ↔ Zoom ↔ Salão e seus fingerprints preservados.
+## Não lançado — áudio Zoom/WhatsApp e câmera na tela principal — 01/10/2026
+
+- Inicializacao verifica Python 3.12 estavel x64 antes do pip; se `.venv` for
+  incompativel, preserva backup e recria com 3.12. Confirma o interpretador base
+  antes de alterar o ambiente existente. Mesma verificacao no setup de desenvolvimento.
+
+- Corrigida restricao impossivel de versao pycaw no Windows; dependencia fixada
+  em 20240210, com as interfaces de sessao usadas pelo controle de audio.
+
+- Mix único do OBS para Zoom e WhatsApp via VB-CABLE, preservando o nome compatível
+  `Meeting Assistant - Áudio Zoom`.
+- Botão de retorno do WhatsApp na tela principal, silenciado por padrão e controlado
+  por sessão individual do Windows Core Audio.
+- Câmera virtual nativa do Windows 11 integrada à tela principal, com tentativa de
+  inicialização automática depois da conexão do OBS.
+- Botão F2 renomeado para **Texto do Ano**; a câmera deixou de ser uma ferramenta
+  escondida em Ajustes.
+- Pacote PyInstaller preparado para incluir `pycaw` no executável Windows.
+- `scripts/run.ps1` executa o codigo Python atualizado da pasta `src`, prepara
+  `.venv` e atualiza dependencias quando necessario; nao abre um app congelado em cache.
+- Download/instalacao nativa isolada em `ensure-video-native.ps1`; reutiliza camera
+  instalada e permite atualizar DLLs/host com `-Refresh` ou fornecer pacote local.
+- Workflow de video prepara apenas dependencias C++ em `native-latest`; a geracao
+  do executavel/instalador principal permanece reservada para a distribuicao final.
+- Suíte automatizada: 233 testes aprovados; os novos controles de audio/interface
+  aguardam o ensaio fisico desta atualizacao.
+
+## Não lançado — Windows 11 e vídeo revisão 3 — 30/09/2026
+
+- Windows 11 x64 passa a ser requisito do app e do instalador.
+- Retiradas as alternativas DirectShow Compat, NDI e driver experimental Windows 10.
+- Câmera nativa Media Foundation recebe Program do OBS, com identidade própria.
+- Prévia contínua NV12 na tela principal e nos ajustes; sem screenshots JPEG ou
+  conversão QImage/QPixmap por quadro. Canais independentes para prévia e câmera.
+- Uma conexão persistente compartilhada entre as prévias; descarte de quadros atrasados.
+- Câmera permanece ativa ao fechar ajustes, para permitir operar cenas na tela principal.
+- Retomada após reinício OBS, desligamento explícito e diagnóstico revisão 3.
+- Pacote de desenvolvimento inclui app portátil com Python e bibliotecas.
+- Núcleo congelado JWL/Zoom preservado. Compatibilidade WhatsApp e fluidez no hardware
+  aguardam confirmação do operador; compilação não substitui esse ensaio.
+
+As entradas históricas abaixo descrevem tentativas anteriores, algumas já removidas.
+
+## Não lançado — câmera de compatibilidade, 27/09/2026
+
+- Módulo DirectShow separado para Windows 10 2004+/11 x64, identidade Meeting Assistant Compat.
+- Mesma ponte Program OBS; saída NV12/I420/YUY2 720p30 e preto sem envio autorizado.
+- Seleção Automático/Moderno/Compatibilidade na tela experimental; um consumidor por vez.
+- Instalar, verificar e remover Compat separadamente, com SHA256 e verificador COM.
+- Testes de formatos, ciclo de vida e controles; recepção WhatsApp depende de ensaio físico.
+- Fontes correspondentes e licença libdshowcapture incluídas no pacote.
+
+## Não lançado — instalador de vídeo / PowerShell 5.1, 27/09/2026
+
+- Corrigida enumeração do manifesto JSON que podia causar falso erro de SHA256 no Windows PowerShell 5.1.
+- Modo `-VerifyOnly` verifica integridade sem instalar nem exigir administrador.
+- Build verifica pacote válido e rejeição de corrupção, duplicidade e arquivos ausentes em PowerShell 5.1 e 7.
+
+## Não lançado — fluidez e diagnóstico de vídeo, 27/09/2026
+
+- Cadência da ponte baseada no timestamp OBS; elimina limitador de 32 ms em relógio de baixa resolução.
+- Prévia com alvo de 30 fps, conversão fora da interface, sem fila de quadros atrasados.
+- Diagnóstico diferencia FPS da ponte e da prévia, contabiliza erros e limpa estado obsoleto.
+- Parada durante leitura é enfileirada; reconexão não inicia o envio automaticamente.
+- Provedor Windows 11 usa cadência monotônica; requer validação física no WhatsApp.
+- Pacote inclui revisão/commit e verifica hashes antes de instalar os binários.
+- Testes nativos de 24/29,97/30/60 fps, pausa e reinício do timestamp.
+- Operador validou troca de cenas e parar/reiniciar na versão anterior; fluidez corrigida aguardando reteste.
+
+## Não lançado — câmera própria, 27/09/2026
+
+- Plugin separado de saída Program OBS em NV12 720p e transporte local com timeout.
+- Tela experimental com prévia, diagnóstico copiável e bloqueio da câmera própria no Windows 10.
+- Provedor Windows 11 baseado no exemplo MIT Microsoft, com CLSID próprio e câmera de sessão.
+- Build nativo reproduzível em commits fixos; scripts explícitos de instalação e remoção.
+- Núcleo de telas preservado; ensaio Windows 11/WhatsApp e distribuição final ainda pendentes.
 
 ## 0.5.0 — primeira release instalável — 21/09/2026
 

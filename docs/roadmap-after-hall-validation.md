@@ -196,3 +196,23 @@ Referências: [captura por aplicativo OBS](https://obsproject.com/kb/application
 [VB-CABLE](https://vb-audio.com/Cable/),
 [RegisterHotKey](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey),
 [WinGet install](https://learn.microsoft.com/en-us/windows/package-manager/winget/install).
+
+
+## Câmera e vídeo — atualização 30/09/2026
+
+Windows 11 x64 passa a ser requisito. Máquina do operador atualizada e com segundo
+monitor disponível. Uso pessoal neste computador. Decisões técnicas delegadas ao desenvolvimento.
+
+- [x] Retirar DirectShow Compat, NDI e PoC de driver Windows 10 da árvore ativa.
+- [x] Manter fonte Microsoft via MFCreateVirtualCamera e Program OBS NV12 720p30.
+- [x] Separar prévia/câmera em canais independentes; conexão persistente e último quadro.
+- [x] Substituir preview JPEG da tela principal e conversão RGB da prévia da câmera.
+- [x] Câmera permanece ativa ao fechar Ajustes; encerramento explícito ou ao sair do app.
+- [x] Diagnóstico separado, reconexão, módulo de ciclo de vida e pacote com runtime.
+- [ ] Confirmar fluidez real no notebook, com e sem WhatsApp ativo.
+- [ ] Confirmar enumeração MF e vídeo recebido em chamada WhatsApp.
+- [ ] Confirmar retorno após reiniciar OBS e regressão física JWL/Zoom/Windows+D.
+- [ ] Integrar instalação nativa ao assistente principal após a validação acima.
+
+[Roteiro de teste e retorno](test-virtual-camera.md). Nenhuma aprovação física é
+inferida da compilação ou da confirmação da API do Windows.

@@ -24,7 +24,7 @@ ou o pull falhar, envie a mensagem; não use reset nem descarte arquivos.
 1. Abra Ajustes. No topo estão Áudio, Observar mídia e Calibrar Texto do Ano.
    Os dois últimos saíram da tela principal. Não é necessário recalibrar o que já funciona.
 2. Volte à tela principal e aperte F1. Confira a lista.
-3. Com OBS aberto, teste F2/F3/F4: Fundo, Palco, Mídia. Teste F6: automação;
+3. Com OBS aberto, teste F2/F3/F4: Texto do Ano, Palco, Mídia. Teste F6: automação;
    F7: pausa a automação e seleciona Palco. F9: Verificar. F10: Ajustes.
 4. Dentro de Ajustes, aperte F3: não deve disparar Palco. Com OBS/Zoom em foco,
    as teclas devem continuar pertencendo ao programa em foco.
@@ -32,11 +32,14 @@ ou o pull falhar, envie a mensagem; não use reset nem descarte arquivos.
 6. F8 usa a função existente Iniciar reunião: só teste quando quiser abrir os aplicativos.
 7. Se o segundo monitor ainda estiver conectado, teste F5 duas vezes: Zoom → Salão → JWL.
    Sem ele, deixe este item para o próximo ensaio físico.
+8. Na tela principal, confira o botão **Câmera WhatsApp**. Depois que o OBS conectar,
+   ele deve mudar sozinho para **Parar câmera WhatsApp**. O botão permite parar e iniciar
+   a câmera nativa sem abrir Ajustes.
 
 | Tecla | Ação |
 | --- | --- |
 | F1 | Ajuda dos atalhos |
-| F2 | Fundo / Texto do Ano |
+| F2 | Texto do Ano |
 | F3 | Palco |
 | F4 | Mídia |
 | F5 | Zoom → Salão / voltar ao JWL |
@@ -61,24 +64,25 @@ estar conectada. Anote antes qual microfone o Zoom está usando, para restaurá-
 3. Nas Propriedades avançadas de áudio do OBS, deixe as fontes antigas com
    **Monitoramento desligado**. O app bloqueia ativação se encontrar outra fonte monitorada;
    não muda suas fontes pessoais automaticamente.
-4. No Zoom: Configurações → Áudio → Microfone = **CABLE Output**. Alto-falante = a saída
-   física já usada no Salão. A câmera continua **OBS Virtual Camera**.
+4. No Zoom e no WhatsApp: Configurações → Áudio → Microfone = **CABLE Output**.
+   Alto-falante = a saída física já usada no Salão. A câmera continua **OBS Virtual Camera**.
 5. Mantenha a reprodução local de JWL/VLC/navegador na saída física atual. Não selecione
    CABLE Input como saída padrão geral do Windows: o cabo é o destino da mistura do OBS.
-6. Abra Ajustes → Áudio da mesa e das mídias → Zoom. Abra também JWL/VLC/navegadores que
+6. Abra Ajustes → Áudio da mesa e das mídias → Zoom + WhatsApp. Abra também JWL/VLC/navegadores que
    pretende usar. Clique **Preparar / atualizar listas — silencia envio**.
 7. Escolha a entrada física da mesa. Não usamos “Padrão” para evitar mudança silenciosa
    de dispositivo. Escolha a janela de cada aplicativo desejado; deixe os outros sem seleção.
    Se faltar um app, abra sua janela e prepare novamente. Captura por aplicativo requer
    suporte do OBS/Windows; não há fallback para capturar todo o áudio do computador.
 8. Confirme as três caixas somente após conferir o caminho real:
-   OBS CABLE Input; Zoom CABLE Output/alto-falante físico; entrada da mesa sem retorno
-   do Zoom e sem uma segunda cópia das mídias.
-9. Clique **Aplicar seleção e ativar envio ao Zoom**. O app confirma fontes/monitoramento
-   no OBS, mas não certifica que alguém ouviu o som. Faça o Teste C.
+   OBS CABLE Input; Zoom/WhatsApp CABLE Output/alto-falante físico; entrada da mesa sem retorno
+   das chamadas e sem uma segunda cópia das mídias.
+9. Clique **Aplicar seleção e ativar envio ao Zoom e WhatsApp**. O app confirma
+   fontes/monitoramento no OBS, mas não certifica que alguém ouviu o som. Faça o Teste C.
 
-O app cria `Meeting Assistant - Áudio Zoom`, contendo a entrada da mesa e quatro fontes
-independentes de captura por aplicativo. Essa cena é incluída em Fundo, Palco e Mídias.
+O app mantém o nome compatível `Meeting Assistant - Áudio Zoom` (o rótulo é legado;
+o bus agora atende Zoom e WhatsApp), contendo a entrada da mesa e quatro fontes
+independentes de captura por aplicativo. Essa cena é incluída em Texto do Ano, Palco e Mídias.
 Somente as fontes selecionadas são habilitadas e monitoradas. A cena Program e as janelas
 JWL/Zoom não são trocadas por esta configuração. OBS salva fontes, seleção e ativação;
 fechar o Meeting Assistant **não silencia o áudio**. Preparar novamente silencia as fontes
@@ -94,18 +98,21 @@ separar os sons que já chegaram misturados pela entrada física.
 Use outro dispositivo com fones, preferencialmente em outro ambiente. No notebook,
 confira os medidores do OBS e ajuste volumes no mixer do OBS, sem saturar.
 
-1. **Voz:** fale no microfone da mesa; o participante remoto deve ouvir uma única voz limpa.
-2. **JWL:** reproduza um vídeo e depois uma música; confirme som remoto e local.
+1. **Voz:** fale no microfone da mesa; os participantes remotos devem ouvir uma única voz limpa.
+2. **JWL:** reproduza um vídeo e depois uma música; confirme som remoto e local nos dois aplicativos.
 3. **VLC / Chrome / Edge:** teste cada um que selecionou. Troque título/aba. O navegador
    selecionado pode enviar som de outras abas; feche as que não devem ser ouvidas.
 4. **Voz + mídia:** confirme equilíbrio, sem eco ou duplicação.
 5. **Retorno:** o participante remoto fala; ele não deve ouvir a própria voz voltando.
-6. **Trocas de vídeo:** alterne Fundo/Palco/Mídia; o som deve continuar. Com segundo monitor,
+6. **Trocas de vídeo:** alterne Texto do Ano/Palco/Mídia; o som deve continuar. Com segundo monitor,
    faça também Zoom → Salão → JWL. Isso não deve reenviar o áudio do participante.
-7. **Silêncio:** em Ajustes → Áudio, clique **Silenciar envio do app**. A mistura para o Zoom
-   deve parar. Para retornar ao funcionamento anterior, selecione no Zoom a entrada física
-   da mesa que você anotou. O áudio local continua pela ligação existente.
-8. Depois de aprovado, reinicie OBS/app/Zoom e confira os dispositivos e a escuta novamente.
+7. **Retorno WhatsApp:** confirme que o botão **WhatsApp** começa silenciado. Libere-o
+   apenas quando quiser ouvir os participantes do WhatsApp no salão; silencie novamente
+   e confirme que o Zoom continua audível.
+8. **Silêncio do mix:** em Ajustes → Áudio, clique **Silenciar mix enviado aos aplicativos**.
+   A mistura para Zoom e WhatsApp deve parar. Para retornar ao funcionamento anterior,
+   selecione nos aplicativos a entrada física da mesa que você anotou.
+9. Depois de aprovado, reinicie OBS/app/Zoom/WhatsApp e confira os dispositivos e a escuta novamente.
    Não considere a persistência no OBS como prova de que o cabo e os dispositivos estão corretos.
 
 Se o Zoom cortar música, revise suas opções de áudio original/música antes de concluir
@@ -135,8 +142,9 @@ não selecione Zoom ou captura global como substituição.
 
 ## Limites deste lote
 
-- Monitoramento do OBS e dispositivos Zoom são conferidos manualmente na própria tela de orientação.
+- Monitoramento do OBS e dispositivos Zoom/WhatsApp são conferidos manualmente na própria tela de orientação.
 - Sem instalação automática de VB-CABLE, controle de volumes no app ou medidores no app ainda.
+- O botão de retorno do WhatsApp controla o mute da sessão de reprodução, não a seleção de microfone.
 - A captura por processo pode não funcionar com todos os aplicativos/versões, especialmente UWP;
   o teste real do JWL é obrigatório. O módulo não usa ApplicationFrameHost genérico como substituto.
 - Preparação de áudio usa a fila serial do OBS; ajustes permanecem abertos até o resultado.

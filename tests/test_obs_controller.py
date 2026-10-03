@@ -89,7 +89,5 @@ def test_handle_set_scene_uses_explicit_obs_request_after_fade_setup() -> None:
     ) in client.calls
     assert client.calls.index(
         ("SetCurrentSceneTransitionDuration", {"transitionDuration": 350}, True)
-    ) < client.calls.index(
-        ("SetCurrentProgramScene", {"sceneName": "Mídias"}, True)
-    )
+    ) < client.calls.index(("SetCurrentProgramScene", {"sceneName": "Mídias"}, True))
     assert controller._last_scene == "Mídias"

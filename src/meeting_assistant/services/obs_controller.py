@@ -141,10 +141,13 @@ class ObsController(QObject):
     operator_finished = Signal(str, bool, object)
     audio_task_finished = Signal(str, str, bool, object)
 
-    def __init__(self, poll_interval: float = 0.5, preview_interval: float = 0.15) -> None:
+    def __init__(
+        self, poll_interval: float = 0.5, preview_interval: float = 0.15, *, screenshot_preview: bool = True
+    ) -> None:
         super().__init__()
         _install_transient_log_filter()
         self._poll_interval = max(0.25, poll_interval)
+        self._screenshot_preview = screenshot_preview
         self._preview_interval = max(0.12, preview_interval)
         self._commands: queue.Queue[tuple[str, object | None]] = queue.Queue()
         self._stop_event = threading.Event()
@@ -224,10 +227,15 @@ class ObsController(QObject):
         except ValueError as exc:
             self.audio_task_finished.emit(token, action, False, {"message": str(exc)})
         except Exception:
-            self.audio_task_finished.emit(token, action, False, {
-                "message": "Configuração de áudio incompleta. Confira o OBS e, se necessário, "
-                           "silencie o microfone no Zoom antes de tentar novamente."
-            })
+            self.audio_task_finished.emit(
+                token,
+                action,
+                False,
+                {
+                    "message": "Configuração de áudio incompleta. Confira o OBS e, se necessário, "
+                    "silencie o microfone no Zoom antes de tentar novamente."
+                },
+            )
 
     def operator_task(self, action, data=None):
         self._commands.put(("operator", (action, data)))
@@ -359,6 +367,8 @@ class ObsController(QObject):
 
             if self._client is not None and now >= next_preview:
                 self._preview_stream.set_scene(self._last_scene)
+            if self._screenshot_preview and self._client is not None and now >= next_preview:
+                self._refresh_preview()
                 if self._client is None:
                     next_reconnect = time.monotonic() + 2.0
                 next_preview = now + self._preview_interval
@@ -469,8 +479,9 @@ class ObsController(QObject):
             prepare_obs(self._client, settings)
             self._refresh_scene_list()
             self.setup_finished.emit(
-                True, "Cenas padronizadas e fonte IP configurada. A imagem da câmera ainda não foi validada. "
-                "Confira fontes de Texto do Ano/Mídias e possíveis fontes antigas em Palco."
+                True,
+                "Cenas padronizadas e fonte IP configurada. A imagem da câmera ainda não foi validada. "
+                "Confira fontes de Texto do Ano/Mídias e possíveis fontes antigas em Palco.",
             )
         except ValueError as exc:
             self.setup_finished.emit(False, str(exc))

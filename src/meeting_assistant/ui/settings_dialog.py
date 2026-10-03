@@ -33,11 +33,13 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
 class SettingsDialog(QDialog):
+    virtual_camera_requested = Signal()
     audio_setup_requested = Signal()
     observe_requested = Signal()
     calibrate_requested = Signal()
     hall_setup_requested = Signal()
     setup_assistant_requested = Signal()
+    update_history_requested = Signal()
 
     def __init__(
         self,
@@ -58,10 +60,7 @@ class SettingsDialog(QDialog):
             app = QGuiApplication.instance()
             primary = app.primaryScreen() if app is not None else None
             available_displays = (
-                [
-                    display_info_from_screen(screen, primary=screen is primary)
-                    for screen in app.screens()
-                ]
+                [display_info_from_screen(screen, primary=screen is primary) for screen in app.screens()]
                 if app is not None
                 else []
             )
@@ -80,17 +79,23 @@ class SettingsDialog(QDialog):
             tools_group = QGroupBox("Ferramentas e áudio")
             tools_layout = QVBoxLayout(tools_group)
             for text, signal in (
-                ("Áudio da mesa e das mídias → Zoom…", self.audio_setup_requested),
+                ("Áudio da mesa e das mídias → Zoom + WhatsApp…", self.audio_setup_requested),
                 ("Observar mídia no JW Library (20 s)", self.observe_requested),
                 ("Calibrar Texto do Ano", self.calibrate_requested),
             ):
                 button = QPushButton(text)
                 button.clicked.connect(signal.emit)
                 tools_layout.addWidget(button)
-            hint = QLabel("Observar e calibrar fecham os ajustes sem salvar alterações pendentes. "
-                          "Salve antes se tiver editado algum campo. F1 na tela principal mostra os atalhos.")
+            hint = QLabel(
+                "Observar e calibrar fecham os ajustes sem salvar alterações pendentes. "
+                "Salve antes se tiver editado algum campo. F1 na tela principal mostra os atalhos."
+            )
             hint.setWordWrap(True)
             tools_layout.addWidget(hint)
+
+            update_btn = QPushButton("Versões Anteriores (Restaurar App)")
+            update_btn.clicked.connect(self.update_history_requested.emit)
+            tools_layout.addWidget(update_btn)
             root.addWidget(tools_group)
 
         output_group = QGroupBox("Saída do Salão")
@@ -137,9 +142,7 @@ class SettingsDialog(QDialog):
         startup_form = QFormLayout(startup_group)
 
         self.zoom_join_edit = QLineEdit(settings.zoom_join_url)
-        self.zoom_join_edit.setPlaceholderText(
-            "https://...zoom.us/j/123456789?pwd=..."
-        )
+        self.zoom_join_edit.setPlaceholderText("https://...zoom.us/j/123456789?pwd=...")
         self.zoom_join_edit.setToolTip(
             "Cole o link normal da reunião. O Meeting Assistant o converte para "
             "abrir diretamente no aplicativo Zoom."
@@ -207,6 +210,7 @@ class SettingsDialog(QDialog):
         self.telemetry_screenshots_check = QCheckBox(
             "Incluir screenshots em eventos importantes"
         )
+        self.telemetry_screenshots_check = QCheckBox("Incluir screenshots em eventos importantes")
         self.telemetry_screenshots_check.setChecked(settings.telemetry_screenshots)
         self.telemetry_repo_edit = QLineEdit(settings.telemetry_repo_url)
         self.telemetry_repo_edit.setPlaceholderText(
@@ -286,17 +290,23 @@ class SettingsDialog(QDialog):
 
     def _prepare_obs(self) -> None:
         try:
-            camera_url(self.camera_ip_edit.text(), self.camera_user_edit.text(),
-                       self.camera_password_edit.text(), self.camera_port_spin.value())
+            camera_url(
+                self.camera_ip_edit.text(),
+                self.camera_user_edit.text(),
+                self.camera_password_edit.text(),
+                self.camera_port_spin.value(),
+            )
         except ValueError as exc:
             QMessageBox.warning(self, "Câmera IP", str(exc))
             return
         answer = QMessageBox.question(
-            self, "Preparar OBS",
+            self,
+            "Preparar OBS",
             "Padronizar Texto do Ano, Palco e Mídias e aplicar a câmera IP? "
             "Fontes existentes serão preservadas. A fonte de câmera terá áudio silenciado. "
             "Revise o resultado antes de usar numa reunião.",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
         )
         if answer == QMessageBox.Yes:
             self.prepare_obs_requested = True

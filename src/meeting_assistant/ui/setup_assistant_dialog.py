@@ -112,6 +112,7 @@ class SetupAssistantDialog(QDialog):
             )
         self._button(layout, "Obter JW Library — Microsoft Store", self._store)
         self._button(layout, "Configurar WebSocket local (OBS fechado)", self._websocket)
+        self._button(layout, "Instalar/atualizar câmera e ponte nativas (OBS fechado)", self._native)
         self._button(layout, "Abrir OBS", self._open_obs)
         self._button(layout, "Criar cenas padrão, preservando as existentes", self._scenes)
         self._button(layout, "Preparar câmera IP em Palco", self._camera)
@@ -220,7 +221,21 @@ class SetupAssistantDialog(QDialog):
         self.checks.setPlainText("\n".join([row.render() for row in self._check_rows] + manual))
 
     def _inspect(self):
+        # Probe what is currently displayed in the embedded editor. Previously
+        # this used only owner.settings, so a freshly typed host/port/password
+        # was ignored until the operator discovered the separate Save button.
         settings = replace(self.owner.settings)
+        self.editor.apply_to(settings)
+        if settings != self.owner.settings:
+            try:
+                service.validate_settings(settings)
+                self.owner._apply_assistant_settings(settings)
+            except ValueError as exc:
+                self.status.setText(str(exc))
+                return
+            except Exception:
+                self.status.setText("Falha ao aplicar os ajustes antes da verificação.")
+                return
         self._run(lambda: service.inspect_environment(settings))
 
     def _install(self, app):
@@ -239,6 +254,13 @@ class SetupAssistantDialog(QDialog):
         if self._authorized():
             settings = replace(self.owner.settings)
             self._run(lambda: service.configure_websocket(settings))
+
+    def _native(self):
+        if self._authorized():
+            from meeting_assistant.services.packaged_native import install_bundled
+
+            settings = replace(self.owner.settings)
+            self._run(lambda: install_bundled(settings))
 
     def _open_obs(self):
         if self._authorized():

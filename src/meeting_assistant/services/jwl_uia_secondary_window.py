@@ -228,8 +228,7 @@ class JwlUiaSecondaryWindowService(QObject):
         snapshot["selected_candidate"] = asdict(selected) if selected else None
         snapshot["discovery_backend"] = (
             "uia"
-            if selected
-            and any(int(row.get("handle", 0)) == selected.hwnd for row in uia_rows)
+            if selected and any(int(row.get("handle", 0)) == selected.hwnd for row in uia_rows)
             else "win32-fallback"
         )
         return snapshot
@@ -341,9 +340,7 @@ class JwlUiaSecondaryWindowService(QObject):
             self._last_uia_error = str(error) if error else None
 
         if not isinstance(candidate, JwlSecondaryWindowInfo):
-            candidate = self._win32_fallback.discover(
-                target if isinstance(target, DisplayInfo) else None
-            )
+            candidate = self._win32_fallback.discover(target if isinstance(target, DisplayInfo) else None)
 
         previous_hwnd = self._current.hwnd if self._current else 0
         self._current = candidate
@@ -363,8 +360,7 @@ class JwlUiaSecondaryWindowService(QObject):
             state = "minimizada" if candidate.minimized else "ativa"
             self._emit_status(
                 True,
-                "Saída JWL identificada • "
-                f"HWND {candidate.hwnd} • {candidate.size} • {state}",
+                f"Saída JWL identificada • HWND {candidate.hwnd} • {candidate.size} • {state}",
             )
 
         if current_hwnd != previous_hwnd:
@@ -590,11 +586,7 @@ class JwlUiaSecondaryWindowService(QObject):
                 or abs(refreshed_rect.height - target_rect.height) > 8
             )
             if wrong_monitor or wrong_geometry or not self._is_visible(item.hwnd):
-                flags = (
-                    win32con.SWP_NOACTIVATE
-                    | win32con.SWP_SHOWWINDOW
-                    | win32con.SWP_ASYNCWINDOWPOS
-                )
+                flags = win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW | win32con.SWP_ASYNCWINDOWPOS
                 win32gui.SetWindowPos(
                     item.hwnd,
                     win32con.HWND_TOPMOST,
@@ -746,4 +738,3 @@ class JwlUiaSecondaryWindowService(QObject):
             return
         self._last_status = current
         self.status_changed.emit(ok, message)
-

@@ -153,11 +153,7 @@ def score_secondary_candidate(
     frame_top_level = class_name == _FRAME_WINDOW_CLASS
 
     structural_identity = bool(
-        explicit_secondary
-        or title_hint
-        or process_hint
-        or has_jwl_core_window
-        or has_jwl_descendant_hint
+        explicit_secondary or title_hint or process_hint or has_jwl_core_window or has_jwl_descendant_hint
     )
     if not structural_identity:
         return -10_000
@@ -261,9 +257,7 @@ class JwlSecondaryWindowService(QObject):
     def refresh(self) -> None:
         target = self._display_provider()
         candidate = self.discover(target)
-        changed = (candidate.hwnd if candidate else 0) != (
-            self._current.hwnd if self._current else 0
-        )
+        changed = (candidate.hwnd if candidate else 0) != (self._current.hwnd if self._current else 0)
         self._current = candidate
 
         if candidate is None:
@@ -605,10 +599,7 @@ class JwlSecondaryWindowService(QObject):
         def callback(child: int, _: object) -> bool:
             nonlocal found
             try:
-                if (
-                    win32gui.GetClassName(child) == _TITLEBAR_CLASS
-                    and win32gui.IsWindowVisible(child)
-                ):
+                if win32gui.GetClassName(child) == _TITLEBAR_CLASS and win32gui.IsWindowVisible(child):
                     found = True
                     return False
             except (OSError, RuntimeError):
@@ -679,16 +670,9 @@ class JwlSecondaryWindowService(QObject):
 
             overlap = rect_overlap_ratio(item.rect, target)
             geometry_matches = overlap >= 0.90 and is_fullscreen_on_display(item.rect, target)
-            same_monitor_role = (
-                item.monitor_primary is not None
-                and item.monitor_primary == target.primary
-            )
+            same_monitor_role = item.monitor_primary is not None and item.monitor_primary == target.primary
             if not geometry_matches and not same_monitor_role:
-                flags = (
-                    win32con.SWP_NOACTIVATE
-                    | win32con.SWP_SHOWWINDOW
-                    | win32con.SWP_ASYNCWINDOWPOS
-                )
+                flags = win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW | win32con.SWP_ASYNCWINDOWPOS
                 win32gui.SetWindowPos(
                     item.hwnd,
                     win32con.HWND_TOPMOST,

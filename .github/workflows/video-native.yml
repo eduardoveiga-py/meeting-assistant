@@ -1,0 +1,78 @@
+name: Windows 11 video
+on:
+  push:
+    branches: [main, 'feature/**']
+    paths: ['native/**', 'scripts/*video*', 'scripts/prepare-camera-source.py', '.github/workflows/video-native.yml']
+  pull_request:
+    paths: ['native/**', 'scripts/*video*', 'scripts/prepare-camera-source.py', '.github/workflows/video-native.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-video-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: microsoft/setup-msbuild@v2
+      - uses: NuGet/setup-nuget@v2
+      - name: Build bridge and Windows 11 provider
+        shell: pwsh
+        run: ./scripts/build-video-native.ps1
+      - name: Create native-only package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path 'build/video-native/package/*' -DestinationPath 'build/MeetingAssistant-Windows11-native.zip'
+          $hash = (Get-FileHash 'build/MeetingAssistant-Windows11-native.zip' -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  MeetingAssistant-Windows11-native.zip" | Set-Content 'build/MeetingAssistant-Windows11-native-SHA256.txt' -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meeting-assistant-video-windows11-x64
+          path: build/video-native/package/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meeting-assistant-windows11-native
+          path: |
+            build/MeetingAssistant-Windows11-native.zip
+            build/MeetingAssistant-Windows11-native-SHA256.txt
+          if-no-files-found: error
+  publish:
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/meeting-launch-zoom-hall')
+    needs: build
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: meeting-assistant-windows11-native
+          path: build
+      - name: Publish native dependencies
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $tag = 'native-latest'
+          @"
+          Native Windows 11 dependencies for running Meeting Assistant from Python.
+          Source commit: $env:GITHUB_SHA
+          Includes OBS bridge, Media Foundation provider, camera host and diagnostics.
+          Does not include a frozen MeetingAssistant application.
+          "@ | Set-Content native-notes.md -Encoding utf8
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --target $env:GITHUB_SHA --prerelease --title 'Meeting Assistant - native Windows 11' --notes-file native-notes.md
+          } else {
+            gh release edit $tag --notes-file native-notes.md
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Native release metadata failed.' }
+          gh release upload $tag build/MeetingAssistant-Windows11-native.zip build/MeetingAssistant-Windows11-native-SHA256.txt --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Native package upload failed.' }

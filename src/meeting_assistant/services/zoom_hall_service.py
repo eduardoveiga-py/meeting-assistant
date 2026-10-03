@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover - Windows-only
     win32process = None
 
 
-_ZOOM_WINDOW_CLASS = "ConfMultiTabContentWndClass"
+_ZOOM_WINDOW_CLASS = "ZPContentViewWndClass"
 _ZOOM_CONTROL_PANEL_CLASS = "ZPControlPanelClass"
 
 
@@ -63,7 +63,10 @@ def has_descendant_class(hwnd: int, class_name: str, max_depth: int = 3) -> bool
 
 
 def hall_runtime_flags(
-    enabled: bool, zoom_active: bool, returning: bool, switching_to_zoom: bool = False,
+    enabled: bool,
+    zoom_active: bool,
+    returning: bool,
+    switching_to_zoom: bool = False,
 ) -> tuple[bool, bool]:
     protect_jwl = returning or not (zoom_active or switching_to_zoom)
     media_enabled = enabled and protect_jwl and not returning
@@ -91,6 +94,7 @@ class ZoomHallService(QObject):
         self._active = False
         self._zoom_hwnd = 0
         self._jwl_hwnd = 0
+        self._original_zoom_placement = None
         self._show_started = 0.0
         self._show_rect = None
         self._show_confirmed = False
@@ -111,7 +115,6 @@ class ZoomHallService(QObject):
     def returning(self) -> bool:
         return self._returning
 
-
     @property
     def active(self) -> bool:
         return self._active
@@ -126,7 +129,7 @@ class ZoomHallService(QObject):
             self.status_changed.emit(False, "Tela do Salão física não está disponível.")
             return False
 
-        zoom = self._find_secondary_zoom_window()
+        zoom = self._find_zoom_window()
         if zoom is None:
             self.status_changed.emit(
                 False,
@@ -149,9 +152,13 @@ class ZoomHallService(QObject):
         self._show_confirmed = False
         self._activation_attempted = False
         self._active = True
-        self.transition_diagnostic.emit({
-            "phase": "show_requested", "hwnd": zoom.hwnd, "jwl_hwnd": self._jwl_hwnd,
-        })
+        self.transition_diagnostic.emit(
+            {
+                "phase": "show_requested",
+                "hwnd": zoom.hwnd,
+                "jwl_hwnd": self._jwl_hwnd,
+            }
+        )
         self.status_changed.emit(True, "Preparando Zoom na Tela do Salão…")
         self._request_show()
         self._show_timer.start()
@@ -160,16 +167,30 @@ class ZoomHallService(QObject):
     def _request_show(self) -> None:
         rect = self._show_rect
         try:
+            if self._is_window(self._zoom_hwnd):
+                self._original_zoom_placement = win32gui.GetWindowPlacement(self._zoom_hwnd)
+
             if self._is_window(self._jwl_hwnd):
                 win32gui.SetWindowPos(
-                    self._jwl_hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
-                    win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE
-                    | win32con.SWP_NOSIZE | win32con.SWP_ASYNCWINDOWPOS,
+                    self._jwl_hwnd,
+                    win32con.HWND_NOTOPMOST,
+                    0,
+                    0,
+                    0,
+                    0,
+                    win32con.SWP_NOACTIVATE
+                    | win32con.SWP_NOMOVE
+                    | win32con.SWP_NOSIZE
+                    | win32con.SWP_ASYNCWINDOWPOS,
                 )
-            show_window_async(self._zoom_hwnd, win32con.SW_SHOWNOACTIVATE)
+            show_window_async(self._zoom_hwnd, win32con.SW_MAXIMIZE)
             win32gui.SetWindowPos(
-                self._zoom_hwnd, win32con.HWND_TOPMOST,
-                rect.left, rect.top, rect.width, rect.height,
+                self._zoom_hwnd,
+                win32con.HWND_TOPMOST,
+                rect.left,
+                rect.top,
+                rect.width,
+                rect.height,
                 win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW | win32con.SWP_ASYNCWINDOWPOS,
             )
         except (OSError, RuntimeError) as exc:
@@ -186,9 +207,13 @@ class ZoomHallService(QObject):
                 self._show_started = time.monotonic()
                 if not self._show_confirmed:
                     self._show_confirmed = True
-                    self.transition_diagnostic.emit({
-                        "phase": "show_confirmed", "elapsed_ms": elapsed, **snapshot,
-                    })
+                    self.transition_diagnostic.emit(
+                        {
+                            "phase": "show_confirmed",
+                            "elapsed_ms": elapsed,
+                            **snapshot,
+                        }
+                    )
                     message = "Zoom confirmado visível no Salão; Zoom remoto continua recebendo OBS."
                     self.active_changed.emit(True, message)
                     self.status_changed.emit(True, message)
@@ -203,9 +228,13 @@ class ZoomHallService(QObject):
                 # once; never repeatedly steal focus during an active Zoom part.
                 self._activation_attempted = True
                 accepted = activate_window(self._zoom_hwnd)
-                self.transition_diagnostic.emit({
-                    "phase": "show_activation", "accepted": accepted, **snapshot,
-                })
+                self.transition_diagnostic.emit(
+                    {
+                        "phase": "show_activation",
+                        "accepted": accepted,
+                        **snapshot,
+                    }
+                )
             self._request_show()
         except (OSError, RuntimeError) as exc:
             snapshot = {"ready": False, "error": type(exc).__name__}
@@ -254,30 +283,47 @@ class ZoomHallService(QObject):
                 return
             self._return_activation_attempted = True
             accepted = activate_window(self._jwl_hwnd)
-            self.transition_diagnostic.emit({
-                "phase": "return_activation", "hwnd": self._jwl_hwnd,
-                "accepted": accepted, **snapshot,
-            })
+            self.transition_diagnostic.emit(
+                {
+                    "phase": "return_activation",
+                    "hwnd": self._jwl_hwnd,
+                    "accepted": accepted,
+                    **snapshot,
+                }
+            )
         except (OSError, RuntimeError) as exc:
-            self.transition_diagnostic.emit({
-                "phase": "return_activation_error", "error": type(exc).__name__,
-            })
+            self.transition_diagnostic.emit(
+                {
+                    "phase": "return_activation_error",
+                    "error": type(exc).__name__,
+                }
+            )
 
     def _request_return(self) -> None:
         rect = self._return_rect
         try:
-            if self._is_window(self._zoom_hwnd):
-                # Keep Zoom alive and discoverable underneath JWL. SW_HIDE
-                # outlives this app's HWND cache and strands it after a restart.
+            if self._is_window(self._zoom_hwnd) and self._original_zoom_placement:
+                win32gui.SetWindowPlacement(self._zoom_hwnd, self._original_zoom_placement)
                 win32gui.SetWindowPos(
-                    self._zoom_hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
-                    win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE
-                    | win32con.SWP_NOSIZE | win32con.SWP_ASYNCWINDOWPOS,
+                    self._zoom_hwnd,
+                    win32con.HWND_NOTOPMOST,
+                    0,
+                    0,
+                    0,
+                    0,
+                    win32con.SWP_NOACTIVATE
+                    | win32con.SWP_NOMOVE
+                    | win32con.SWP_NOSIZE
+                    | win32con.SWP_ASYNCWINDOWPOS,
                 )
             show_window_async(self._jwl_hwnd, win32con.SW_SHOWNOACTIVATE)
             win32gui.SetWindowPos(
-                self._jwl_hwnd, win32con.HWND_TOPMOST,
-                rect.left, rect.top, rect.width, rect.height,
+                self._jwl_hwnd,
+                win32con.HWND_TOPMOST,
+                rect.left,
+                rect.top,
+                rect.width,
+                rect.height,
                 win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW | win32con.SWP_ASYNCWINDOWPOS,
             )
         except (OSError, RuntimeError) as exc:
@@ -295,18 +341,26 @@ class ZoomHallService(QObject):
         minimized = bool(win32gui.IsIconic(hwnd))
         cloaked = JwlFastWindowGuard._cloak_state(hwnd)
         exposed = JwlFastWindowGuard._is_exposed_at_center(hwnd, rect)
-        geometry_ok = all(abs(a - b) <= 8 for a, b in zip(
-            (actual.left, actual.top, actual.width, actual.height),
-            (rect.left, rect.top, rect.width, rect.height), strict=True,
-        ))
+        geometry_ok = all(
+            abs(a - b) <= 8
+            for a, b in zip(
+                (actual.left, actual.top, actual.width, actual.height),
+                (rect.left, rect.top, rect.width, rect.height),
+                strict=True,
+            )
+        )
         cover = self._covering_window(rect)
         return {
             "rect": [actual.left, actual.top, actual.right, actual.bottom],
             "target_rect": [rect.left, rect.top, rect.right, rect.bottom],
             **cover,
             "ready": visible and not minimized and not cloaked and exposed and geometry_ok,
-            "valid": valid, "visible": visible, "minimized": minimized,
-            "cloaked": cloaked, "exposed": exposed, "geometry_ok": geometry_ok,
+            "valid": valid,
+            "visible": visible,
+            "minimized": minimized,
+            "cloaked": cloaked,
+            "exposed": exposed,
+            "geometry_ok": geometry_ok,
         }
 
     @staticmethod
@@ -316,7 +370,8 @@ class ZoomHallService(QObject):
             point = int(win32gui.WindowFromPoint(rect.center) or 0)
             root = int(win32gui.GetAncestor(point, win32con.GA_ROOT) or point)
             return {
-                "cover_hwnd": root, "cover_class": win32gui.GetClassName(root),
+                "cover_hwnd": root,
+                "cover_class": win32gui.GetClassName(root),
                 "foreground_hwnd": int(win32gui.GetForegroundWindow() or 0),
             }
         except (AttributeError, OSError, RuntimeError):
@@ -343,10 +398,14 @@ class ZoomHallService(QObject):
     def _finish_return(self, ok: bool, elapsed: int, snapshot: dict) -> None:
         self._return_timer.stop()
         self._returning = False
-        self.transition_diagnostic.emit({
-            "phase": "return_confirmed" if ok else "return_timeout",
-            "elapsed_ms": elapsed, "hwnd": self._jwl_hwnd, **snapshot,
-        })
+        self.transition_diagnostic.emit(
+            {
+                "phase": "return_confirmed" if ok else "return_timeout",
+                "elapsed_ms": elapsed,
+                "hwnd": self._jwl_hwnd,
+                **snapshot,
+            }
+        )
         if ok:
             self._active = False
         self.returning_changed.emit(False)
@@ -360,9 +419,16 @@ class ZoomHallService(QObject):
                 if self._is_window(self._zoom_hwnd):
                     show_window_async(self._zoom_hwnd, win32con.SW_SHOWNOACTIVATE)
                     win32gui.SetWindowPos(
-                        self._zoom_hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
-                        win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE
-                        | win32con.SWP_NOSIZE | win32con.SWP_ASYNCWINDOWPOS,
+                        self._zoom_hwnd,
+                        win32con.HWND_TOPMOST,
+                        0,
+                        0,
+                        0,
+                        0,
+                        win32con.SWP_NOACTIVATE
+                        | win32con.SWP_NOMOVE
+                        | win32con.SWP_NOSIZE
+                        | win32con.SWP_ASYNCWINDOWPOS,
                     )
             except (OSError, RuntimeError):
                 pass
@@ -377,7 +443,7 @@ class ZoomHallService(QObject):
     def toggle(self) -> bool:
         return self.restore_jwl() if self._active else self.show_on_hall()
 
-    def _find_secondary_zoom_window(self) -> ZoomHallWindow | None:
+    def _find_zoom_window(self) -> ZoomHallWindow | None:
         if win32gui is None or win32process is None:
             return None
 
@@ -399,12 +465,18 @@ class ZoomHallService(QObject):
                 rect = self._window_rect(hwnd)
                 controls = has_descendant_class(hwnd, _ZOOM_CONTROL_PANEL_CLASS)
                 # Do not log window titles: they can contain meeting/participant names.
-                inventory.append({
-                    "hwnd": int(hwnd), "pid": int(pid), "class_name": class_name,
-                    "visible": visible, "width": rect.width, "height": rect.height,
-                    "has_controls": controls,
-                })
-                if class_name != _ZOOM_WINDOW_CLASS or controls:
+                inventory.append(
+                    {
+                        "hwnd": int(hwnd),
+                        "pid": int(pid),
+                        "class_name": class_name,
+                        "visible": visible,
+                        "width": rect.width,
+                        "height": rect.height,
+                        "has_controls": controls,
+                    }
+                )
+                if class_name not in (_ZOOM_WINDOW_CLASS, "ZPPTopWndClass") or controls:
                     return True
                 # A previous app instance may have hidden this window. Its
                 # process/class/controls identify it even without our HWND cache.
@@ -423,11 +495,13 @@ class ZoomHallService(QObject):
 
         # Ambiguous candidates must never be resolved by moving the largest window.
         selected = candidates[0] if len(candidates) == 1 else None
-        self.discovery_changed.emit({
-            "windows": inventory,
-            "result": "selected" if selected else "ambiguous" if candidates else "not_found",
-            "selected_hwnd": selected.hwnd if selected else 0,
-        })
+        self.discovery_changed.emit(
+            {
+                "windows": inventory,
+                "result": "selected" if selected else "ambiguous" if candidates else "not_found",
+                "selected_hwnd": selected.hwnd if selected else 0,
+            }
+        )
         return selected
 
     def _native_target_rect(self, target: DisplayInfo) -> WindowRect:
@@ -467,4 +541,3 @@ class ZoomHallService(QObject):
             return bool(win32gui.IsWindow(hwnd))
         except (OSError, RuntimeError):
             return False
-

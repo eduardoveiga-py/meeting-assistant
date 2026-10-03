@@ -90,9 +90,7 @@ def pixel_difference(reference: bytes, current: bytes) -> float:
     if not reference or len(reference) != len(current):
         raise ValueError("frames devem ter o mesmo tamanho e não podem estar vazios")
     changed = sum(
-        1
-        for before, after in zip(reference, current, strict=True)
-        if abs(before - after) > PIXEL_THRESHOLD
+        1 for before, after in zip(reference, current, strict=True) if abs(before - after) > PIXEL_THRESHOLD
     )
     return (changed / len(reference)) * 100.0
 
@@ -106,8 +104,7 @@ def dark_pixel_ratio(frame: bytes, *, threshold: int = 48) -> float:
 
 def idle_reference_difference(reference: JwlIdleReference, frame: bytes) -> float:
     return min(
-        pixel_difference(variant, frame)
-        for variant in (reference.pixels, *reference.alternate_pixels)
+        pixel_difference(variant, frame) for variant in (reference.pixels, *reference.alternate_pixels)
     )
 
 
@@ -152,12 +149,7 @@ def should_restore_scene(
     current_scene: str | None,
     media_scene: str,
 ) -> bool:
-    return bool(
-        auto_switched
-        and not manual_override
-        and return_scene
-        and current_scene == media_scene
-    )
+    return bool(auto_switched and not manual_override and return_scene and current_scene == media_scene)
 
 
 def capture_region_for_secondary(window: JwlSecondaryWindowInfo) -> CaptureRegion:
@@ -227,9 +219,7 @@ class MediaAutomationService(QObject):
         # The capture worker owns its cached reference and all reference I/O.
         # Keep the last good file until a replacement has actually been saved.
         self._recalibrate_event.set()
-        self._emit_status(
-            "Nova calibração solicitada; mantenha apenas o Texto do Ano visível."
-        )
+        self._emit_status("Nova calibração solicitada; mantenha apenas o Texto do Ano visível.")
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -285,22 +275,14 @@ class MediaAutomationService(QObject):
                 self._detector.reset()
 
             window = (
-                self._secondary_window_provider()
-                if self._secondary_window_provider is not None
-                else None
+                self._secondary_window_provider() if self._secondary_window_provider is not None else None
             )
             if window is not None and (window.minimized or not window.visible):
-                self._emit_status(
-                    "Saída JWL localizada; aguardando o guardião restaurá-la na Tela do Salão…"
-                )
+                self._emit_status("Saída JWL localizada; aguardando o guardião restaurá-la na Tela do Salão…")
                 self._stop_event.wait(0.25)
                 continue
 
-            region = (
-                self._capture_region_provider()
-                if self._capture_region_provider is not None
-                else None
-            )
+            region = self._capture_region_provider() if self._capture_region_provider is not None else None
             if region is None and window is not None:
                 region = capture_region_for_secondary(window)
             if region is None:
@@ -378,15 +360,11 @@ class MediaAutomationService(QObject):
 
                 if event == MediaSignalEvent.STARTED:
                     self.media_started.emit(config.media_scene)
-                    self._emit_status(
-                        "Mídia já estava ativa ao iniciar; recuperando a cena Mídias."
-                    )
+                    self._emit_status("Mídia já estava ativa ao iniciar; recuperando a cena Mídias.")
                     initial_route_pending = False
                 elif event == MediaSignalEvent.ENDED:
                     self.media_ended.emit(config.preferred_return_scene or "")
-                    self._emit_status(
-                        "Tela do Salão está em repouso; mantendo/recuperando Palco."
-                    )
+                    self._emit_status("Tela do Salão está em repouso; mantendo/recuperando Palco.")
                     initial_route_pending = False
                 self._stop_event.wait(self._sample_interval)
                 continue
@@ -418,11 +396,7 @@ class MediaAutomationService(QObject):
         stable_hits = 0
         deadline = time.monotonic() + 6.0
 
-        while (
-            time.monotonic() < deadline
-            and not self._stop_event.is_set()
-            and self._enabled_event.is_set()
-        ):
+        while time.monotonic() < deadline and not self._stop_event.is_set() and self._enabled_event.is_set():
             frame = sensor.capture(region)
             if frame is None:
                 self._stop_event.wait(0.18)
@@ -434,9 +408,7 @@ class MediaAutomationService(QObject):
             if dark_pixel_ratio(frame) < 65.0:
                 stable_hits = 0
                 previous = frame
-                self._emit_status(
-                    "Aguardando o Texto do Ano para criar a referência de repouso…"
-                )
+                self._emit_status("Aguardando o Texto do Ano para criar a referência de repouso…")
                 self._stop_event.wait(0.18)
                 continue
 
