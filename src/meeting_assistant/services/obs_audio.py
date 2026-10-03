@@ -150,7 +150,8 @@ def discover(client):
 def validate_selection(client, data):
     if data.get("routing_confirmed") is not True:
         raise ValueError(
-            "Confirme CABLE Input no OBS, microfone da Mesa no Zoom, CABLE Output no WhatsApp, e o retorno separado da mesa."
+            "Confirme CABLE Input no OBS, microfone da Mesa no Zoom, "
+            "CABLE Output no WhatsApp, e o retorno separado da mesa."
         )
     mic = data.get("microphone", "")
     if mic not in {x["itemValue"] for x in physical_choices(client)}:
@@ -212,9 +213,23 @@ def activate(client, data):
         try:
             filters = call(client, "GetSourceFilterList", sourceName=MIC)["filters"]
             if not any(f["filterName"] == "Gain (WhatsApp)" for f in filters):
-                call(client, "CreateSourceFilter", sourceName=MIC, filterName="Gain (WhatsApp)", filterKind="gain_filter", filterSettings={"db": 8.0})
+                call(
+                    client,
+                    "CreateSourceFilter",
+                    sourceName=MIC,
+                    filterName="Gain (WhatsApp)",
+                    filterKind="gain_filter",
+                    filterSettings={"db": 8.0},
+                )
             if not any(f["filterName"] == "Limiter (WhatsApp)" for f in filters):
-                call(client, "CreateSourceFilter", sourceName=MIC, filterName="Limiter (WhatsApp)", filterKind="limiter_filter", filterSettings={"threshold": -3.0, "release_time": 60})
+                call(
+                    client,
+                    "CreateSourceFilter",
+                    sourceName=MIC,
+                    filterName="Limiter (WhatsApp)",
+                    filterKind="limiter_filter",
+                    filterSettings={"threshold": -3.0, "release_time": 60},
+                )
         except Exception:
             pass
 

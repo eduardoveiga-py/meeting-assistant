@@ -65,7 +65,9 @@ def _prepare_obs(client, settings, renamed) -> None:
 
     monitor_captures = [i["inputName"] for i in inputs if i["inputKind"] == "monitor_capture"]
     if monitor_captures:
-        raise ValueError(f"Exclua capturas de tela antigas do OBS para evitar espelhamento: {', '.join(monitor_captures)}")
+        raise ValueError(
+            f"Exclua capturas de tela antigas do OBS para evitar espelhamento: {', '.join(monitor_captures)}"
+        )
 
     for old, new in migrations:
         client.send("SetSceneName", {"sceneName": old, "newSceneName": new}, raw=True)

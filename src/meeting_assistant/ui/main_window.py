@@ -1,27 +1,15 @@
 from __future__ import annotations
 
-
-def _is_local_host(host: str) -> bool:
-    if host.lower() in {"localhost", "127.0.0.1", "::1"}:
-        return True
-    import socket
-
-    try:
-        return socket.gethostbyname(host) == socket.gethostbyname(socket.gethostname())
-    except Exception:
-        return False
-
-
 import time
 from dataclasses import replace
 
 from PySide6.QtCore import (
-    Qt,
-    QTimer,
-    Signal,
     QEasingCurve,
     QPropertyAnimation,
     QSequentialAnimationGroup,
+    Qt,
+    QTimer,
+    Signal,
 )
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
@@ -54,6 +42,17 @@ from meeting_assistant.ui.hall_setup_dialog import HallSetupDialog
 from meeting_assistant.ui.program_preview import ProgramPreview
 from meeting_assistant.ui.settings_dialog import SettingsDialog
 from meeting_assistant.ui.window_geometry import ScreenFitController
+
+
+def _is_local_host(host: str) -> bool:
+    if host.lower() in {"localhost", "127.0.0.1", "::1"}:
+        return True
+    import socket
+
+    try:
+        return socket.gethostbyname(host) == socket.gethostbyname(socket.gethostname())
+    except Exception:
+        return False
 
 
 class MainWindow(QMainWindow):
@@ -510,10 +509,8 @@ class MainWindow(QMainWindow):
         elif key in modes:
             self._manual_select(modes[key])
 
-
     def _operator_tick(self):
         self.global_keys.set_enabled(self.settings.global_shortcuts)
-        visible = self.isVisible() and not self.isMinimized()
         if time.monotonic() - self._zoom_audio_seen > 5:
             self._zoom_audio_state = "unknown"
             self.zoom_mic_button.setText("🎙 Microfone Zoom · verificar")
