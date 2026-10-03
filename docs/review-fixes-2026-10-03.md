@@ -115,7 +115,7 @@ operador nem valida áudio/vídeo recebidos por um dispositivo remoto.
 A suíte local usa Python 3.12 e Qt offscreen, com serviços Win32/OBS simulados.
 Testes incluem contratos e falhas parciais; nenhuma chamada real é iniciada nos
 aplicativos do operador. O CI Windows executa a mesma suíte sem builds nativos.
-Na execução local deste lote, os 358 testes passaram; Ruff e a conferência de
+Na execução local deste lote, os 363 testes passaram; Ruff e a conferência de
 espaços do diff também passaram. O registro está em
 [review-fix-validation.json](review-fix-validation.json). Confira o resultado
 Windows em Actions para o commit de entrega. O teste físico do roteiro continua

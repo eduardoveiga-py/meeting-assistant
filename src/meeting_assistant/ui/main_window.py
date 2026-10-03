@@ -141,7 +141,8 @@ class MainWindow(QMainWindow):
             self._on_camera_state()
         else:
             self.camera_button.setEnabled(False)
-            self.camera_button.setText("📹 Câmera WhatsApp")
+            self.camera_button.setText("📹 Câmera")
+            self.camera_button.setAccessibleName("Câmera virtual WhatsApp indisponível")
             self.camera_button.setToolTip(
                 "A câmera virtual nativa do Windows 11 não está disponível nesta execução."
             )
@@ -203,8 +204,13 @@ class MainWindow(QMainWindow):
         title_box.setSpacing(0)
         title = QLabel("Meeting Assistant")
         title.setObjectName("Title")
+        title.setMinimumWidth(0)
+        title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         subtitle = QLabel("Operação local • OBS • Zoom • JW Library")
         subtitle.setObjectName("Subtitle")
+        subtitle.setWordWrap(True)
+        subtitle.setMinimumWidth(0)
+        subtitle.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.yeartext_notice = subtitle
         subtitle.linkActivated.connect(lambda _: self._open_hall_setup(self))
         title_box.addWidget(title)
@@ -316,7 +322,7 @@ class MainWindow(QMainWindow):
         self.ext_media_button.toggled.connect(self._toggle_ext_media)
         system_grid.addWidget(self.ext_media_button, 1, 0)
 
-        self.camera_button = QPushButton("📷 Câmera WhatsApp")
+        self.camera_button = QPushButton("📷 Câmera")
         self.camera_button.setToolTip(
             "Inicia ou para a câmera virtual nativa que transmite o Program do OBS ao WhatsApp."
         )
@@ -330,6 +336,21 @@ class MainWindow(QMainWindow):
         self.zoom_mic_button.setToolTip("Controla seu microfone no Zoom; não silencia participantes.")
         self.zoom_mic_button.clicked.connect(self._zoom_microphone)
         system_grid.addWidget(self.zoom_mic_button, 1, 2)
+
+        # Native Windows font/emoji metrics must not make one cell widen the
+        # entire three-column grid. Compact labels keep the full action visible.
+        for column in range(3):
+            system_grid.setColumnStretch(column, 1)
+        for button in (
+            self.start_meeting_button,
+            self.end_meeting_button,
+            settings_button,
+            self.ext_media_button,
+            self.camera_button,
+            self.zoom_mic_button,
+        ):
+            button.setMinimumWidth(0)
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
 
         controls.addLayout(system_grid)
 
@@ -1080,14 +1101,15 @@ class MainWindow(QMainWindow):
         running = state == "running"
         busy = state in {"starting", "stopping"}
         if running:
-            text = "⏹️ Parar câmera WhatsApp"
+            text = "⏹️ Parar câmera"
         elif state == "error":
-            text = "📹 Tentar câmera WhatsApp"
+            text = "📹 Tentar câmera"
         else:
-            text = "📹 Iniciar câmera WhatsApp"
+            text = "📹 Iniciar câmera"
         self.camera_button.setText(text)
         self.camera_button.setEnabled(bool(self.camera_session.supported) and not busy)
-        self.camera_button.setToolTip(self.camera_session.message)
+        self.camera_button.setToolTip("Câmera virtual WhatsApp: " + self.camera_session.message)
+        self.camera_button.setAccessibleName("Câmera virtual WhatsApp: " + text)
 
     def _toggle_whatsapp_audio(self) -> None:
         if self.whatsapp_audio_guard is None:

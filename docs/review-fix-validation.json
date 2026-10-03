@@ -10,7 +10,7 @@
     "windows_and_obs": "simulated in unit tests"
   },
   "checks": {
-    "pytest": {"passed": 358, "failed": 0, "command": "python -m pytest -q -o faulthandler_timeout=30"},
+    "pytest": {"passed": 363, "failed": 0, "command": "python -m pytest -q -o faulthandler_timeout=30"},
     "ruff": {"status": "passed", "command": "python -m ruff check ."},
     "whitespace": {"status": "passed", "command": "git diff --check"}
   },

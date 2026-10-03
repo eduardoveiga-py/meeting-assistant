@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
 import pytest
-from PySide6.QtWidgets import QApplication, QScrollArea
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QScrollArea
 
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.meeting_shutdown import EndSummary
@@ -19,6 +19,15 @@ def make_window(tmp_path):
     return MainWindow(AppState(), AppSettings(), SettingsService(tmp_path / "settings.json"), *services)
 
 
+def layout_details(window):
+    return [
+        (widget.text(), widget.width(), widget.sizeHint().width(), widget.minimumSizeHint().width())
+        for kind in (QPushButton, QLabel)
+        for widget in window.findChildren(kind)
+        if widget.isVisible()
+    ]
+
+
 @pytest.mark.parametrize("state", ["live", "muted", "unknown"])
 def test_every_microphone_state_and_update_banner_fit_operator_width(tmp_path, state):
     window = make_window(tmp_path)
@@ -27,8 +36,23 @@ def test_every_microphone_state_and_update_banner_fit_operator_width(tmp_path, s
     window._zoom_audio_result(state, "Diagnostic")
     window._on_update_available("0.10.0", "", "Long release notes")
     QApplication.processEvents()
-    assert window.findChild(QScrollArea).horizontalScrollBar().maximum() == 0
+    assert window.findChild(QScrollArea).horizontalScrollBar().maximum() == 0, layout_details(window)
     assert window.width() == 520
+    window.close()
+
+
+@pytest.mark.parametrize("state", ["off", "starting", "running", "stopping", "error"])
+def test_camera_controls_fit_without_clipping_at_operator_width(tmp_path, state):
+    window = make_window(tmp_path)
+    window.camera_session = MagicMock(state=state, supported=True, message="Camera diagnostic")
+    window._on_camera_state()
+    window.resize(520, 780)
+    window.show()
+    QApplication.processEvents()
+    assert window.findChild(QScrollArea).horizontalScrollBar().maximum() == 0, layout_details(window)
+    for button in window.findChildren(QPushButton):
+        if button.isVisible():
+            assert button.sizeHint().width() <= button.width(), layout_details(window)
     window.close()
 
 

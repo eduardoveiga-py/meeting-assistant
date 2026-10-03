@@ -143,14 +143,16 @@ def test_main_window_camera_button_and_auto_start(app):
     window.show()
     app.processEvents()
     try:
-        assert "Iniciar câmera WhatsApp" in window.camera_button.text()
+        assert "Iniciar câmera" in window.camera_button.text()
+        assert "WhatsApp" in window.camera_button.accessibleName()
+        assert "WhatsApp" in window.camera_button.toolTip()
         assert window.mode_buttons[window.state.current_mode].text().startswith("📖 Texto do Ano")
         window._on_obs_connected(True, "OBS conectado")
         window._auto_start_camera()
         assert camera.start_calls == 1
-        assert "Parar câmera WhatsApp" in window.camera_button.text()
+        assert "Parar câmera" in window.camera_button.text()
         window.camera_button.click()
         assert camera.stop_calls == 1
-        assert "Iniciar câmera WhatsApp" in window.camera_button.text()
+        assert "Iniciar câmera" in window.camera_button.text()
     finally:
         window.close()
