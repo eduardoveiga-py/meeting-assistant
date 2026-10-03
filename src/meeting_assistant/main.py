@@ -213,6 +213,9 @@ def main() -> int:
         telemetry.status_message,
     )
     telemetry.sync_status_changed.connect(window.set_telemetry_status)
+    window.zoom_audio.diagnostic.connect(
+        lambda details: telemetry.event("zoom_microphone", **details)
+    )
 
     from meeting_assistant.services.external_media_service import ExternalMediaService
 

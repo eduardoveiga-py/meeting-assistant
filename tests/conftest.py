@@ -24,7 +24,7 @@ def collect_qt_objects_between_tests(qt_application):
 def isolate_operator_uia(monkeypatch):
     # UI unit tests never enumerate/control the runner's real Zoom UI. Direct
     # service regressions inject their own finder instead of this default.
-    def unavailable():
+    def unavailable(**_kwargs):
         raise ValueError("No Zoom controls in unit tests")
 
     monkeypatch.setattr("meeting_assistant.services.zoom_audio.find_control", unavailable)

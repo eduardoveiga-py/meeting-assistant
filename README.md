@@ -103,6 +103,9 @@ O código de `main` inclui as correções da revisão de 03/10/2026. Elas ainda 
 de ensaio físico em Windows 11; o instalador v0.8.1 já publicado não contém este lote.
 [Confira as alterações e o roteiro de testes](docs/review-fixes-2026-10-03.md).
 
+A correção do **Mic Zoom** consulta o estado atual antes de alternar e informa
+falhas do controle. [Roteiro de teste e diagnóstico](docs/zoom-microphone-control.md).
+
 Para continuar testando pelo Python, na pasta do projeto:
 
 ```powershell

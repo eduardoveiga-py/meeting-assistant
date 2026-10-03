@@ -7,3 +7,15 @@
 **Motivo:** reduz camadas, preserva o fluxo do operador e permite reaproveitar técnicas maduras de identificação/proteção de janela já usadas por ferramentas da comunidade.
 
 **Consequência:** `HallOutputWindow` própria deixa de ser o caminho principal. O detector visual usa somente a segunda janela identificada do JW Library e uma referência persistente do estado de repouso.
+
+## 2026-10-03 — microfone próprio do Zoom
+
+**Decisão:** o clique consulta e alterna o estado real no worker; o cache da UI serve
+apenas à apresentação. A identificação usa evidência de acessibilidade do controle
+próprio, incluindo UIA/legacy, sem depender de uma única classe de janela ou de
+comandos globais de teclado. Consultas periódicas não descartam cliques.
+
+**Evidência:** regressões reproduziram o clique sem ação com estado desconhecido ou
+antigo e a interpretação incorreta de comandos de vídeo/legendas. A correção inclui
+cliques da UI, fila limitada, confirmação, falhas e diagnóstico sem dados pessoais.
+Zoom real permanece pendente de ensaio. [Roteiro](zoom-microphone-control.md).

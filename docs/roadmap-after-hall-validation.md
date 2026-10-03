@@ -229,3 +229,11 @@ ser testados no futuro executável. O perfil opcional de áudio com participante
 Zoom no WhatsApp exige segundo cabo e Audio Monitor; não altera a rota comum
 já usada com um cabo. O teste físico é a próxima etapa, seguido de correções do
 retorno do operador, tutorial ilustrado atualizado e futura release/instalador.
+
+### Retorno do operador — Mic Zoom (03/10/2026)
+
+Correção candidata: clique baseado no estado atual, identificação UIA/legacy,
+preservação de clique durante consulta e confirmação/diagnóstico de falhas.
+Testes automatizados cobrem a interação do botão e os serviços; teste do Zoom
+real segue pendente. [Atualização e teste](zoom-microphone-control.md).
+Não requer segundo monitor, novos binários ou mudança no núcleo de telas.

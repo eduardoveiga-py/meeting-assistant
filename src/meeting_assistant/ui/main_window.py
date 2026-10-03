@@ -169,8 +169,11 @@ class MainWindow(QMainWindow):
 
         self.zoom_audio = ZoomAudio(self)
         self.zoom_audio.result.connect(self._zoom_audio_result)
+        self.zoom_audio.activity.connect(self._zoom_microphone_activity)
+        self.zoom_audio.command_finished.connect(self._zoom_microphone_finished)
         self._zoom_audio_state = "unknown"
         self._zoom_audio_seen = 0.0
+        self._zoom_audio_message = "Controla seu microfone no Zoom; não silencia participantes."
         self._operator_timer = QTimer(self)
         self._operator_timer.setInterval(3000)
         self._operator_timer.timeout.connect(self._operator_tick)
@@ -566,32 +569,54 @@ class MainWindow(QMainWindow):
 
     def _operator_tick(self):
         self.global_keys.set_enabled(self.settings.global_shortcuts)
+        if self.zoom_audio.command_pending:
+            return
         if time.monotonic() - self._zoom_audio_seen > 5:
             self._zoom_audio_state = "unknown"
-            self.zoom_mic_button.setText("🎙 Mic Zoom")
-            self.zoom_mic_button.setProperty("state", "unknown")
-            self._repolish(self.zoom_mic_button)
+            self._zoom_audio_message = (
+                "Estado expirado. Clique para consultar e alternar seu microfone no Zoom."
+            )
+            self._render_zoom_microphone()
         self.zoom_audio.request()
 
     def _zoom_microphone(self):
-        state = self._zoom_audio_state if time.monotonic() - self._zoom_audio_seen <= 5 else "unknown"
-        action = {"live": "mute", "muted": "unmute"}.get(state, "inspect")
-        self.zoom_mic_button.setText("🎙 Verificando…")
-        self.zoom_audio.request(action)
+        # Cached/unknown state is presentation only. The worker reads the
+        # current own microphone before deciding which action to invoke.
+        self.zoom_audio.request("toggle")
+
+    def _zoom_microphone_activity(self, _active):
+        # Ignore a late idle signal from an older worker if a new command began.
+        pending = self.zoom_audio.command_pending
+        self.zoom_mic_button.setEnabled(not pending)
+        if pending:
+            self.zoom_mic_button.setText("🎙 Verificando…")
+        else:
+            self._render_zoom_microphone()
+
+    def _zoom_microphone_finished(self, _state, message):
+        self.mode_label.setText(message)
 
     def _zoom_audio_result(self, state, message):
         if state in {"live", "muted"}:
             self._meeting_active = True
         self._zoom_audio_state = state
         self._zoom_audio_seen = time.monotonic()
+        self._zoom_audio_message = message
+        self._render_zoom_microphone()
+
+    def _render_zoom_microphone(self):
+        state = self._zoom_audio_state
         self.zoom_mic_button.setText(
             {
                 "live": "🎙 Silenciar Zoom",
                 "muted": "🔇 Ativar mic Zoom",
             }.get(state, "🎙 Mic Zoom ?")
+            if not self.zoom_audio.command_pending else "🎙 Verificando…"
         )
         self.zoom_mic_button.setProperty("state", state)
-        self.zoom_mic_button.setToolTip(message)
+        self.zoom_mic_button.setToolTip(self._zoom_audio_message)
+        self.zoom_mic_button.setAccessibleDescription(self._zoom_audio_message)
+        self.zoom_mic_button.setAccessibleName(self.zoom_mic_button.text())
         self._repolish(self.zoom_mic_button)
 
     def _operator_result(self, action, ok, result):
