@@ -204,6 +204,7 @@ class MainWindow(QMainWindow):
         title_box.setSpacing(0)
         title = QLabel("Meeting Assistant")
         title.setObjectName("Title")
+        title.setWordWrap(True)
         title.setMinimumWidth(0)
         title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         subtitle = QLabel("Operação local • OBS • Zoom • JW Library")
@@ -215,13 +216,15 @@ class MainWindow(QMainWindow):
         subtitle.linkActivated.connect(lambda _: self._open_hall_setup(self))
         title_box.addWidget(title)
         title_box.addWidget(subtitle)
-        header.addLayout(title_box)
-        header.addStretch()
+        # The title column owns the remaining width. A separate stretch here
+        # would consume it because the labels deliberately have no width floor.
+        header.addLayout(title_box, 1)
 
         self.automation_badge = QLabel("AUTOMAÇÃO PAUSADA")
         self.automation_badge.setObjectName("AutomationBadge")
         self.automation_badge.setAlignment(Qt.AlignCenter)
-        header.addWidget(self.automation_badge)
+        self.automation_badge.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        header.addWidget(self.automation_badge, alignment=Qt.AlignVCenter)
         root.addLayout(header)
 
         status_grid = QGridLayout()

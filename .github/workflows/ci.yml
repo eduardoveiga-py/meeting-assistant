@@ -13,6 +13,7 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
       MEETING_ASSISTANT_TESTING: "1"
+      MEETING_ASSISTANT_LAYOUT_CAPTURE_DIRECTORY: ${{ runner.temp }}/operator-layout
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,3 +47,12 @@ jobs:
       - name: Pytest
         timeout-minutes: 8
         run: python -m pytest -vv --durations=15 -o faulthandler_timeout=60
+
+      - name: Save operator layout renders
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-layout
+          path: ${{ runner.temp }}/operator-layout/*.png
+          if-no-files-found: warn
+          retention-days: 7

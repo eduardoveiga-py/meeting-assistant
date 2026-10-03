@@ -56,6 +56,37 @@ def test_camera_controls_fit_without_clipping_at_operator_width(tmp_path, state)
     window.close()
 
 
+@pytest.mark.parametrize("height", [600, 640, 780])
+@pytest.mark.parametrize("enabled", [False, True])
+def test_header_text_is_exposed_and_preview_retains_useful_height(tmp_path, height, enabled):
+    window = make_window(tmp_path)
+    window.resize(520, height)
+    window._set_automation_ui(enabled)
+    window.show()
+    QApplication.processEvents()
+    try:
+        title = window.findChild(QLabel, "Title")
+        subtitle = window.findChild(QLabel, "Subtitle")
+        badge = window.automation_badge
+        scroll = window.centralWidget()
+        for label in (title, subtitle, badge):
+            assert label.isVisible() and label.width() > 0, layout_details(window)
+            assert scroll.viewport().rect().contains(
+                label.mapTo(scroll.viewport(), label.rect().topLeft())
+            )
+            assert scroll.viewport().rect().contains(
+                label.mapTo(scroll.viewport(), label.rect().bottomRight())
+            )
+        for label in (title, subtitle):
+            assert label.height() >= label.heightForWidth(label.width()), layout_details(window)
+        assert badge.height() == badge.sizeHint().height(), layout_details(window)
+        assert window.preview.height() >= 100, layout_details(window)
+        assert scroll.horizontalScrollBar().maximum() == 0
+        assert scroll.verticalScrollBar().maximum() == 0
+    finally:
+        window.close()
+
+
 def test_launch_summary_does_not_run_legacy_native_layout_on_gui(tmp_path, monkeypatch):
     import sys
 
