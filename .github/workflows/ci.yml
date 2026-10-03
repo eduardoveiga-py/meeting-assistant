@@ -24,6 +24,8 @@ jobs:
             if ($parseErrors.Count -gt 0) { throw ($parseErrors | Out-String) }
           }
 
+      - uses: microsoft/setup-msbuild@v2
+      - uses: NuGet/setup-nuget@v2
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -45,6 +47,10 @@ jobs:
 
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
+
+      - name: Build and verify native camera and OBS bridge
+        shell: pwsh
+        run: ./scripts/build-video-native.ps1
 
       - name: Build and smoke-test packaged app
         shell: pwsh
