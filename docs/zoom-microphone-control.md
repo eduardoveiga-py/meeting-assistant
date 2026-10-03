@@ -11,6 +11,11 @@ depende de testar o Zoom instalado no PC do operador.
 - Uma consulta em andamento descartava silenciosamente o clique do operador.
 - A busca exigia uma única classe antiga de janela e somente o texto do botão.
   As expressões amplas podiam interpretar `Ativar vídeo` como controle de áudio.
+- O novo teste físico exibiu **“Zoom não informa a identidade do controle.
+  Nenhuma ação enviada.”**. A primeira correção exigia RuntimeId não vazio e
+  representado como lista/tupla; os testes usavam somente um identificador válido.
+  Isso bloqueava um microfone já reconhecido pela acessibilidade. O tipo/valor
+  retornado pelo Zoom real não foi coletado; a imagem comprova esse bloqueio.
 
 ## Comportamento atual
 
@@ -25,6 +30,14 @@ nome pessoal/atalho de áudio ou barra da reunião, excluindo linhas de particip
 e ações coletivas. Lê Name, HelpText, ItemStatus e propriedades LegacyIAccessible,
 incluindo DefaultAction. O rótulo `Áudio` isolado não comprova aberto/mudo.
 
+A identidade usada para confirmar a ação combina processo e seu instante de
+início, HWND/classe da janela da reunião e o papel de microfone próprio. A busca
+precisa encontrar um único controle com estado consistente. RuntimeId é opcional:
+arrays de inteiros são aceitos para remover duplicatas da enumeração, mas sua
+ausência/falha não impede a ação. Sem RuntimeId, dois candidatos continuam
+ambíguos. A reconstrução do botão na mesma reunião pode confirmar o novo estado;
+outra janela ou outra instância do processo não pode fazê-lo.
+
 `zoom_audio.py` serializa consultas/comandos, inicializa COM MTA no worker,
 verifica/cancela operações e informa falhas. Usa Invoke quando disponível ou a
 ação LegacyIAccessible quando esse padrão estiver ausente **antes do envio**.
@@ -37,6 +50,7 @@ Essa condição foi reproduzida e coberta por uma regressão de encerramento.
 Referências da implementação:
 [threading UI Automation](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-threading),
 [LegacyIAccessible](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-implementinglegacyiaccessible),
+[GetRuntimeId](https://learn.microsoft.com/en-us/windows/win32/api/uiautomationclient/nf-uiautomationclient-iuiautomationelement-getruntimeid),
 [pywinauto 0.6.9](https://pypi.org/project/pywinauto/0.6.9/).
 
 ## Atualização e teste no Windows 11
@@ -68,12 +82,21 @@ Com a telemetria já habilitada, `zoom_microphone` registra ação, estado obser
 alvo, tentativa/retorno do envio, confirmação, classes de janela, contagens e código
 de erro. Consultas iguais não geram eventos repetidos. Não registra títulos de
 reunião, nomes de participantes, rótulos brutos, credenciais ou atalhos digitados.
+Também registra o método de identidade e contagens de RuntimeId disponível,
+indisponível ou com erro; não registra seus valores nem o HWND/PID.
 
 Se não funcionar, informe o horário do clique e a mensagem completa. Códigos como
-`state_unavailable`, `control_not_found`, `ambiguous_control` e `not_confirmed`
+`state_unavailable`, `control_not_found`, `ambiguous_control`, `control_changed` e `not_confirmed`
 distinguem falta de informação acessível de uma ação sem confirmação.
 
 Os testes incluem cliques Qt reais com worker do serviço, estado desconhecido/
 desatualizado, consulta ocupada, acessibilidade UIA/legacy simulada, participantes,
 falhas parciais, cancelamento, COM e diagnóstico. Eles não substituem o ensaio do
 Zoom real; fontes OBS, áudio, vídeo nativo e troca JWL/Zoom não foram alterados.
+Uma nova regressão percorre clique Qt → worker/COM → descoberta Desktop/UIA →
+Invoke → confirmação sem RuntimeId. Também cobre arrays, falha dessa propriedade,
+reconstrução do controle, candidatos ambíguos e outra instância/janela do Zoom.
+
+No momento da correção, o último diagnóstico sincronizado no repositório do
+operador era de 02/10/2026. Não há telemetria disponível desse novo ensaio físico;
+a investigação usa a mensagem da imagem e as regressões descritas acima.

@@ -237,3 +237,9 @@ preservação de clique durante consulta e confirmação/diagnóstico de falhas.
 Testes automatizados cobrem a interação do botão e os serviços; teste do Zoom
 real segue pendente. [Atualização e teste](zoom-microphone-control.md).
 Não requer segundo monitor, novos binários ou mudança no núcleo de telas.
+
+O ensaio seguinte falhou em `identity_unavailable`, mostrado na imagem do operador.
+Nova correção candidata remove a exigência de RuntimeId sem perder o vínculo com
+janela/processo e microfone próprio. Regressão do clique atravessa o backend Windows
+simulado, incluindo COM/descoberta UIA e confirmação; ambiguidade e troca de reunião
+continuam recusadas. Validar abrir/silenciar no Zoom instalado após atualizar o Python.

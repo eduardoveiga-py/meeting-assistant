@@ -19,3 +19,11 @@ comandos globais de teclado. Consultas periódicas não descartam cliques.
 antigo e a interpretação incorreta de comandos de vídeo/legendas. A correção inclui
 cliques da UI, fila limitada, confirmação, falhas e diagnóstico sem dados pessoais.
 Zoom real permanece pendente de ensaio. [Roteiro](zoom-microphone-control.md).
+
+**Ajuste após retorno físico:** a imagem do novo teste identificou o bloqueio
+`identity_unavailable`. RuntimeId deixa de ser requisito para o clique: identidade
+lógica vincula o microfone próprio a uma única janela/instância do Zoom, com estado
+acessível consistente. RuntimeId disponível serve somente à deduplicação; candidatos
+sem ele não são fundidos. Regressões reproduziram o bloqueio e cobrem o fluxo Qt/COM/
+UIA, reconstrução do botão, ambiguidade e troca de janela/processo. Novo teste do
+Zoom real permanece pendente; não há telemetria sincronizada desse ensaio.

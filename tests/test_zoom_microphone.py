@@ -1,6 +1,8 @@
 import sys
 import threading
 import time
+from array import array
+from ctypes import c_int
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 
@@ -292,6 +294,181 @@ def test_real_uia_adapter_dispatches_once_and_observes_afterwards(monkeypatch):
     button.iface_invoke.Invoke.assert_called_once()
 
 
+@pytest.mark.parametrize("runtime_id", [0, None, (), array("i", [42, 7]), (c_int * 2)(42, 7)])
+def test_uia_microphone_does_not_require_a_python_list_runtime_id(monkeypatch, runtime_id):
+    install_pattern_exception(monkeypatch)
+    button = Button("Áudio", help_text="Unmute my audio (Alt+A)")
+    button.element_info.runtime_id = runtime_id
+    window = Window([button])
+    button.iface_invoke.Invoke.side_effect = lambda: setattr(
+        button.element_info.element, "CurrentHelpText", "Mute my audio (Alt+A)"
+    )
+    details = {}
+    assert perform("toggle", lambda: find_control(
+        windows=[window], pids={7}, diagnostic=details
+    )) == "live"
+    button.iface_invoke.Invoke.assert_called_once()
+    assert details["identity_method"] == "meeting_window_self_microphone"
+
+
+def test_unavailable_runtime_id_property_is_optional_and_diagnosed(monkeypatch):
+    install_pattern_exception(monkeypatch)
+    button = Button("Unmute my audio (Alt+A)")
+
+    class ProviderInfo:
+        element = button.element_info.element
+
+        @property
+        def runtime_id(self):
+            raise RuntimeError("private provider error")
+
+    button.element_info = ProviderInfo()
+    window = Window([button])
+    details = {}
+    button.iface_invoke.Invoke.side_effect = lambda: setattr(button, "_name", "Mute my audio (Alt+A)")
+    assert perform("toggle", lambda: find_control(
+        windows=[window], pids={7}, diagnostic=details
+    )) == "live"
+    assert details["runtime_id_errors"] == 1
+    assert details["runtime_ids_unavailable"] == 1
+    assert "private" not in str(details)
+
+
+def test_two_controls_without_runtime_ids_remain_ambiguous():
+    buttons = [Button("Unmute my audio (Alt+A)") for _ in range(2)]
+    for button in buttons:
+        button.element_info.runtime_id = 0
+    with pytest.raises(MicrophoneError) as caught:
+        find_control(windows=[Window(buttons)], pids={7})
+    assert caught.value.code == "ambiguous_control"
+    for button in buttons:
+        button.iface_invoke.Invoke.assert_not_called()
+
+
+def test_same_uia_element_in_repeated_enumeration_is_deduplicated():
+    button = Button("Unmute my audio (Alt+A)")
+    window = Window([button, button])
+    selected, state = find_control(windows=[window], pids={7})
+    assert selected.button is button and state == "muted"
+
+
+def test_rebuilt_own_microphone_is_confirmed_in_the_same_meeting(monkeypatch):
+    install_pattern_exception(monkeypatch)
+    before = Button("Unmute my audio (Alt+A)")
+    before.element_info.runtime_id = 0
+    after = Button("Mute my audio (Alt+A)")
+    window = Window([before])
+    before.iface_invoke.Invoke.side_effect = lambda: setattr(window, "buttons", [after])
+    assert perform("toggle", lambda: find_control(windows=[window], pids={7})) == "live"
+    before.iface_invoke.Invoke.assert_called_once()
+    after.iface_invoke.Invoke.assert_not_called()
+
+
+def test_reused_pid_and_window_handle_cannot_confirm_another_zoom_process(monkeypatch):
+    install_pattern_exception(monkeypatch)
+    button = Button("Unmute my audio (Alt+A)")
+    window = Window([button])
+    process_birth = [12.0]
+
+    def invoke():
+        process_birth[0] = 13.0
+        button._name = "Mute my audio (Alt+A)"
+
+    button.iface_invoke.Invoke.side_effect = invoke
+    with pytest.raises(MicrophoneError) as caught:
+        perform("toggle", lambda: find_control(windows=[window], pids={7: process_birth[0]}))
+    assert caught.value.code == "control_changed"
+    button.iface_invoke.Invoke.assert_called_once()
+
+
+def test_process_instance_is_read_from_psutil_for_the_default_discovery(monkeypatch):
+    import psutil
+
+    process = SimpleNamespace(pid=7, info={"name": "Zoom.exe"})
+    monkeypatch.setattr(psutil, "process_iter", lambda fields: iter([process]))
+    birth = Mock(return_value=12.0)
+    monkeypatch.setattr(psutil, "Process", lambda pid: SimpleNamespace(create_time=birth))
+    button = Button("Unmute my audio (Alt+A)")
+    window = Window([button])
+    first, _ = find_control(windows=[window])
+    birth.return_value = 13.0
+    replacement, _ = find_control(windows=[window])
+    assert first.identity != replacement.identity
+    assert birth.call_count == 2
+
+
+def test_actual_ui_click_without_runtime_id_opens_and_mutes_own_audio(tmp_path, monkeypatch):
+    import psutil
+
+    install_pattern_exception(monkeypatch)
+    services = [MagicMock() for _ in range(6)]
+    services[1].snapshot.return_value = services[2].snapshot.return_value = []
+    services[4].busy = services[5].active = services[5].returning = False
+    app = MainWindow(AppState(), AppSettings(), SettingsService(tmp_path / "settings.json"), *services)
+    app._operator_timer.stop()
+    app.resize(520, 780)
+    app.show()
+    own = Button("Áudio", help_text="Unmute my audio (Alt+A)")
+    own.element_info.runtime_id = 0
+    participant = Button("Mute", parent=Node("ListItem", "participant", Node()))
+    meeting = Window([own, participant])
+
+    def invoke():
+        current = own.element_info.element.CurrentHelpText
+        own.element_info.element.CurrentHelpText = (
+            "Mute my audio (Alt+A)" if current.startswith("Unmute") else "Unmute my audio (Alt+A)"
+        )
+
+    own.iface_invoke.Invoke.side_effect = invoke
+    # Exercise the service's default Windows finder, including COM and Desktop,
+    # rather than bypassing discovery with a preselected microphone wrapper.
+    com = SimpleNamespace(CoInitializeEx=Mock(), COINIT_MULTITHREADED=0, CoUninitialize=Mock())
+    monkeypatch.setitem(sys.modules, "pythoncom", com)
+    desktop = Mock(return_value=SimpleNamespace(windows=lambda: [meeting]))
+    monkeypatch.setitem(sys.modules, "pywinauto", SimpleNamespace(Desktop=desktop))
+    monkeypatch.setattr("meeting_assistant.services.zoom_audio.find_control", find_control)
+    monkeypatch.setattr(psutil, "process_iter", lambda fields: iter([
+        SimpleNamespace(pid=7, info={"name": "Zoom.exe"})
+    ]))
+    monkeypatch.setattr(psutil, "Process", lambda pid: SimpleNamespace(create_time=lambda: 12.0))
+    app.zoom_audio._platform = "win32"
+    reports = []
+    app.zoom_audio.diagnostic.connect(reports.append)
+    try:
+        for expected, caption in (("live", "Silenciar"), ("muted", "Ativar mic")):
+            QTest.mouseClick(app.zoom_mic_button, Qt.MouseButton.LeftButton)
+            wait_until(lambda: not app.zoom_audio.busy)
+            assert app.zoom_mic_button.property("state") == expected
+            assert caption in app.zoom_mic_button.text()
+            assert app.zoom_mic_button.isEnabled()
+        assert own.iface_invoke.Invoke.call_count == 2
+        participant.iface_invoke.Invoke.assert_not_called()
+        assert "identidade" not in app.mode_label.text()
+        assert com.CoInitializeEx.call_count == com.CoUninitialize.call_count == 2
+        desktop.assert_called_with(backend="uia")
+        assert all(report["code"] == "confirmed" for report in reports)
+        assert all(report["runtime_ids_unavailable"] == 1 for report in reports)
+    finally:
+        app.close()
+        QApplication.processEvents()
+
+
+def test_missing_runtime_id_never_allows_another_meeting_to_confirm(monkeypatch):
+    install_pattern_exception(monkeypatch)
+    own = Button("Unmute my audio (Alt+A)")
+    own.element_info.runtime_id = 0
+    other = Button("Mute my audio (Alt+A)")
+    other.element_info.runtime_id = 0
+    first_window, other_window = Window([own]), Window([other])
+    observed_window = [first_window]
+    own.iface_invoke.Invoke.side_effect = lambda: observed_window.__setitem__(0, other_window)
+    with pytest.raises(MicrophoneError) as caught:
+        perform("toggle", lambda: find_control(windows=observed_window, pids={7}))
+    assert caught.value.code == "control_changed"
+    own.iface_invoke.Invoke.assert_called_once()
+    other.iface_invoke.Invoke.assert_not_called()
+
+
 def test_no_action_is_dispatched_if_the_fresh_state_is_unknown():
     button = Mock()
     with pytest.raises(MicrophoneError) as caught:
@@ -438,11 +615,13 @@ def test_backend_failure_exposes_reason_but_never_private_exception_text():
     service.stop()
 
 
-def test_missing_runtime_identity_is_refused_before_any_command():
+def test_missing_meeting_window_identity_is_refused_before_any_command():
     button = Button("Unmute my audio (Alt+A)")
     button.element_info.runtime_id = 0
+    window = Window([button])
+    window.handle = 0
     with pytest.raises(MicrophoneError) as caught:
-        find_control(windows=[Window([button])], pids={7})
+        find_control(windows=[window], pids={7})
     assert caught.value.code == "identity_unavailable"
     button.iface_invoke.Invoke.assert_not_called()
 
