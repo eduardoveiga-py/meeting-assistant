@@ -52,11 +52,13 @@ window = MainWindow(
     AppState(), AppSettings(), SettingsService(root / "settings.json"), *services, app_icon=icon
 )
 work_area = QRect(0, 0, round(1920 / scale), round(1040 / scale))
+# Isolate the synthetic Full HD desktop before native show() can process real
+# runner screen events. Screen fitting itself has separate event tests.
+window.removeEventFilter(window._screen_fit)
+window._screen_fit._timer.stop()
+window._screen_fit._timer.timeout.disconnect()
 window.resize(520, min(780, work_area.height() - 40))
 window.show()
-# The test represents a Full HD desktop; the offscreen backend's default screen
-# size differs by host. Fit to that explicit work area in logical coordinates.
-window._screen_fit._timer.stop()
 fit_window(window, work_area)
 app.processEvents()
 title = window.findChild(QLabel, "Title")
@@ -65,6 +67,9 @@ badge = window.automation_badge
 scroll = window.centralWidget()
 result = {
     "scale": window.devicePixelRatioF(),
+    "window_height": window.height(),
+    "viewport_height": scroll.viewport().height(),
+    "work_area_height": work_area.height(),
     "title_width": title.width(),
     "subtitle_width": subtitle.width(),
     "badge_height": badge.height(),
