@@ -59,6 +59,10 @@ window._screen_fit._timer.stop()
 window._screen_fit._timer.timeout.disconnect()
 window.resize(520, min(780, work_area.height() - 40))
 window.show()
+# Native window creation can clamp the initial size to the runner's smaller
+# desktop. Once it exists, apply the explicit test size and work area again.
+app.processEvents()
+window.resize(520, min(780, work_area.height() - 40))
 fit_window(window, work_area)
 app.processEvents()
 title = window.findChild(QLabel, "Title")
@@ -79,6 +83,12 @@ result = {
     "vertical_scroll": scroll.verticalScrollBar().maximum(),
 }
 try:
+    rendered = window.grab()
+    assert not rendered.isNull(), result
+    result["rendered_width"] = rendered.width()
+    result["logical_width"] = window.width()
+    if len(sys.argv) > 3:
+        assert rendered.save(sys.argv[3]), "Could not save layout image"
     assert QFontMetrics(title.font()).inFontUcs4(ord("M")), "Header font has no Latin glyphs"
     assert work_area.contains(window.frameGeometry()), result
     for label in (title, subtitle, badge):
@@ -100,12 +110,6 @@ try:
             assert scroll.viewport().rect().contains(
                 button.mapTo(scroll.viewport(), button.rect().bottomRight())
             ), (button.text(), result)
-    rendered = window.grab()
-    assert not rendered.isNull(), result
-    result["rendered_width"] = rendered.width()
-    result["logical_width"] = window.width()
-    if len(sys.argv) > 3:
-        assert rendered.save(sys.argv[3]), "Could not save layout image"
     print(json.dumps(result))
 finally:
     window.close()
