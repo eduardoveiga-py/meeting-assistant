@@ -13,11 +13,13 @@ def microphone_state(label):
     value = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode().lower().strip()
     if re.search(r"\b(all|todos|todas|participants?|participantes?)\b", value):
         return None
-    if re.match(r"^(unmute|ativar (o )?(audio|som)|reativar (o )?(audio|som))($|[\s(])", value):
+    
+    if re.search(r"\b(unmute|ativar|reativar|desativado|silenciado)\b", value):
         return "muted"
-    if re.match(r"^(mute|desativar (o )?(audio|som)|silenciar (meu )?(audio|microfone))($|[\s(])", value):
-        if "all" not in value and "todos" not in value:
-            return "live"
+    
+    if re.search(r"\b(mute|desativar|silenciar|ativado)\b", value):
+        return "live"
+    
     return None
 
 
