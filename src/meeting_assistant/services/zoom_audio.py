@@ -84,7 +84,7 @@ class ZoomAudio(QObject):
         self._finder = finder
         self._platform = platform or sys.platform
         self._cancel = threading.Event()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._thread = None
         self._pending = None
         self._command_pending = False
@@ -192,16 +192,19 @@ class ZoomAudio(QObject):
                     details.update(code="com_cleanup_error", error_type=type(exc).__name__)
                     state = "unknown"
                     message = "Falha ao encerrar a consulta de acessibilidade. Confira seu microfone no Zoom."
-        if self._cancel.is_set():
-            return
-        details["state"] = state
-        # Repeated polling reports only changes; explicit actions always report.
-        if action != "inspect" or details != self._last_inspection:
-            self._last_inspection = dict(details) if action == "inspect" else self._last_inspection
-            self.diagnostic.emit(dict(details, elapsed_ms=round((time.monotonic() - started) * 1000)))
-        self.result.emit(state, message)
-        if action != "inspect":
-            self.command_finished.emit(state, message)
+        # stop() must finish before Qt destroys this QObject. Hold the short
+        # notification section together; native calls/waits never hold this lock.
+        with self._lock:
+            if self._cancel.is_set():
+                return
+            details["state"] = state
+            # Repeated polling reports only changes; explicit actions always report.
+            if action != "inspect" or details != self._last_inspection:
+                self._last_inspection = dict(details) if action == "inspect" else self._last_inspection
+                self.diagnostic.emit(dict(details, elapsed_ms=round((time.monotonic() - started) * 1000)))
+            self.result.emit(state, message)
+            if action != "inspect":
+                self.command_finished.emit(state, message)
 
     def _work(self, action):
         try:
@@ -221,7 +224,8 @@ class ZoomAudio(QObject):
                     self.busy = False
                     self._pending = None
                     self._command_pending = False
-            self.activity.emit(False)
+                if not self._cancel.is_set():
+                    self.activity.emit(False)
 
     def stop(self):
         with self._lock:

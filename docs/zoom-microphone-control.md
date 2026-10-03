@@ -30,6 +30,10 @@ verifica/cancela operações e informa falhas. Usa Invoke quando disponível ou 
 ação LegacyIAccessible quando esse padrão estiver ausente **antes do envio**.
 Não tenta uma segunda ação após um envio cujo resultado seja incerto.
 
+A interface recebe resultados em slots Qt na thread principal. Ao sair, o serviço
+cancela ações pendentes e suprime notificações tardias para objetos Qt já destruídos.
+Essa condição foi reproduzida e coberta por uma regressão de encerramento.
+
 Referências da implementação:
 [threading UI Automation](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-threading),
 [LegacyIAccessible](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-implementinglegacyiaccessible),

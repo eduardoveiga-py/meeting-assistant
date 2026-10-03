@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 
 import pytest
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, Qt, QTimer
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
@@ -27,6 +27,17 @@ def wait_until(predicate, timeout=2):
         QTest.qWait(10)
     QApplication.processEvents()
     assert predicate()
+
+
+class GuiThreadObserver(QObject):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.threads = []
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.EnabledChange:
+            self.threads.append(threading.get_ident())
+        return False
 
 
 @pytest.mark.parametrize(
@@ -58,9 +69,17 @@ def test_actual_ui_click_opens_muted_microphone_using_fresh_state(tmp_path, cach
     window.show()
     button = Mock()
     observed = ["muted"]
-    button.invoke.side_effect = lambda: observed.__setitem__(0, "live")
+    native_threads = []
+
+    def invoke():
+        native_threads.append(threading.get_ident())
+        observed[0] = "live"
+
+    button.invoke.side_effect = invoke
     window.zoom_audio._finder = lambda: (button, observed[0])
     window._zoom_audio_result(cached, "Observed earlier")
+    observer = GuiThreadObserver(window)
+    window.zoom_mic_button.installEventFilter(observer)
     QApplication.processEvents()
     try:
         QTest.mouseClick(window.zoom_mic_button, Qt.MouseButton.LeftButton)
@@ -69,6 +88,9 @@ def test_actual_ui_click_opens_muted_microphone_using_fresh_state(tmp_path, cach
         assert observed[0] == "live"
         assert window.zoom_mic_button.property("state") == "live"
         assert window.zoom_mic_button.isEnabled()
+        assert native_threads and all(t != threading.get_ident() for t in native_threads)
+        assert len(observer.threads) >= 2
+        assert all(t == threading.get_ident() for t in observer.threads)
     finally:
         window.close()
         QApplication.processEvents()
@@ -507,3 +529,29 @@ def test_ui_click_failure_is_visible_and_controls_remain_accessible(tmp_path, he
     finally:
         window.close()
         QApplication.processEvents()
+
+
+@pytest.mark.filterwarnings("error::pytest.PytestUnhandledThreadExceptionWarning")
+def test_cancelled_worker_can_finish_after_its_qobject_has_been_destroyed():
+    import shiboken6
+
+    entered, release = threading.Event(), threading.Event()
+    button = Mock()
+
+    def finder():
+        entered.set()
+        assert release.wait(2)
+        return button, "muted"
+
+    service = ZoomAudio(finder=finder)
+    service.request("toggle")
+    wait_until(entered.is_set)
+    worker = service._thread
+    service.stop()
+    service.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert not shiboken6.isValid(service)
+    release.set()
+    worker.join(1)
+    assert not worker.is_alive()
+    button.invoke.assert_not_called()

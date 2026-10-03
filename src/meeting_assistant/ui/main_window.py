@@ -10,6 +10,7 @@ from PySide6.QtCore import (
     Qt,
     QTimer,
     Signal,
+    Slot,
 )
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
@@ -584,6 +585,7 @@ class MainWindow(QMainWindow):
         # current own microphone before deciding which action to invoke.
         self.zoom_audio.request("toggle")
 
+    @Slot(bool)
     def _zoom_microphone_activity(self, _active):
         # Ignore a late idle signal from an older worker if a new command began.
         pending = self.zoom_audio.command_pending
@@ -593,9 +595,11 @@ class MainWindow(QMainWindow):
         else:
             self._render_zoom_microphone()
 
+    @Slot(str, str)
     def _zoom_microphone_finished(self, _state, message):
         self.mode_label.setText(message)
 
+    @Slot(str, str)
     def _zoom_audio_result(self, state, message):
         if state in {"live", "muted"}:
             self._meeting_active = True
