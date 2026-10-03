@@ -263,7 +263,8 @@ class MainWindow(QMainWindow):
             mode_grid.addWidget(button, row, col)
         controls.addLayout(mode_grid)
 
-        self.auto_button = QPushButton("🚥 Ativar automação")
+        self.auto_button = QPushButton("🚥 Ativar")
+        self.auto_button.setToolTip("Ativar automação de mídias e guardião do JWL.")
         self.auto_button.clicked.connect(self._toggle_automation)
         automation_row = QHBoxLayout()
         automation_row.addWidget(self.auto_button, 1)
@@ -313,21 +314,21 @@ class MainWindow(QMainWindow):
         system_grid.addWidget(self.end_meeting_button, 0, 1)
         settings_button = QPushButton("⚙️ Ajustes")
         settings_button.clicked.connect(self._show_settings)
-        system_grid.addWidget(settings_button, 0, 2)
+        system_grid.addWidget(settings_button, 1, 1)
 
         # Row 1
         self.ext_media_button = QPushButton("🎬 Mídia Externa")
         self.ext_media_button.setCheckable(True)
         self.ext_media_button.setToolTip("Envia o player de vídeo ativo para o telão")
         self.ext_media_button.toggled.connect(self._toggle_ext_media)
-        system_grid.addWidget(self.ext_media_button, 1, 0)
+        system_grid.addWidget(self.ext_media_button, 2, 0)
 
         self.camera_button = QPushButton("📷 Câmera")
         self.camera_button.setToolTip(
             "Inicia ou para a câmera virtual nativa que transmite o Program do OBS ao WhatsApp."
         )
         self.camera_button.clicked.connect(self._toggle_camera)
-        system_grid.addWidget(self.camera_button, 1, 1)
+        system_grid.addWidget(self.camera_button, 1, 0)
 
         self.zoom_mic_button = QPushButton("🎙 Mic Zoom")
         self.zoom_mic_button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
@@ -335,11 +336,11 @@ class MainWindow(QMainWindow):
         self.zoom_mic_button.setObjectName("ZoomMic")
         self.zoom_mic_button.setToolTip("Controla seu microfone no Zoom; não silencia participantes.")
         self.zoom_mic_button.clicked.connect(self._zoom_microphone)
-        system_grid.addWidget(self.zoom_mic_button, 1, 2)
+        system_grid.addWidget(self.zoom_mic_button, 2, 1)
 
-        # Native Windows font/emoji metrics must not make one cell widen the
-        # entire three-column grid. Compact labels keep the full action visible.
-        for column in range(3):
+        # Two equal columns accommodate native Windows font/emoji metrics
+        # without widening the window or truncating action names.
+        for column in range(2):
             system_grid.setColumnStretch(column, 1)
         for button in (
             self.start_meeting_button,
@@ -575,12 +576,16 @@ class MainWindow(QMainWindow):
         if enabled:
             self.automation_badge.setText("AUTOMAÇÃO ATIVA")
             self.automation_badge.setProperty("active", True)
-            self.auto_button.setText("⏸️ Pausar automação")
+            self.auto_button.setText("⏸️ Pausar")
+            self.auto_button.setAccessibleName("Pausar automação e guardião do JWL")
+            self.auto_button.setToolTip("Pausar automação de mídias e guardião do JWL.")
             self.automation_status.setText("Automação ativada; calibrando Mídias…")
         else:
             self.automation_badge.setText("AUTOMAÇÃO PAUSADA")
             self.automation_badge.setProperty("active", False)
-            self.auto_button.setText("🚥 Ativar automação")
+            self.auto_button.setText("🚥 Ativar")
+            self.auto_button.setAccessibleName("Ativar automação e guardião do JWL")
+            self.auto_button.setToolTip("Ativar automação de mídias e guardião do JWL.")
             self.automation_status.setText("Automação pausada")
         self._repolish(self.automation_badge)
 
@@ -1000,45 +1005,8 @@ class MainWindow(QMainWindow):
         self._set_component_status("Zoom", zoom_state, zoom_text, zoom_tooltip)
         self.mode_label.setText(" • ".join(payload.notes[-3:]) or "Inicialização concluída.")
 
-        # Layout organization requested by the user
-        try:
-            import win32api
-            import win32con
-            import win32gui
-
-            screen_width = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
-            screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
-            app_width = self.width()
-
-            # Position this app on the left, vertically centered
-            app_height = self.height()
-            self.move(0, (screen_height - app_height) // 2)
-
-            def arrange_windows(hwnd, _):
-                if not win32gui.IsWindowVisible(hwnd):
-                    return True
-                title = win32gui.GetWindowText(hwnd).strip()
-                class_name = win32gui.GetClassName(hwnd)
-
-                if class_name == "ApplicationFrameWindow" and "JW Library" in title:
-                    # JWL to the right, full screen minus app width
-                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                    win32gui.SetWindowPos(
-                        hwnd,
-                        win32con.HWND_TOP,
-                        app_width,
-                        0,
-                        screen_width - app_width,
-                        screen_height,
-                        win32con.SWP_SHOWWINDOW,
-                    )
-                elif ("Zoom Meeting" in title or "Zoom" == title) and "Zoom" in class_name:
-                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                return True
-
-            win32gui.EnumWindows(arrange_windows, None)
-        except Exception:
-            pass
+        # The launcher requests the role-specific layout service after readiness.
+        # No native enumeration or physical screen math runs in this GUI slot.
 
     def _on_zoom_hall_status(self, ok: bool, message: str) -> None:
         self._set_component_status(

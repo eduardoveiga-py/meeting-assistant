@@ -20,12 +20,12 @@ def make_window(tmp_path):
 
 
 def layout_details(window):
-    return [
-        (widget.text(), widget.width(), widget.sizeHint().width(), widget.minimumSizeHint().width())
+    return "\n".join(
+        str((widget.text(), widget.width(), widget.sizeHint().width(), widget.minimumSizeHint().width()))
         for kind in (QPushButton, QLabel)
         for widget in window.findChildren(kind)
         if widget.isVisible()
-    ]
+    )
 
 
 @pytest.mark.parametrize("state", ["live", "muted", "unknown"])
@@ -53,6 +53,21 @@ def test_camera_controls_fit_without_clipping_at_operator_width(tmp_path, state)
     for button in window.findChildren(QPushButton):
         if button.isVisible():
             assert button.sizeHint().width() <= button.width(), layout_details(window)
+    window.close()
+
+
+def test_launch_summary_does_not_run_legacy_native_layout_on_gui(tmp_path, monkeypatch):
+    import sys
+
+    from meeting_assistant.services.meeting_launcher import LaunchSummary
+
+    native = MagicMock()
+    for name in ("win32api", "win32con", "win32gui"):
+        monkeypatch.setitem(sys.modules, name, native)
+    window = make_window(tmp_path)
+    window._on_launch_finished(LaunchSummary(True, True, True, True, ()))
+    native.EnumWindows.assert_not_called()
+    native.GetSystemMetrics.assert_not_called()
     window.close()
 
 

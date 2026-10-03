@@ -13,7 +13,7 @@ O instalador v0.8.1 existente continua contendo o código anterior.
 | Áudio | Perfil comum coerente: mesa + mídias nos dois aplicativos, sem retorno Zoom. Perfil separado opcional envia Zoom somente ao WhatsApp por segundo cabo e Audio Monitor. | Voz/mídia/retorno e ausência de eco |
 | Volume | Ganho por fonte, limitador e ordem dos filtros com leitura de confirmação; sem erros de filtro ocultados. Medidores OBS reativados. | Ajustar ganho e ouvir no receptor |
 | Microfone Zoom | Rejeita ações coletivas; COM inicializa/encerra no worker; falha de importação libera estado ocupado; cancelamento impede ações tardias. | Testar seu microfone, sem alterar participantes |
-| Largura | Botão compacto, política de tamanho flexível e banner compacto. | 100%, 125% e resolução menor |
+| Largura | Comandos em duas colunas, botões compactos, tamanho flexível e banner compacto. | 100%, 125% e resolução menor |
 | Disposição | Inventário fora da GUI, identificação UWP, papéis app/JWL principal, coordenadas relativas à área útil e proteção contra reutilização de PID/janela. | Salvar/reabrir e retirar/reconectar monitor |
 | Encerrar | Pausa automação e câmeras; cancela abertura; fecha normalmente inclusive OBS oculto. Informa processos/confirmacões pendentes; sem encerramento forçado. | Confirmar fim da reunião no Zoom quando solicitado |
 | Mídia externa | Escolha explícita de janela permitida, captura/cena própria, posição e estilos preservados, rollback de Program apenas enquanto gerenciado, retorno explícito ao JWL. Falha de retorno mantém sensor suspenso. | VLC/navegador e retorno pausado/ativo |
@@ -115,7 +115,7 @@ operador nem valida áudio/vídeo recebidos por um dispositivo remoto.
 A suíte local usa Python 3.12 e Qt offscreen, com serviços Win32/OBS simulados.
 Testes incluem contratos e falhas parciais; nenhuma chamada real é iniciada nos
 aplicativos do operador. O CI Windows executa a mesma suíte sem builds nativos.
-Na execução local deste lote, os 363 testes passaram; Ruff e a conferência de
+Na execução local deste lote, os 364 testes passaram; Ruff e a conferência de
 espaços do diff também passaram. O registro está em
 [review-fix-validation.json](review-fix-validation.json). Confira o resultado
 Windows em Actions para o commit de entrega. O teste físico do roteiro continua
