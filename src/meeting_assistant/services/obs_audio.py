@@ -150,7 +150,7 @@ def discover(client):
 def validate_selection(client, data):
     if data.get("routing_confirmed") is not True:
         raise ValueError(
-            "Confirme CABLE Input no OBS, CABLE Output no Zoom e no WhatsApp, e o retorno separado da mesa."
+            "Confirme CABLE Input no OBS, microfone da Mesa no Zoom, CABLE Output no WhatsApp, e o retorno separado da mesa."
         )
     mic = data.get("microphone", "")
     if mic not in {x["itemValue"] for x in physical_choices(client)}:
@@ -221,8 +221,8 @@ def activate(client, data):
         mute_managed(client)
         raise
     return {
-        "message": "OBS confirmou as fontes e o monitoramento. Selecione CABLE Output "
-        "como microfone no Zoom e no WhatsApp; o retorno do WhatsApp começa silenciado "
+        "message": "OBS confirmou as fontes e o monitoramento. Selecione o Microfone da Mesa "
+        "no Zoom e CABLE Output no WhatsApp; o retorno do WhatsApp começa silenciado "
         "pelo Meeting Assistant. O OBS mantém essa configuração ao fechar o app."
     }
 
@@ -245,4 +245,3 @@ def run_audio_task(client, action, data):
     if action == "mute":
         return mute_managed(client)
     raise ValueError("Operação de áudio desconhecida.")
-

@@ -106,7 +106,16 @@ class HallSetupDialog(QDialog):
             self._fit = ScreenFitController(self)
 
     def _local_obs(self) -> bool:
-        if self.settings.obs_host.lower() not in {"localhost", "127.0.0.1", "::1"}:
+        import socket
+
+        host = self.settings.obs_host.lower()
+        is_local = host in {"localhost", "127.0.0.1", "::1"}
+        if not is_local:
+            try:
+                is_local = socket.gethostbyname(host) == socket.gethostbyname(socket.gethostname())
+            except Exception:
+                pass
+        if not is_local:
             self.result.setText("Aplicação de arquivo/janela requer OBS neste mesmo computador.")
             return False
         return True

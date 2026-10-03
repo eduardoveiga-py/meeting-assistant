@@ -49,4 +49,3 @@ class MainWindowShortcuts:
             + "\n\nFuncionam somente com esta tela em foco. "
             "No notebook, pode ser necessário Fn + F1…F10.",
         )
-

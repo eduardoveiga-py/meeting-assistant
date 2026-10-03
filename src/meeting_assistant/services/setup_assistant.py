@@ -171,20 +171,25 @@ def inspect_environment(settings):
         try:
             result = subprocess.run(
                 [
-                    "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
                     "Get-AppxPackage -Name WatchtowerBibleandTractSo.45909CDBADF3C | "
                     "Select-Object -ExpandProperty Name",
                 ],
-                capture_output=True, timeout=20, creationflags=subprocess.CREATE_NO_WINDOW,
+                capture_output=True,
+                timeout=20,
+                creationflags=subprocess.CREATE_NO_WINDOW,
             )
             if result.returncode == 0:
                 jwl = b"Watchtower" in result.stdout
         except (OSError, subprocess.TimeoutExpired):
             pass
     rows.append(Check("INSTALAÇÃO", "JW Library detectado", jwl))
-    rows.append(Check(
-        "CONFIGURAÇÃO", "Link Zoom preenchido (entrada não testada)", bool(settings.zoom_join_url)
-    ))
+    rows.append(
+        Check("CONFIGURAÇÃO", "Link Zoom preenchido (entrada não testada)", bool(settings.zoom_join_url))
+    )
     import obsws_python as obs
 
     rows.extend(inspect_obs(settings, obs.ReqClient))
@@ -229,4 +234,3 @@ def create_standard_scenes(settings):
         return "Cenas padrão confirmadas. Fontes e câmera ainda precisam ser preparadas e testadas."
     finally:
         client.disconnect()
-

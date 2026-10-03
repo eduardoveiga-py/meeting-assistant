@@ -201,7 +201,8 @@ class SetupAssistantDialog(QDialog):
             self._check_rows = value + [
                 Check("CONEXÃO", "Tela do Salão conectada", display is not None),
                 Check(
-                    "CONFIGURAÇÃO", "Foto do Texto do Ano salva",
+                    "CONFIGURAÇÃO",
+                    "Foto do Texto do Ano salva",
                     self.owner.yeartext_store.current() is not None,
                 ),
             ]

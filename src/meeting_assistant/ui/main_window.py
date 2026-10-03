@@ -1,5 +1,17 @@
 from __future__ import annotations
 
+
+def _is_local_host(host: str) -> bool:
+    if host.lower() in {"localhost", "127.0.0.1", "::1"}:
+        return True
+    import socket
+
+    try:
+        return socket.gethostbyname(host) == socket.gethostbyname(socket.gethostname())
+    except Exception:
+        return False
+
+
 import time
 from dataclasses import replace
 
@@ -7,8 +19,11 @@ from PySide6.QtCore import (
     Qt,
     QTimer,
     Signal,
+    QEasingCurve,
+    QPropertyAnimation,
+    QSequentialAnimationGroup,
 )
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -105,14 +120,6 @@ class MainWindow(QMainWindow):
         self._apply_style()
         from meeting_assistant.ui.shortcuts import MainWindowShortcuts
 
-        self._shortcuts = MainWindowShortcuts(self, [
-            lambda: self._manual_select(OperatingMode.BACKGROUND),
-            lambda: self._manual_select(OperatingMode.SPEAKER),
-            lambda: self._manual_select(OperatingMode.MEDIA),
-            lambda: self._manual_select(OperatingMode.ZOOM),
-            self._toggle_automation, self._activate_safe_scene,
-            self._start_meeting, self._show_diagnostics, self._show_settings,
-        ])
         self._shortcuts = MainWindowShortcuts(
             self,
             [
@@ -344,9 +351,7 @@ class MainWindow(QMainWindow):
         preview_row.addWidget(self.preview, 1)
         controls.addLayout(preview_row, 1)
 
-        self.zoom_output_label = QLabel(
-            "Envio previsto: OBS Virtual Camera • confira a recepção no Zoom"
-        )
+        self.zoom_output_label = QLabel("Envio previsto: OBS Virtual Camera • confira a recepção no Zoom")
         self.zoom_output_label = QLabel("Zoom recebe: OBS Virtual Camera • transições feitas pelo OBS")
         self.zoom_output_label.setObjectName("ZoomOutputLabel")
         self.zoom_output_label.setAlignment(Qt.AlignCenter)
@@ -494,23 +499,21 @@ class MainWindow(QMainWindow):
 
         if QApplication.activeModalWidget() is not None:
             return
-        modes = {2: OperatingMode.BACKGROUND, 3: OperatingMode.SPEAKER,
-                 4: OperatingMode.MEDIA, 5: OperatingMode.ZOOM}
+        modes = {
+            2: OperatingMode.BACKGROUND,
+            3: OperatingMode.SPEAKER,
+            4: OperatingMode.MEDIA,
+            5: OperatingMode.ZOOM,
+        }
         if key == 7:
             self._activate_safe_scene()
         elif key in modes:
             self._manual_select(modes[key])
 
-    def closeEvent(self, event):
-        self._operator_timer.stop()
-        self.global_keys.set_enabled(False)
-        super().closeEvent(event)
 
     def _operator_tick(self):
         self.global_keys.set_enabled(self.settings.global_shortcuts)
         visible = self.isVisible() and not self.isMinimized()
-        if hasattr(self.obs, "_preview_stream"):
-            self.obs._preview_stream.visible = visible
         if time.monotonic() - self._zoom_audio_seen > 5:
             self._zoom_audio_state = "unknown"
             self.zoom_mic_button.setText("🎙 Microfone Zoom · verificar")
@@ -527,10 +530,12 @@ class MainWindow(QMainWindow):
     def _zoom_audio_result(self, state, message):
         self._zoom_audio_state = state
         self._zoom_audio_seen = time.monotonic()
-        self.zoom_mic_button.setText({
-            "live": "🎙 Microfone Zoom aberto · Silenciar",
-            "muted": "🔇 Microfone Zoom mudo · Ativar",
-        }.get(state, "🎙 Microfone Zoom · não confirmado"))
+        self.zoom_mic_button.setText(
+            {
+                "live": "🎙 Microfone Zoom aberto · Silenciar",
+                "muted": "🔇 Microfone Zoom mudo · Ativar",
+            }.get(state, "🎙 Microfone Zoom · não confirmado")
+        )
         self.zoom_mic_button.setProperty("state", state)
         self.zoom_mic_button.setToolTip(message)
         self._repolish(self.zoom_mic_button)
@@ -562,6 +567,8 @@ class MainWindow(QMainWindow):
         pass
 
     def closeEvent(self, event) -> None:
+        self._operator_timer.stop()
+        self.global_keys.set_enabled(False)
         try:
             import psutil
             import win32gui
@@ -605,10 +612,7 @@ class MainWindow(QMainWindow):
 
     def set_telemetry_status(self, ok: bool, message: str) -> None:
         session_id = self.telemetry_session_id or "sessão atual"
-        self.footer.setText(
-            "OBS é a fonte de verdade • Zoom → Salão é local • "
-            f"{message} • {session_id}"
-        )
+        self.footer.setText(f"OBS é a fonte de verdade • Zoom → Salão é local • {message} • {session_id}")
         self.footer.setToolTip(message)
 
     def set_automation_signal(
@@ -638,16 +642,7 @@ class MainWindow(QMainWindow):
                 # before asking it to publish the first frame.
                 QTimer.singleShot(1200, self._auto_start_camera)
             current = self.yeartext_store.current()
-            if (
-                current
-                and current.get("obs_pending")
-                and self.settings.obs_host.lower()
-                in {
-                    "127.0.0.1",
-                    "localhost",
-                    "::1",
-                }
-            ):
+            if current and current.get("obs_pending") and _is_local_host(self.settings.obs_host):
                 self.obs.hall_task(
                     "yeartext",
                     {
@@ -712,9 +707,7 @@ class MainWindow(QMainWindow):
             Qt.TransformationMode.SmoothTransformation,
         )
         self.preview.setPixmap(scaled)
-        self.preview.setToolTip(
-            f"Preview leve do OBS Program • {self.current_obs_scene or 'cena atual'}"
-        )
+        self.preview.setToolTip(f"Preview leve do OBS Program • {self.current_obs_scene or 'cena atual'}")
 
     def _on_obs_preview_error(self, message: str) -> None:
         if not self.obs_connected:
@@ -946,9 +939,7 @@ class MainWindow(QMainWindow):
             return
 
         button.setText("💻 Zoom → Salão")
-        self.zoom_output_label.setText(
-            "Envio previsto: OBS Virtual Camera • confira a recepção no Zoom"
-        )
+        self.zoom_output_label.setText("Envio previsto: OBS Virtual Camera • confira a recepção no Zoom")
         self.zoom_output_label.setText("Zoom recebe: OBS Virtual Camera • transições feitas pelo OBS")
         if self.current_obs_scene:
             mode = self._mode_for_scene(self.current_obs_scene)
@@ -1184,11 +1175,14 @@ class MainWindow(QMainWindow):
         dialog.deleteLater()
 
     def _legacy_diagnostics(self) -> None:
-        display_lines = "\n".join(
-            f"• {'Principal' if display.primary else 'Secundária'}: "
-            f"{display.name} • {display.resolution} • {display.x},{display.y}"
-            for display in self.display_snapshot
-        ) or "• nenhum monitor detectado"
+        display_lines = (
+            "\n".join(
+                f"• {'Principal' if display.primary else 'Secundária'}: "
+                f"{display.name} • {display.resolution} • {display.x},{display.y}"
+                for display in self.display_snapshot
+            )
+            or "• nenhum monitor detectado"
+        )
         display_lines = (
             "\n".join(
                 f"• {'Principal' if display.primary else 'Secundária'}: "

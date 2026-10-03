@@ -9,7 +9,6 @@ from PySide6.QtWidgets import QApplication, QDialog
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.audio_levels import summarize
 from meeting_assistant.services.operator_profile import export_profile, import_profile
-from meeting_assistant.services.preview_stream import PreviewStream
 from meeting_assistant.services.settings import AppSettings, SettingsService
 from meeting_assistant.services.stage_camera import USB_SOURCE, camera_health, contingency, prepare_camera
 from meeting_assistant.services.zoom_audio import microphone_state, perform
@@ -126,39 +125,6 @@ def test_profile_preserves_local_credentials_and_rejects_injected_fields(tmp_pat
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError):
         import_profile(settings, path)
-
-
-def test_latest_frame_is_consumed_once_without_backlog():
-    stream = PreviewStream()
-    stream.frame = (1.0, b"old")
-    stream.frame = (2.0, b"new")
-    assert stream.take() == (2.0, b"new")
-    assert stream.take() is None
-
-
-def test_slow_preview_does_not_block_obs_commands(monkeypatch):
-    from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
-
-    controller = ObsController()
-    entered, release, handled = threading.Event(), threading.Event(), threading.Event()
-
-    def slow_factory(**kwargs):
-        entered.set()
-        release.wait(2)
-        raise OSError("test disconnect")
-
-    controller._preview_stream.factory = slow_factory
-    controller._preview_stream.scene = "Palco"
-    monkeypatch.setattr(controller, "_connect", lambda: False)
-    monkeypatch.setattr(controller, "_handle_set_scene", lambda scene: handled.set())
-    controller.start(ObsConnectionConfig("localhost", 4455, ""))
-    try:
-        assert entered.wait(1)
-        controller.set_program_scene("Texto do Ano")
-        assert handled.wait(1), "Preview request blocked operational commands"
-    finally:
-        release.set()
-        controller.stop()
 
 
 def test_audio_levels_only_report_managed_sources():

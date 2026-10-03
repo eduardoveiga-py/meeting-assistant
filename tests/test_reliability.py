@@ -11,12 +11,23 @@ from meeting_assistant.services.settings import AppSettings, SettingsService
 from meeting_assistant.services.telemetry_service import TelemetryService, sanitize_text
 
 
-@pytest.mark.parametrize("field,value", [
-    ("obs_port", "4455"), ("obs_port", True), ("obs_port", 0), ("obs_port", 65536),
-    ("camera_rtsp_port", -1), ("telemetry_repo_url", None), ("obs_password", []),
-    ("telemetry_enabled", "false"), ("telemetry_sync_enabled", 1), ("obs_host", " "),
-    ("scene_media", ""), ("display_settings_version", -1),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("obs_port", "4455"),
+        ("obs_port", True),
+        ("obs_port", 0),
+        ("obs_port", 65536),
+        ("camera_rtsp_port", -1),
+        ("telemetry_repo_url", None),
+        ("obs_password", []),
+        ("telemetry_enabled", "false"),
+        ("telemetry_sync_enabled", 1),
+        ("obs_host", " "),
+        ("scene_media", ""),
+        ("display_settings_version", -1),
+    ],
+)
 def test_invalid_field_is_recovered_without_losing_valid_settings(tmp_path, field, value):
     path = tmp_path / "settings.json"
     raw = json.dumps({"display_settings_version": 1, "zoom_executable": "custom.exe", field: value})
@@ -53,10 +64,12 @@ def test_failed_backup_prevents_overwriting_invalid_original(tmp_path, monkeypat
     path = tmp_path / "settings.json"
     path.write_bytes(b"{broken")
     original_write = Path.write_bytes
+
     def fail_backup(self, data):
         if self.suffix == ".bak":
             raise PermissionError("backup denied")
         return original_write(self, data)
+
     monkeypatch.setattr(Path, "write_bytes", fail_backup)
     service = SettingsService(path)
     settings = service.load()
@@ -87,8 +100,10 @@ def test_unwritable_telemetry_does_not_prevent_startup(tmp_path):
 
 def test_local_diagnostics_never_invokes_git(tmp_path, monkeypatch):
     service = TelemetryService(enabled=True, root=tmp_path)
+
     def forbidden(*args, **kwargs):
         raise AssertionError("Local diagnostics must not invoke Git")
+
     monkeypatch.setattr(service, "_ensure_repo", forbidden)
     service.start()
     service.event("test")
@@ -102,8 +117,10 @@ def test_local_diagnostics_never_invokes_git(tmp_path, monkeypatch):
 
 def test_worker_disk_failure_is_contained(tmp_path, monkeypatch):
     service = TelemetryService(enabled=True, root=tmp_path)
+
     def fail():
         raise OSError("disk full")
+
     monkeypatch.setattr(service, "_worker", fail)
     service._worker_guarded()
     assert not service.enabled
@@ -134,11 +151,14 @@ def test_full_queue_does_not_block_operator(tmp_path):
     assert service._queue.qsize() == 1
 
 
-@pytest.mark.parametrize("text,secret", [
-    ("rtsp://operator:camera-secret@10.0.0.2/live", "camera-secret"),
-    ("request failed token=abc123", "abc123"),
-    ("Authorization: Bearer abc.def.123", "abc.def.123"),
-])
+@pytest.mark.parametrize(
+    "text,secret",
+    [
+        ("rtsp://operator:camera-secret@10.0.0.2/live", "camera-secret"),
+        ("request failed token=abc123", "abc123"),
+        ("Authorization: Bearer abc.def.123", "abc.def.123"),
+    ],
+)
 def test_free_text_credentials_are_redacted(text, secret):
     assert secret not in sanitize_text(text)
 
@@ -164,9 +184,11 @@ def test_changed_upload_destination_never_retargets_existing_clone(tmp_path, mon
     service = TelemetryService(enabled=True, sync_enabled=True, repo_url="https://new.invalid", root=tmp_path)
     (service.repo_path / ".git").mkdir(parents=True)
     calls = []
+
     def run(git, args, **kwargs):
         calls.append(args)
         return "https://previous.invalid"
+
     monkeypatch.setattr(service, "_run_git", run)
     with pytest.raises(RuntimeError, match="Destino alterado"):
         service._ensure_repo(Path("git"))

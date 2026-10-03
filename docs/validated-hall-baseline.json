@@ -1,19 +1,19 @@
 {
-  "validated_commit": "02094d80aa45ab0088d271691122839da759b1ee",
-  "checkpoint_branch": "checkpoint/zoom-jwl-validated-20260921",
-  "normalization": "UTF-8, LF newlines, one final newline",
-  "sha256": {
-    "src/meeting_assistant/services/zoom_hall_service.py": "514a8a3d878eae28273ea43fb9806de006818c59f7a9a70572c7cd092fa78482",
-    "src/meeting_assistant/services/native_window.py": "8b87daa6681167e979ee67534741a1a67df54fcaafc9c9eb7983cb48efb08edf",
-    "src/meeting_assistant/services/jwl_fast_window_guard.py": "ee53065f7ba09b435279d7c12073b5cda68f73b2e57e35cd449414f62e39a4ab",
-    "src/meeting_assistant/services/jwl_uia_secondary_window.py": "3356c99566c23a8f4745494322245c2e2c2cce38e8fd7500b16cea45d533ad7a",
-    "src/meeting_assistant/services/jwl_virtual_desktop_pin.py": "995024e03c8870e7e8a85d402482218fe6a3fb9c69f1393d2778e13a35400a67",
-    "src/meeting_assistant/services/jwl_secondary_window.py": "ab1c515a401f26c4cee844ddf3faae50ebd7812d44aa315db6e443d4ed36c990",
-    "src/meeting_assistant/services/media_automation_service.py": "83aaa9d4ae9091a3221511c258786127646bf5f6312edc1db8627cbb5a84589d",
-    "src/meeting_assistant/services/jwl_idle_reference.py": "b63fe78827c405969605b4da4739af2d9e2b7b277c4ba780006951092869a428",
-    "src/meeting_assistant/services/hall_monitor_sensor.py": "ddeb9363866c071ec1cd989d4e063a8d4cbaffe895be6fd853fda19dac25a2d4",
-    "src/meeting_assistant/services/jwl_screen_sensor.py": "1cf32cd9dd3a6a0a63cf64e14fca998d85d1611c7e32403e44034ada026fcb80",
-    "tests/test_zoom_hall_discovery.py": "8e4f312eb2b1b2ac10783c04eeeb9c9ab724fa896e5012262dbe78d2306620c3"
-  },
-  "validation_note": "Operador confirmou Testes 1, 2 e 3 OK em 21/09/2026; checkpoint original preservado."
+    "validated_commit": "02094d80aa45ab0088d271691122839da759b1ee",
+    "checkpoint_branch": "checkpoint/zoom-jwl-validated-20260921",
+    "normalization": "UTF-8, LF newlines, one final newline",
+    "sha256": {
+        "src/meeting_assistant/services/zoom_hall_service.py": "514a8a3d878eae28273ea43fb9806de006818c59f7a9a70572c7cd092fa78482",
+        "src/meeting_assistant/services/native_window.py": "8b87daa6681167e979ee67534741a1a67df54fcaafc9c9eb7983cb48efb08edf",
+        "src/meeting_assistant/services/jwl_fast_window_guard.py": "ee53065f7ba09b435279d7c12073b5cda68f73b2e57e35cd449414f62e39a4ab",
+        "src/meeting_assistant/services/jwl_uia_secondary_window.py": "3356c99566c23a8f4745494322245c2e2c2cce38e8fd7500b16cea45d533ad7a",
+        "src/meeting_assistant/services/jwl_virtual_desktop_pin.py": "995024e03c8870e7e8a85d402482218fe6a3fb9c69f1393d2778e13a35400a67",
+        "src/meeting_assistant/services/jwl_secondary_window.py": "ab1c515a401f26c4cee844ddf3faae50ebd7812d44aa315db6e443d4ed36c990",
+        "src/meeting_assistant/services/media_automation_service.py": "83aaa9d4ae9091a3221511c258786127646bf5f6312edc1db8627cbb5a84589d",
+        "src/meeting_assistant/services/jwl_idle_reference.py": "b63fe78827c405969605b4da4739af2d9e2b7b277c4ba780006951092869a428",
+        "src/meeting_assistant/services/hall_monitor_sensor.py": "ddeb9363866c071ec1cd989d4e063a8d4cbaffe895be6fd853fda19dac25a2d4",
+        "src/meeting_assistant/services/jwl_screen_sensor.py": "1cf32cd9dd3a6a0a63cf64e14fca998d85d1611c7e32403e44034ada026fcb80",
+        "tests/test_zoom_hall_discovery.py": "8f643267f8211f246039406a27e875a0215cfe3d7dbcd89b8575f4532c48e5be"
+    },
+    "validation_note": "Operador confirmou Testes 1, 2 e 3 OK em 21/09/2026; checkpoint original preservado."
 }

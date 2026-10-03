@@ -1,4 +1,5 @@
 """Packaged entry point with a smoke test that never starts operational services."""
+
 from __future__ import annotations
 
 import json

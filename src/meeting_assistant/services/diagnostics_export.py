@@ -1,4 +1,5 @@
 """Explicit local export. Never include screenshots, settings or a Git checkout."""
+
 from __future__ import annotations
 
 import json
@@ -12,9 +13,7 @@ from meeting_assistant.services.telemetry_service import sanitize_value
 def export_latest_session(destination: Path, root: Path | None = None) -> Path:
     root = root or Path(os.environ.get("LOCALAPPDATA", Path.home())) / "MeetingAssistant" / "telemetry"
     sessions = root / "sessions"
-    candidates = sorted(
-        (p for p in sessions.glob("MA-*") if p.is_dir() and not p.is_symlink()), reverse=True
-    )
+    candidates = sorted((p for p in sessions.glob("MA-*") if p.is_dir() and not p.is_symlink()), reverse=True)
     if not candidates:
         raise ValueError("Nenhuma sessão de diagnóstico local disponível.")
     session = candidates[0]

@@ -2,17 +2,11 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 
-root = Path(SPECPATH).parent
-datas = collect_data_files("meeting_assistant.resources") + copy_metadata("meeting-assistant")
-
-a = Analysis(
-    [str(root / "src/meeting_assistant/bootstrap.py")],
-    pathex=[str(root / "src")],
-datas = collect_data_files("meeting_assistant.resources") + copy_metadata("meeting-assistant")
 source = Path(SPECPATH).resolve().parent / "src"
+datas = collect_data_files("meeting_assistant.resources") + copy_metadata("meeting-assistant")
 
 a = Analysis(
-    [str(source / "meeting_assistant/main.py")],
+    [str(source / "meeting_assistant/bootstrap.py")],
     pathex=[str(source)],
     binaries=[],
     datas=datas,
@@ -21,8 +15,6 @@ a = Analysis(
         "comtypes.client",
         "pythoncom",
         "pywintypes",
-        # windows_audio imports pycaw lazily so non-Windows development stays
-        # importable; keep the Windows package explicit in frozen builds.
         "pycaw",
         "pycaw.pycaw",
     ],
@@ -50,7 +42,6 @@ exe = EXE(
     target_arch=None,
 )
 
-coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="MeetingAssistant")
 coll = COLLECT(
     exe, a.binaries, a.datas, strip=False, upx=False, name="MeetingAssistant"
 )

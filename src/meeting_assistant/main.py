@@ -29,6 +29,7 @@ from meeting_assistant.services.meeting_launcher import MeetingLauncherService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.settings import SettingsService
 from meeting_assistant.services.telemetry_service import TelemetryService
+from meeting_assistant.services.update_service import UpdateService
 from meeting_assistant.services.virtual_camera import camera_support
 from meeting_assistant.services.windows_audio import WhatsAppAudioGuard
 from meeting_assistant.services.zoom_hall_service import ZoomHallService, hall_runtime_flags
@@ -184,7 +185,11 @@ def main() -> int:
     )
     telemetry.event("whatsapp_camera_state", **whatsapp_camera_session.diagnostic())
 
+    update_service = UpdateService()
+    update_service.check_for_updates_async()
+
     window = MainWindow(
+        update_service=update_service,
         state=state,
         settings=settings,
         settings_service=settings_service,

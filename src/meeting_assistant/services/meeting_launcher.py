@@ -108,25 +108,30 @@ class MeetingLauncherService(QObject):
         return True
 
     def end_meeting(self) -> None:
+        if sys.platform != "win32":
+            return
+
+        def callback(hwnd, _):
+            import win32con
+            import win32gui
+            import win32process
+
+            if not win32gui.IsWindowVisible(hwnd):
+                return True
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            try:
+                pname = psutil.Process(pid).name().casefold()
+                if pname in ("obs64.exe", "obs32.exe", "zoom.exe", "jwlibrary.exe", "whatsapp.exe"):
+                    win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+            except Exception:
+                pass
+            return True
+
         try:
-            subprocess.run(
-                [
-                    "taskkill",
-                    "/F",
-                    "/IM",
-                    "obs64.exe",
-                    "/IM",
-                    "obs32.exe",
-                    "/IM",
-                    "Zoom.exe",
-                    "/IM",
-                    "JWLibrary.exe",
-                    "/IM",
-                    "WhatsApp.exe",
-                ],
-                creationflags=subprocess.CREATE_NO_WINDOW,
-            )
-        except OSError:
+            import win32gui
+
+            win32gui.EnumWindows(callback, None)
+        except Exception:
             pass
 
     def _run(self) -> None:
