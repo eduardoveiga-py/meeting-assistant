@@ -41,6 +41,8 @@ def test_websocket_preserves_other_settings_and_backup(tmp_path, monkeypatch):
 )
 def test_websocket_refuses_unsafe_or_incomplete_bootstrap(tmp_path, monkeypatch, running, host, password):
     monkeypatch.setattr(service, "process_running", lambda _: running)
+    monkeypatch.setattr("meeting_assistant.services.local_host.is_local_host",
+                        lambda host: host in {"localhost", "127.0.0.1", "::1"})
     with pytest.raises(ValueError):
         service.configure_websocket(AppSettings(obs_host=host, obs_password=password), tmp_path)
     assert not (tmp_path / "config.json").exists()

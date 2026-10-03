@@ -1,6 +1,7 @@
 # Roteiro de conclusão — 21/09/2026
 
-Requisitos ampliados pelo operador. O núcleo JWL ↔ Zoom continua congelado conforme o [contrato](validated-hall-contract.md). Novas funções usarão módulos separados e interfaces existentes.
+Requisitos ampliados pelo operador. O checkpoint JWL ↔ Zoom é preservado conforme o [contrato](validated-hall-contract.md).
+A política atual de guardião só com automação ligada tem candidato separado, pendente de ensaio físico. Novas funções usarão módulos separados e interfaces existentes.
 
 ## Situação após os testes 1, 2 e 3 aprovados
 
@@ -216,3 +217,15 @@ monitor disponível. Uso pessoal neste computador. Decisões técnicas delegadas
 
 [Roteiro de teste e retorno](test-virtual-camera.md). Nenhuma aprovação física é
 inferida da compilação ou da confirmação da API do Windows.
+
+
+## Lote de revisão de 03/10/2026
+
+Correções implementadas em módulos separados, sem novos binários ou release.
+O [roteiro de testes](review-fixes-2026-10-03.md) cobre guardião, captura JWL,
+retorno Zoom e mídia externa, foto, disposição, áudio, microfone e encerramento.
+Atualização/rollback têm histórico e integridade no código, mas ainda precisam
+ser testados no futuro executável. O perfil opcional de áudio com participantes
+Zoom no WhatsApp exige segundo cabo e Audio Monitor; não altera a rota comum
+já usada com um cabo. O teste físico é a próxima etapa, seguido de correções do
+retorno do operador, tutorial ilustrado atualizado e futura release/instalador.

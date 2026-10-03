@@ -6,7 +6,8 @@ Validado pelo operador em 21/09/2026 no commit
 ## Comportamento a preservar
 
 - O JWL é o player e sua segunda janela é a saída física padrão do Salão.
-- A proteção do JWL funciona mesmo com a automação de cenas pausada.
+- Decisão atual do operador: proteção periódica só com automação ligada.
+  O retorno explícito ao JWL continua funcionando com automação pausada.
 - Zoom → Salão usa somente a janela secundária do Zoom.
 - As duas janelas permanecem abertas; a troca não usa fechamento ou ocultação do Zoom.
 - Uma janela Zoom oculta por versão anterior pode ser redescoberta após reiniciar o app.
@@ -48,3 +49,13 @@ Windows+D e ciclos Zoom/JWL com automação pausada e ativa, início/fim de míd
 e câmera virtual remota sem retorno dos participantes. O checkpoint original
 permanece em 48b159b; o baseline atual usa 02094d8, incluindo a correção de
 inicialização do guardião. Nenhum arquivo protegido foi alterado neste lote.
+
+## Candidato após revisão de 03/10/2026
+
+A tabela histórica de hashes e o checkpoint são preservados. O módulo protegido
+`zoom_hall_service.py` muda somente a função de política, que delega ao novo
+`hall_policy.py`; seus comandos Win32 de alternância não foram alterados.
+A expectativa do teste de política também foi corrigida. As duas assinaturas
+candidatas estão em `hall-policy-candidate.json`, com validação física pendente.
+Isso é uma mudança autorizada de comportamento, não um novo aceite físico.
+O guardião e o sensor aguardam o retorno explícito finalizar, inclusive em mídia externa.

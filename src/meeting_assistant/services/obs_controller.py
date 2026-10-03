@@ -138,8 +138,10 @@ class ObsController(QObject):
     error = Signal(str)
     setup_finished = Signal(bool, str)
     hall_task_finished = Signal(str, bool, str)
+    external_task_finished = Signal(str, bool, object)
     operator_finished = Signal(str, bool, object)
     audio_task_finished = Signal(str, str, bool, object)
+    audio_levels_changed = Signal(object)
 
     def __init__(
         self, poll_interval: float = 0.5, preview_interval: float = 0.15, *, screenshot_preview: bool = False
@@ -152,6 +154,8 @@ class ObsController(QObject):
         self._commands: queue.Queue[tuple[str, object | None]] = queue.Queue()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self.local_connection: bool | None = None
+        self.media_scene = "Mídias"
         self._config: ObsConnectionConfig | None = None
         self._client: obs.ReqClient | None = None
         self._last_connected: bool | None = None
@@ -165,6 +169,9 @@ class ObsController(QObject):
         from meeting_assistant.services.audio_levels import AudioLevels
 
         self.audio_levels = AudioLevels()
+        self._audio_delivery = QTimer(self)
+        self._audio_delivery.setInterval(250)
+        self._audio_delivery.timeout.connect(self._deliver_audio_levels)
         self._preview_last = 0.0
         self._preview_delivery = QTimer(self)
         self._preview_delivery.setInterval(50)
@@ -173,7 +180,8 @@ class ObsController(QObject):
     def start(self, config: ObsConnectionConfig) -> None:
         self._config = config
         self.audio_levels.config = config
-        pass  #        self.audio_levels.start()
+        self.audio_levels.start()
+        self._audio_delivery.start()
         pass  # self._preview_delivery.start()
         if self._thread and self._thread.is_alive():
             self.reconfigure(config)
@@ -187,6 +195,7 @@ class ObsController(QObject):
         self._thread.start()
 
     def reconfigure(self, config: ObsConnectionConfig) -> None:
+        self.local_connection = None
         self.audio_levels.config = config
         self._commands.put(("configure", config))
 
@@ -201,6 +210,33 @@ class ObsController(QObject):
         from dataclasses import replace
 
         self._commands.put(("prepare_stage", replace(settings)))
+
+    def external_task(self, action, data):
+        self._commands.put(("external_task", (action, dict(data))))
+
+    def _handle_external_task(self, action, data):
+        from meeting_assistant.services.obs_external_media import (
+            prepare_external,
+            restore_external,
+            show_external,
+        )
+
+        try:
+            if self._client is None or self.local_connection is not True:
+                raise ValueError("Mídia externa exige OBS conectado neste computador.")
+            if action == "prepare":
+                result = prepare_external(self._client, data["selector"])
+            elif action == "show":
+                result = show_external(self._client, data["prior"])
+            elif action == "restore":
+                result = restore_external(self._client, data["prior"])
+            else:
+                raise ValueError("Operação de mídia externa desconhecida.")
+            self.external_task_finished.emit(action, True, result)
+        except ValueError as exc:
+            self.external_task_finished.emit(action, False, {"message": str(exc)})
+        except Exception:
+            self.external_task_finished.emit(action, False, {"message": "OBS não confirmou a mídia externa."})
 
     def hall_task(self, action: str, data: dict | None = None) -> None:
         self._commands.put(("hall_task", (action, dict(data or {}))))
@@ -217,6 +253,8 @@ class ObsController(QObject):
             self.audio_task_finished.emit(token, action, False, {"message": "OBS desconectado."})
             return
         try:
+            if self.local_connection is not True:
+                raise ValueError("Configuração de áudio exige OBS conectado neste computador.")
             result = run_audio_task(self._client, action, data)
             self.audio_task_finished.emit(token, action, True, result)
         except ValueError as exc:
@@ -271,12 +309,19 @@ class ObsController(QObject):
     def refresh_preview(self) -> None:
         self._commands.put(("preview", None))
 
+    def _deliver_audio_levels(self):
+        measured, voice, media = self.audio_levels.latest
+        self.audio_levels_changed.emit(
+            (voice, media) if measured and time.monotonic() - measured < 3 else (None, None)
+        )
+
     def _deliver_preview(self):
         pass
 
     def stop(self) -> None:
         self._preview_delivery.stop()
         self.audio_levels.stop()
+        self._audio_delivery.stop()
         self._stop_event.set()
         self._commands.put(("stop", None))
         if self._thread and self._thread.is_alive():
@@ -304,6 +349,8 @@ class ObsController(QObject):
                     next_preview = 0.0
                 elif command == "prepare_stage":
                     self._handle_prepare_stage(payload)
+                elif command == "external_task":
+                    self._handle_external_task(*payload)
                 elif command == "hall_task":
                     self._handle_hall_task(*payload)
                 elif command == "operator":
@@ -368,6 +415,9 @@ class ObsController(QObject):
             return False
 
         try:
+            from meeting_assistant.services.local_host import is_local_host
+
+            self.local_connection = is_local_host(self._config.host)
             client = obs.ReqClient(
                 host=self._config.host,
                 port=self._config.port,
@@ -448,6 +498,10 @@ class ObsController(QObject):
             self.error.emit("OBS desconectado; não foi possível trocar a cena.")
             return
         try:
+            if scene_name == self.media_scene:
+                from meeting_assistant.services.obs_capture_safety import assert_safe_media
+
+                assert_safe_media(self._client, scene_name)
             ensure_fade_transition(self._client)
             self._client.send(
                 "SetCurrentProgramScene",
@@ -483,6 +537,8 @@ class ObsController(QObject):
             self.hall_task_finished.emit(action, False, "OBS desconectado; configuração pendente.")
             return
         try:
+            if action in {"yeartext", "media"} and self.local_connection is not True:
+                raise ValueError("Arquivo e janela locais exigem OBS conectado neste computador.")
             if action == "yeartext":
                 store = YeartextStore(Path(data["directory"]))
                 photo = store.current()

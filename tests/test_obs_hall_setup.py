@@ -122,6 +122,7 @@ def test_disconnected_photo_stays_pending_then_applies(tmp_path):
     assert results[-1][1] is False
     assert store.current()["obs_pending"]
     controller._client = FakeObs()
+    controller.local_connection = True
     controller._handle_hall_task("yeartext", data)
     assert results[-1][1] is True
     assert not store.current()["obs_pending"]

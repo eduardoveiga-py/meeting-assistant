@@ -44,17 +44,6 @@ from meeting_assistant.ui.settings_dialog import SettingsDialog
 from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
-def _is_local_host(host: str) -> bool:
-    if host.lower() in {"localhost", "127.0.0.1", "::1"}:
-        return True
-    import socket
-
-    try:
-        return socket.gethostbyname(host) == socket.gethostbyname(socket.gethostname())
-    except Exception:
-        return False
-
-
 class MainWindow(QMainWindow):
     automation_enabled_changed = Signal(bool)
     idle_reference_requested = Signal()
@@ -83,6 +72,7 @@ class MainWindow(QMainWindow):
         self.settings = settings
         self.settings_service = settings_service
         self.obs = obs_controller
+        self.obs.media_scene = settings.scene_media
         self.displays = display_service
         self.jwl = jwl_service
         self.jwl_probe = jwl_probe
@@ -94,9 +84,18 @@ class MainWindow(QMainWindow):
         self.whatsapp_audio_guard = whatsapp_audio_guard
         self.camera_session = camera_session
         self.update_service = update_service
+        self._meeting_active = False
+        self._meeting_ending = False
+        self.layout_service = None
+        self.external_media = None
+        self._close_after_external = False
+        self._layout_save_pending = False
 
         if self.update_service:
             self.update_service.update_available.connect(self._on_update_available)
+            self.update_service.status_changed.connect(self._update_status)
+            self.update_service.install_ready.connect(self._install_update)
+            self.update_service.activity_provider = self._update_blocked
         self._camera_auto_start_attempted = False
         self.yeartext_store = YeartextStore(settings_service.path.parent / "yeartext")
         self._latest_media_active = False
@@ -324,7 +323,9 @@ class MainWindow(QMainWindow):
         self.camera_button.clicked.connect(self._toggle_camera)
         system_grid.addWidget(self.camera_button, 1, 1)
 
-        self.zoom_mic_button = QPushButton("🎙 Microfone Zoom … verificar")
+        self.zoom_mic_button = QPushButton("🎙 Mic Zoom")
+        self.zoom_mic_button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.zoom_mic_button.setMinimumWidth(0)
         self.zoom_mic_button.setObjectName("ZoomMic")
         self.zoom_mic_button.setToolTip("Controla seu microfone no Zoom; não silencia participantes.")
         self.zoom_mic_button.clicked.connect(self._zoom_microphone)
@@ -371,6 +372,7 @@ class MainWindow(QMainWindow):
         self.update_banner = QPushButton()
         self.update_banner.setObjectName("UpdateBanner")
         self.update_banner.hide()
+        self.update_banner.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.update_banner.clicked.connect(self._trigger_update)
         root.addWidget(self.update_banner)
 
@@ -402,6 +404,7 @@ class MainWindow(QMainWindow):
     def _connect_launcher_signals(self) -> None:
         self.launcher.progress_changed.connect(self._on_launch_progress)
         self.launcher.finished.connect(self._on_launch_finished)
+        self.launcher.end_finished.connect(self._on_end_finished)
         self.zoom_hall.status_changed.connect(self._on_zoom_hall_status)
         self.zoom_hall.active_changed.connect(self._on_zoom_hall_active)
 
@@ -413,6 +416,9 @@ class MainWindow(QMainWindow):
         return label
 
     def _select_mode(self, mode: OperatingMode) -> None:
+        if self.external_media and self.external_media.active:
+            self.mode_label.setText("Encerre a mídia externa antes de trocar a saída do salão.")
+            return
         if mode is OperatingMode.ZOOM:
             if not self.zoom_hall.toggle():
                 self.mode_buttons[OperatingMode.ZOOM].setChecked(self.zoom_hall.active)
@@ -514,7 +520,7 @@ class MainWindow(QMainWindow):
         self.global_keys.set_enabled(self.settings.global_shortcuts)
         if time.monotonic() - self._zoom_audio_seen > 5:
             self._zoom_audio_state = "unknown"
-            self.zoom_mic_button.setText("🎙 Microfone Zoom · verificar")
+            self.zoom_mic_button.setText("🎙 Mic Zoom")
             self.zoom_mic_button.setProperty("state", "unknown")
             self._repolish(self.zoom_mic_button)
         self.zoom_audio.request()
@@ -522,17 +528,19 @@ class MainWindow(QMainWindow):
     def _zoom_microphone(self):
         state = self._zoom_audio_state if time.monotonic() - self._zoom_audio_seen <= 5 else "unknown"
         action = {"live": "mute", "muted": "unmute"}.get(state, "inspect")
-        self.zoom_mic_button.setText("🎙 Microfone Zoom · verificando…")
+        self.zoom_mic_button.setText("🎙 Verificando…")
         self.zoom_audio.request(action)
 
     def _zoom_audio_result(self, state, message):
+        if state in {"live", "muted"}:
+            self._meeting_active = True
         self._zoom_audio_state = state
         self._zoom_audio_seen = time.monotonic()
         self.zoom_mic_button.setText(
             {
-                "live": "🎙 Microfone Zoom aberto · Silenciar",
-                "muted": "🔇 Microfone Zoom mudo · Ativar",
-            }.get(state, "🎙 Microfone Zoom · não confirmado")
+                "live": "🎙 Silenciar Zoom",
+                "muted": "🔇 Ativar mic Zoom",
+            }.get(state, "🎙 Mic Zoom ?")
         )
         self.zoom_mic_button.setProperty("state", state)
         self.zoom_mic_button.setToolTip(message)
@@ -565,48 +573,66 @@ class MainWindow(QMainWindow):
         pass
 
     def closeEvent(self, event) -> None:
+        if self.external_media and self.external_media.active:
+            self._close_after_external = True
+            self.external_media.stop_external_media()
+            event.ignore()
+            return
         self._operator_timer.stop()
         self.global_keys.set_enabled(False)
-        try:
-            import psutil
-            import win32gui
-            import win32process
-
-            layouts = getattr(self.settings, "window_layouts", {})
-            if layouts is None:
-                layouts = {}
-                self.settings.window_layouts = layouts
-
-            # Save our own window
-            layouts["meeting_assistant"] = [self.x(), self.y(), self.width(), self.height()]
-
-            # Find Zoom and JWL
-            def callback(hwnd, _):
-                if not win32gui.IsWindowVisible(hwnd):
-                    return True
-                _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                try:
-                    pname = psutil.Process(pid).name().casefold()
-                    if pname == "zoom.exe" and win32gui.GetClassName(hwnd) in (
-                        "ZPContentViewWndClass",
-                        "ZPPTopWndClass",
-                    ):
-                        wp = win32gui.GetWindowPlacement(hwnd)
-                        layouts["zoom"] = list(wp[4])
-                    elif pname == "jwlibrary.exe" and "Windows.UI.Core.CoreWindow" in win32gui.GetClassName(
-                        hwnd
-                    ):
-                        wp = win32gui.GetWindowPlacement(hwnd)
-                        layouts["jwlibrary"] = list(wp[4])
-                except Exception:
-                    pass
-                return True
-
-            win32gui.EnumWindows(callback, None)
-            self.settings_service.save(self.settings)
-        except Exception as e:
-            print(f"Error saving layout: {e}")
+        self.zoom_audio.stop()
+        self.launcher.stop()
+        if self.update_service:
+            self.update_service.stop()
+        self._persist_layout()
+        if self.layout_service:
+            self.layout_service.stop()
         super().closeEvent(event)
+
+    def _persist_layout(self, capture=False):
+        if not self.layout_service:
+            return
+        from meeting_assistant.services.window_layout import encode_rect
+
+        screen = self.screen()
+        roles = dict(self.settings.window_layouts.get("roles", {}))
+        roles.update(self.layout_service.latest.get("roles", {}))
+        if screen is not None:
+            area = screen.availableGeometry()
+            frame = self.frameGeometry()
+            roles["app"] = encode_rect(
+                (frame.x(), frame.y(), frame.x() + frame.width(), frame.y() + frame.height()),
+                {
+                    "name": screen.name(),
+                    "work": (area.x(), area.y(), area.x() + area.width(), area.y() + area.height()),
+                },
+            )
+        self.settings.window_layouts = {"version": 2, "roles": roles}
+        try:
+            self.settings_service.save(self.settings)
+            if capture:
+                self._layout_save_pending = True
+                self.layout_service.capture()
+                self.mode_label.setText("Disposição do app salva; verificando a janela principal JWL…")
+        except OSError:
+            self.mode_label.setText("Não foi possível salvar a disposição das janelas.")
+
+    def _layout_captured(self, payload):
+        if not self._layout_save_pending:
+            return
+        self._layout_save_pending = False
+        self.settings.window_layouts.setdefault("roles", {}).update(payload.get("roles", {}))
+        try:
+            self.settings_service.save(self.settings)
+            self.mode_label.setText("Disposição salva por função; tela secundária JWL preservada.")
+        except OSError:
+            self.mode_label.setText("Não foi possível salvar a disposição do JWL.")
+
+    def _restore_layout(self):
+        if self.layout_service:
+            from meeting_assistant.ui.app_layout import operator_fraction
+
+            self.layout_service.restore(operator_fraction(self))
 
     def set_telemetry_status(self, ok: bool, message: str) -> None:
         session_id = self.telemetry_session_id or "sessão atual"
@@ -640,7 +666,7 @@ class MainWindow(QMainWindow):
                 # before asking it to publish the first frame.
                 QTimer.singleShot(1200, self._auto_start_camera)
             current = self.yeartext_store.current()
-            if current and current.get("obs_pending") and _is_local_host(self.settings.obs_host):
+            if current and current.get("obs_pending") and self.obs.local_connection is True:
                 self.obs.hall_task(
                     "yeartext",
                     {
@@ -797,49 +823,130 @@ class MainWindow(QMainWindow):
         dialog.setDetailedText(report)
         dialog.exec()
 
-    def _toggle_ext_media(self, checked: bool) -> None:
-        from meeting_assistant.services.external_media_service import ExternalMediaService
-
-        if not hasattr(self, "_ext_media_service"):
-            self._ext_media_service = ExternalMediaService(self._hall_display_provider)
-            self._ext_media_service.state_changed.connect(lambda active, msg: self.mode_label.setText(msg))
-
+    def _toggle_ext_media(self, checked):
+        if not self.external_media:
+            self.ext_media_button.blockSignals(True)
+            self.ext_media_button.setChecked(False)
+            self.ext_media_button.blockSignals(False)
+            self.mode_label.setText("Serviço de mídia externa indisponível.")
+            return
         if checked:
-            if not self._ext_media_service.start_external_media():
-                self.ext_media_button.setChecked(False)
+            self.external_media.start_external_media()
         else:
-            self._ext_media_service.stop_external_media()
+            self.external_media.stop_external_media()
 
-    def _on_update_available(self, version: str, download_url: str, release_notes: str) -> None:
-        self.update_banner.setText(f"✨ Nova versão disponível (v{version}) - Clique para instalar")
-        self.update_banner.download_url = download_url
-        self.update_banner.version = version
+    def _choose_external_media(self, candidates):
+        from PySide6.QtWidgets import QInputDialog
+
+        labels = [f"{w.process} — {w.title}" for w in candidates]
+        selected, accepted = QInputDialog.getItem(
+            self, "Mídia externa", "Janela que será apresentada:", labels, 0, False
+        )
+        self.external_media.select(candidates[labels.index(selected)] if accepted else None)
+
+    def _external_state(self, active, message):
+        if (
+            self.external_media
+            and self.external_media.phase == "return_failed"
+            and (self._close_after_external or self._meeting_ending)
+        ):
+            self.external_media.stop()
+            return
+        self.ext_media_button.blockSignals(True)
+        self.ext_media_button.setChecked(active)
+        self.ext_media_button.blockSignals(False)
+        self.mode_label.setText(message)
+        if not active and self._close_after_external:
+            self._close_after_external = False
+            QTimer.singleShot(0, self.close)
+        if not active and self._meeting_ending:
+            self._request_end_programs()
+
+    def _update_blocked(self):
+        return bool(
+            self._meeting_active
+            or self._meeting_ending
+            or self.state.automation_enabled
+            or self.zoom_hall.active
+            or self.zoom_hall.returning
+            or self.launcher.busy
+            or (getattr(self, "external_media", None) and self.external_media.active)
+        )
+
+    def _update_status(self, message, busy):
+        self.update_banner.setEnabled(not busy)
+        self.update_banner.setToolTip(message)
+        if self.update_banner.isVisible():
+            self.mode_label.setText(message)
+
+    def _on_update_available(self, version, download_url, release_notes):
+        self.update_banner.setText(f"Atualização v{version} · detalhes")
+        self.update_banner.setToolTip(release_notes)
         self.update_banner.show()
 
-    def _trigger_update(self) -> None:
-        if hasattr(self.update_banner, "download_url") and self.update_service:
-            self.update_banner.setText("Baixando atualização... Por favor, aguarde.")
-            self.update_banner.setEnabled(False)
-            self.update_service.download_and_install_async(
-                self.update_banner.download_url, self.update_banner.version
-            )
+    def _trigger_update(self):
+        if self.update_service:
+            from meeting_assistant.ui.update_dialog import UpdateDialog
+
+            UpdateDialog(self.update_service, self).exec()
+
+    def _install_update(self, path, version, checksum):
+        from PySide6.QtWidgets import QApplication
+
+        try:
+            if self._update_blocked():
+                raise ValueError("Encerre a reunião antes de instalar.")
+            self.update_service.launch_after_exit(path, checksum)
+            self.close()
+            QApplication.instance().quit()
+        except (ValueError, OSError) as exc:
+            self._update_status(str(exc), False)
 
     def _start_meeting(self) -> None:
+        self._meeting_active = True
+        if self.camera_session:
+            self.camera_session.start()
         if not self.settings.zoom_join_url.strip():
             self.mode_label.setText("Abrindo programas; configure o link da reunião do Zoom em Ajustes.")
         self.start_meeting_button.setEnabled(False)
-        self.start_meeting_button.setText("⏳ Iniciando reunião…")
+        self.start_meeting_button.setText("⏳ Iniciando…")
         if not self.launcher.start_meeting():
             self.start_meeting_button.setEnabled(True)
             self.start_meeting_button.setText("▶️ Iniciar reunião")
 
-    def _end_meeting(self) -> None:
+    def _end_meeting(self):
+        if self._meeting_ending:
+            return
+        self._meeting_ending = True
+        if self.state.automation_enabled:
+            self._toggle_automation()
+        if self.camera_session:
+            self.camera_session.stop()
+        self.obs.operator_task("stop_virtual")
+        self.start_meeting_button.setEnabled(False)
         self.end_meeting_button.setEnabled(False)
         self.end_meeting_button.setText("⏳ Encerrando…")
-        self.launcher.end_meeting()
+        self.mode_label.setText("Solicitando fechamento; confirme o encerramento no Zoom se solicitado.")
+        if self.external_media and self.external_media.active:
+            self.external_media.stop_external_media()
+            return
+        self._request_end_programs()
+
+    def _request_end_programs(self):
+        if not self.launcher.end_meeting():
+            self._on_end_finished(None)
+
+    def _on_end_finished(self, summary):
+        self._meeting_ending = False
+        complete = bool(summary and summary.complete)
+        self._meeting_active = not complete
         self.end_meeting_button.setEnabled(True)
-        self.end_meeting_button.setText("⏹️ Encerrar reunião")
-        self.mode_label.setText("Reunião encerrada. Programas fechados.")
+        self.end_meeting_button.setText("🔴 Encerrar")
+        self.start_meeting_button.setEnabled(True)
+        self.start_meeting_button.setText("▶️ Iniciar reunião")
+        self.mode_label.setText(
+            summary.message if summary else "Encerramento não confirmado. Confira os programas."
+        )
 
     def _on_launch_progress(self, message: str) -> None:
         self.mode_label.setText(message)
@@ -851,6 +958,7 @@ class MainWindow(QMainWindow):
             self.mode_label.setText("Inicialização concluída.")
             return
 
+        self._meeting_active = bool(payload.zoom_running or payload.jwl_running)
         if payload.obs_running:
             self.obs.ensure_virtual_camera()
 
@@ -1008,7 +1116,9 @@ class MainWindow(QMainWindow):
     def _open_audio_setup(self, parent=None) -> None:
         from meeting_assistant.ui.audio_setup_dialog import AudioSetupDialog
 
-        dialog = AudioSetupDialog(self.obs, self.settings, parent or self)
+        dialog = AudioSetupDialog(
+            self.obs, self.settings, parent or self, settings_service=self.settings_service
+        )
         dialog.exec()
         dialog.deleteLater()
 
@@ -1016,6 +1126,9 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self.settings, self.obs_scenes, self)
         dialog.hall_setup_requested.connect(lambda: self._open_hall_setup(dialog))
         dialog.audio_setup_requested.connect(lambda: self._open_audio_setup(dialog))
+        dialog.update_history_requested.connect(self._trigger_update)
+        dialog.save_layout_requested.connect(lambda: self._persist_layout(capture=True))
+        dialog.restore_layout_requested.connect(self._restore_layout)
         dialog.virtual_camera_requested.connect(lambda: self._open_virtual_camera(dialog))
         dialog.observe_requested.connect(
             lambda: (dialog.reject(), QTimer.singleShot(0, self._start_jwl_probe))
@@ -1054,6 +1167,7 @@ class MainWindow(QMainWindow):
         # Provisioning must not trigger the reconnect callback's Program change.
         self._startup_scene_applied = dialog.prepare_obs_requested
         self._set_component_status("OBS", "pending", "○ OBS", "Reconectando…")
+        self.obs.media_scene = self.settings.scene_media
         self.obs.reconfigure(self._obs_config())
         if dialog.prepare_obs_requested:
             self.obs.prepare_stage(self.settings)
@@ -1087,7 +1201,8 @@ class MainWindow(QMainWindow):
             setattr(self.settings, field.name, getattr(pending, field.name))
         self._startup_scene_applied = True
         if previous_obs_config != self._obs_config():
-            self.obs.reconfigure(self._obs_config())
+            self.obs.media_scene = self.settings.scene_media
+        self.obs.reconfigure(self._obs_config())
 
     def _open_setup_assistant(self):
         if self._setup_assistant is not None:
@@ -1108,6 +1223,8 @@ class MainWindow(QMainWindow):
         self._refresh_yeartext_notice()
 
     def _hall_capture_target(self):
+        if self.external_media and self.external_media.active:
+            raise ValueError("Encerre a mídia externa antes de capturar o Texto do Ano.")
         if self.state.automation_enabled and self._latest_media_active:
             raise ValueError("O detector ainda indica mídia. Pare a mídia antes de capturar o Texto do Ano.")
         return verified_hall_target(

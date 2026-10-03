@@ -22,18 +22,25 @@ O **Meeting Assistant** é um orquestrador open-source criado para simplificar e
 
 ## ✨ Principais Funcionalidades
 
-* **🤖 Automação Inteligente (JW Library & OBS):** 
-  Transições automáticas no OBS baseadas na atividade do JW Library. O sistema lê o áudio direto do kernel do Windows (`pycaw`) garantindo precisão absoluta. Ao dar "Play" no JWL, o app corta o áudio da mesa no OBS automaticamente, prevenindo microfonias e vazamentos.
-* **🎥 Câmera Virtual Integrada (WhatsApp & Zoom):**
-  Uma ponte de vídeo nativa (Media Foundation) capta a saída do OBS Studio e cria uma câmera virtual ultraleve, otimizada para o WhatsApp UWP e Zoom (sem depender de plugins como NDI).
-* **🎬 Projeção de Mídia Externa (VLC, MPC, Fotos):**
-  Precisa reproduzir um arquivo de fora do JW Library? Um clique no botão **Mídia** encontra o VLC ou reprodutor ativo, remove suas bordas, e o projeta em tela cheia na Tela 2. Ao desativar, devolve o controle automaticamente para o JW Library.
-* **🎤 Controle Silencioso do Zoom:**
-  Gerencie o microfone do Zoom diretamente pelo painel do Meeting Assistant. O sistema usa automação invisível (`pywinauto` UIA) para mutar/desmutar o Zoom em segundo plano, sem roubar o foco ou atrapalhar o operador.
-* **🔄 Atualizações Automáticas (Auto-updater):**
-  Sempre que houver melhorias, o aplicativo avisará com um banner visual. Com um clique, ele baixa a nova versão do GitHub e atualiza silenciosamente.
-* **🕰️ Máquina do Tempo (Rollback):**
-  Deu algum problema no dia da reunião? A aba de Ajustes permite restaurar o aplicativo para qualquer uma das últimas 5 versões lançadas com um único clique.
+* **🤖 Automação do JW Library e OBS:**
+  O sensor de imagem identifica repouso e mídia, com calibração do Texto do Ano.
+  O guardião atua somente com a automação ligada; respeita Zoom, mídia externa e transições.
+* **🎥 Câmera virtual Windows 11:**
+  A ponte nativa recebe o Program do OBS e entrega vídeo ao WhatsApp. A câmera virtual
+  do OBS atende o Zoom. O áudio usa dispositivos virtuais separados do vídeo.
+* **🎬 Mídia externa:**
+  O operador escolhe a janela de um player ou navegador permitido. Uma captura
+  exclusiva envia sua imagem ao OBS e ao salão, preservando a fonte do JWL.
+  O retorno restaura a disposição anterior e verifica o JWL.
+* **🎤 Microfone do operador no Zoom:**
+  O painel mostra estado observado e solicita silenciar/ativar seu microfone.
+  Controles coletivos e identidades ambíguas são recusados.
+* **🔄 Atualizações e histórico:**
+  O aviso oferece versões estáveis mais recentes. No app instalado, o instalador
+  exige checksum, reunião encerrada e saída do processo atual antes de iniciar.
+  Em execução Python, a atualização continua por Git e `scripts/run.ps1`.
+  Restaurar uma versão anterior é uma escolha explícita no histórico; ajustes
+  e coleção de cenas precisam de backup próprio.
 * **🎮 Modo de Simulação:**
   Treine novos operadores em casa ou em notebooks comuns sem bagunçar as configurações oficiais ou precisar de dois monitores físicos.
 
@@ -43,18 +50,14 @@ O **Meeting Assistant** é um orquestrador open-source criado para simplificar e
 
 O fluxo de mídia automatizado reduz a carga cognitiva do operador. A rota padrão é:
 
-```text
-JW Library / VLC / Câmeras do Salão
-               |
-      Captura de Áudio/Vídeo no OBS
-               |
-        Mixer / Transições (OBS)
-               |
-    [Câmera Virtual OBS] + [VB-CABLE Output]
-               |
-        Zoom + WhatsApp
-```
-*(Nota: O uso do VB-CABLE é recomendado para separar o áudio das mídias enviadas remotamente).*
+Mesa e mídias selecionadas alimentam o monitoramento OBS → **CABLE Input**.
+No perfil comum, Zoom e WhatsApp usam **CABLE Output** como microfone; nenhum
+retorno dos aplicativos entra nesse mix. O perfil opcional com participantes do
+Zoom no WhatsApp exige uma segunda entrada virtual e o plugin Audio Monitor.
+Veja a [configuração dos dois perfis](docs/audio-routing.md).
+
+O retorno físico da mesa precisa excluir o Zoom e as mídias capturadas separadamente.
+Se esse retorno já contém tudo, o app não consegue separar os sinais depois de misturados.
 
 ---
 
@@ -83,16 +86,33 @@ O painel principal foi desenhado para uso em monitores de toque ou mouse, de for
 
 | Botão | Ação |
 |---|---|
-| **▶ Iniciar Reunião** | Inicia OBS, Zoom, JWL, câmera virtual e conecta o WebSocket automaticamente. |
-| **🔴 Encerrar** | Fecha os aplicativos da reunião e devolve o PC ao estado normal de uso. |
+| **▶ Iniciar Reunião** | Solicita OBS, Zoom, JWL e WhatsApp; verifica abertura e inicia câmera virtual. |
+| **🔴 Encerrar** | Pausa automação/câmeras, solicita fechamento normal e informa confirmações pendentes. |
 | **⚙️ Ajustes** | Configurações de Telas, Cenas do OBS, Atualizações, Diagnósticos e Rollback. |
-| **🎬 Mídia** | Intercepta reprodutores externos (VLC/Fotos) e os força para a Tela 2 em tela cheia. |
+| **🎬 Mídia Externa** | Seleciona janela, prepara captura própria no OBS e apresenta na tela do salão. |
 | **📷 Câmera WhatsApp** | Inicia/Para o envio de vídeo do OBS para o aplicativo do WhatsApp. |
 | **🎤 Mic Zoom** | Alterna entre "Mudo/Aberto" no Zoom em segundo plano. |
 
-Também possui suporte total a atalhos de teclado de **F1** a **F10** para operadores ágeis.
+F1 mostra os atalhos disponíveis. Atalhos globais são opcionais e não substituem os atalhos do Windows indiscriminadamente.
 
 ---
+
+## Correções em desenvolvimento
+
+O código de `main` inclui as correções da revisão de 03/10/2026. Elas ainda precisam
+de ensaio físico em Windows 11; o instalador v0.8.1 já publicado não contém este lote.
+[Confira as alterações e o roteiro de testes](docs/review-fixes-2026-10-03.md).
+
+Para continuar testando pelo Python, na pasta do projeto:
+
+```powershell
+git pull --ff-only
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1
+```
+
+O script usa Python 3.12, atualiza a `.venv` e verifica os componentes nativos
+pré-compilados conforme o manifesto. Não exige MSBuild nem compilação local.
+Os componentes da câmera e da ponte OBS não foram alterados neste lote.
 
 ## 👨‍💻 Para Desenvolvedores
 

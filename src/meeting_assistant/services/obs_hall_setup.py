@@ -155,6 +155,9 @@ def prepare_media(client, scene: str, selectors: list[str]) -> str:
     if applied.get("window") != selector:
         raise ValueError("OBS não confirmou o vínculo da janela JWL.")
     client.send("SetInputMute", {"inputName": MEDIA_SOURCE, "inputMuted": True}, raw=True)
+    from meeting_assistant.services.obs_capture_safety import disable_managed_display_captures
+
+    disable_managed_display_captures(client, [scene])
     fit_and_enable(client, scene, item_id)
     return selector
 

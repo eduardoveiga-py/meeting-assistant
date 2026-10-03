@@ -36,8 +36,15 @@ Uma falha de OBS pode impedir até a seleção de Palco pelo app. Nessa situaç�
 2. Execute o instalador anterior no mesmo diretório. Se for necessário desinstalar primeiro, mantenha o backup privado fora da pasta de instalação.
 3. Com o app fechado, restaure a cópia de `%APPDATA%\MeetingAssistant` feita antes da atualização. Não misture arquivos de backups diferentes. Restaurar apenas o executável não reverte ajustes.
 4. Se você alterou o OBS, importe o perfil e a coleção de cenas anteriores. A reversão do Meeting Assistant não desfaz configurações dos aplicativos externos.
-5. Abra e repita a pré-verificação e o ciclo curto de operação. A compatibilidade de downgrade depende desse ensaio; não há atualizador nem rollback automático.
+5. Abra e repita a pré-verificação e o ciclo curto de operação. A compatibilidade de downgrade depende desse ensaio. O código atual oferece histórico e
+instalação verificada no executável; em Python, use Git. Restaurar o executável não
+restaura automaticamente ajustes nem a coleção OBS. Veja o roteiro atual.
 
 ## Critério de conclusão
 
-Código e instalador precisam passar pelo CI Windows, incluindo teste de integridade do núcleo, suíte, lint e smoke test do executável. O aceite de áudio/câmera já foi recebido. A matriz acima e o ensaio de atualização/retorno no equipamento real permanecem como verificações operacionais documentadas, sem exigir o Windows limpo excluído do escopo.
+Código passa pelo CI Windows de testes, incluindo integridade do núcleo, suíte e lint.
+Build e smoke test do executável são etapas da futura release; pushes de código
+não compilam instaladores. O aceite de áudio/câmera já foi recebido. A matriz acima e o ensaio de atualização/retorno no equipamento real permanecem como verificações operacionais documentadas, sem exigir o Windows limpo excluído do escopo.
+
+
+O roteiro atual de correções e validação está em [review-fixes-2026-10-03.md](review-fixes-2026-10-03.md).

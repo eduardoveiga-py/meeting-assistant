@@ -1,0 +1,21 @@
+{
+  "review_date": "2026-10-03",
+  "base_commit": "b4cd185cc578c5ba0aadc166243faee6b6ad297c",
+  "app_version": "0.8.1",
+  "scope": "source corrections; no executable or native component build",
+  "local_environment": {
+    "platform": "Linux",
+    "python": "3.12.14",
+    "qt_platform": "offscreen",
+    "windows_and_obs": "simulated in unit tests"
+  },
+  "checks": {
+    "pytest": {"passed": 358, "failed": 0, "command": "python -m pytest -q -o faulthandler_timeout=30"},
+    "ruff": {"status": "passed", "command": "python -m ruff check ."},
+    "whitespace": {"status": "passed", "command": "git diff --check"}
+  },
+  "windows_ci": "see GitHub Actions for the delivery commit; not a physical test",
+  "physical_validation": "pending operator tests in Windows 11 with two monitors and calls",
+  "historical_checkpoint_preserved": true,
+  "native_video_components_changed": false
+}

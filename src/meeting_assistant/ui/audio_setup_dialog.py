@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -21,10 +22,11 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
 class AudioSetupDialog(QDialog):
-    def __init__(self, controller, settings, parent=None):
+    def __init__(self, controller, settings, parent=None, *, settings_service=None):
         super().__init__(parent)
         self.controller = controller
         self.settings = settings
+        self.settings_service = settings_service
         self.token = uuid4().hex
         self.busy = False
         self.setWindowTitle("Áudio da mesa e das mídias → Zoom + WhatsApp")
@@ -56,14 +58,44 @@ class AudioSetupDialog(QDialog):
         body.addWidget(self.prepare_button)
         form = QFormLayout()
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        self.profile = QComboBox()
+        self.profile.addItem("Mesa + mídias nos dois aplicativos", "shared")
+        self.profile.addItem("WhatsApp também recebe participantes do Zoom", "whatsapp_zoom")
+        self.profile.setCurrentIndex(max(0, self.profile.findData(settings.audio_profile)))
+        form.addRow("Perfil", self.profile)
+        self.whatsapp_device = self.combo()
+        form.addRow("Segunda entrada virtual para WhatsApp", self.whatsapp_device)
+        self.profile.currentIndexChanged.connect(self._profile_changed)
         self.microphone = self.combo()
         form.addRow("Entrada da mesa", self.microphone)
         self.applications = {}
+        self.gains = {}
         for label in APPS:
             combo = self.combo()
             self.applications[label] = combo
             form.addRow(label, combo)
+        for name in (MIC, *(app_name(label) for label in APPS)):
+            gain = QDoubleSpinBox()
+            gain.setRange(0, 18)
+            gain.setSuffix(" dB")
+            gain.setValue(settings.audio_gains_db.get(name, 0))
+            self.gains[name] = gain
+            form.addRow("Ganho: " + name.removeprefix("Meeting Assistant - "), gain)
         body.addLayout(form)
+        advanced = QLabel(
+            "O perfil com participantes Zoom requer dois cabos virtuais e o plugin "
+            '<a href="https://github.com/exeldro/obs-audio-monitor/releases/tag/0.10.1">'
+            "Audio Monitor 0.10.1</a> instalado no OBS. "
+            "OBS monitora mesa + mídias no primeiro cabo (microfone do Zoom); "
+            "o plugin envia mesa + mídias + Zoom ao segundo cabo (microfone do WhatsApp). "
+            "Os dois destinos precisam ser diferentes. Reinicie OBS após instalar o plugin. "
+            "No perfil comum, Zoom não pode ser selecionado como fonte. "
+            "O ganho fica antes do limitador a −3 dB. Comece em 0 dB e aumente aos poucos; "
+            "o limitador não corrige distorção já existente na entrada da mesa."
+        )
+        advanced.setWordWrap(True)
+        advanced.setOpenExternalLinks(True)
+        body.addWidget(advanced)
         note = QLabel(
             "Selecione somente os aplicativos usados. Todas as abas do navegador escolhido "
             "podem ser ouvidas. Se a mesa já devolve as mídias ao notebook, a mistura pode "
@@ -76,7 +108,7 @@ class AudioSetupDialog(QDialog):
         self.confirmations = []
         for text in (
             "Conferi CABLE Input como monitoramento do OBS.",
-            "Conferi CABLE Output como microfone do Zoom e do WhatsApp, e a saída física como alto-falante.",
+            "Conferi os microfones virtuais do perfil escolhido e a saída física como alto-falante.",
             "Conferi que a entrada da mesa não devolve Zoom nem duplica as mídias.",
         ):
             row = QHBoxLayout()
@@ -104,6 +136,9 @@ class AudioSetupDialog(QDialog):
         self.status.setWordWrap(True)
         self.status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         outer.addWidget(self.status)
+        self.levels = QLabel("Medidores OBS: aguardando sinal.")
+        self.levels.setWordWrap(True)
+        outer.addWidget(self.levels)
         self.activate_button = QPushButton("Aplicar seleção e ativar envio ao Zoom e WhatsApp")
         self.activate_button.clicked.connect(lambda: self.request("activate"))
         outer.addWidget(self.activate_button)
@@ -114,7 +149,10 @@ class AudioSetupDialog(QDialog):
         self.close_button.clicked.connect(self.reject)
         outer.addWidget(self.close_button)
         controller.audio_task_finished.connect(self.on_result)
+        if hasattr(controller, "audio_levels_changed"):
+            controller.audio_levels_changed.connect(self._levels_changed)
         self.finished.connect(self.disconnect_results)
+        self._profile_changed()
         self.refresh_enabled()
         self._screen_fit = ScreenFitController(self)
 
@@ -135,15 +173,35 @@ class AudioSetupDialog(QDialog):
         self.activate_button.setEnabled(
             not self.busy
             and bool(self.microphone.currentData())
+            and (self.profile.currentData() != "whatsapp_zoom" or bool(self.whatsapp_device.currentData()))
             and all(c.isChecked() for c in self.confirmations)
         )
-        for widget in (self.microphone, *self.applications.values(), *self.confirmations):
+        for widget in (
+            self.microphone,
+            self.profile,
+            self.whatsapp_device,
+            *self.gains.values(),
+            *self.applications.values(),
+            *self.confirmations,
+        ):
             widget.setEnabled(not self.busy)
+        self.applications["Zoom"].setEnabled(not self.busy and self.profile.currentData() == "whatsapp_zoom")
+        self.whatsapp_device.setEnabled(not self.busy and self.profile.currentData() == "whatsapp_zoom")
+
+    def _profile_changed(self):
+        if self.profile.currentData() == "shared":
+            self.applications["Zoom"].setCurrentIndex(0)
+        for check in self.confirmations:
+            check.setChecked(False)
+        self.refresh_enabled()
 
     def request(self, action):
         if self.busy:
             return
         data = {
+            "profile": self.profile.currentData(),
+            "whatsapp_device": self.whatsapp_device.currentData(),
+            "gains_db": {name: gain.value() for name, gain in self.gains.items()},
             "microphone": self.microphone.currentData(),
             "applications": {k: v.currentData() for k, v in self.applications.items()},
             "routing_confirmed": all(c.isChecked() for c in self.confirmations),
@@ -163,14 +221,27 @@ class AudioSetupDialog(QDialog):
             return
         self.busy = False
         self.status.setText(result["message"])
+        if ok and action == "activate":
+            self.settings.audio_profile = result["profile"]
+            self.settings.whatsapp_audio_device = result["whatsapp_device"]
+            self.settings.audio_gains_db = result["gains_db"]
+            if self.settings_service:
+                try:
+                    self.settings_service.save(self.settings)
+                except OSError:
+                    self.status.setText(
+                        "Rota aplicada, mas ajustes do app não foram salvos. Confira permissões."
+                    )
         if ok and action == "prepare":
+            self.populate(
+                self.whatsapp_device, result.get("outputs", []), self.settings.whatsapp_audio_device
+            )
             self.populate(self.microphone, result["microphones"], result["selected"][MIC].get("device_id"))
             for label, combo in self.applications.items():
                 self.populate(
                     combo, result["applications"][label], result["selected"][app_name(label)].get("window")
                 )
-            for check in self.confirmations:
-                check.setChecked(False)
+            self._profile_changed()
         self.refresh_enabled()
 
     def populate(self, combo, choices, selected):
@@ -184,8 +255,18 @@ class AudioSetupDialog(QDialog):
             combo.currentIndexChanged.connect(self.refresh_enabled)
             combo.setProperty("audioConnected", True)
 
+    def _levels_changed(self, levels):
+        voice, media = levels
+
+        def display(value):
+            return "—" if value is None else f"{value:.1f} dBFS"
+
+        self.levels.setText(f"Medidores OBS · mesa: {display(voice)} · mídias: {display(media)}")
+
     def disconnect_results(self):
         self.controller.audio_task_finished.disconnect(self.on_result)
+        if hasattr(self.controller, "audio_levels_changed"):
+            self.controller.audio_levels_changed.disconnect(self._levels_changed)
 
     def reject(self):
         if not self.busy:

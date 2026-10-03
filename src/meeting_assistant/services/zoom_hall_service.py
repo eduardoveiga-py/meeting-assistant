@@ -62,15 +62,12 @@ def has_descendant_class(hwnd: int, class_name: str, max_depth: int = 3) -> bool
     return False
 
 
-def hall_runtime_flags(
-    enabled: bool,
-    zoom_active: bool,
-    returning: bool,
-    switching_to_zoom: bool = False,
-) -> tuple[bool, bool]:
-    protect_jwl = returning or (enabled and not (zoom_active or switching_to_zoom))
-    media_enabled = enabled and protect_jwl and not returning
-    return protect_jwl, media_enabled
+def hall_runtime_flags(enabled, zoom_active, returning, switching_to_zoom=False, *, external_active=False):
+    from meeting_assistant.services.hall_policy import hall_runtime_flags as runtime_policy
+
+    return runtime_policy(
+        enabled, zoom_active, returning, switching_to_zoom, external_active=external_active
+    )
 
 
 class ZoomHallService(QObject):

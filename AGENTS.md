@@ -58,10 +58,12 @@ Estes são requisitos de manutenção, inclusive quando o código atual os descu
 Não documente uma regressão como se fosse uma nova decisão autorizada.
 
 ### Janelas e automação
-- O JWL é a saída padrão da segunda tela. O guardião começa com o app e funciona
-  também quando a automação de mídia está pausada.
+- O JWL é a saída padrão da segunda tela. Por decisão atual do operador, o
+  guardião periódico só atua com a automação ligada. Na abertura, a automação
+  permanece pausada. O retorno explícito Zoom → JWL deve funcionar também pausado.
 - Enquanto o operador solicita Zoom no Salão, o guardião respeita essa escolha.
   No retorno, restaure e confirme a visibilidade do JWL antes de retomar o sensor.
+  Durante mídia externa, escolha de janela e transições, suspenda guardião e sensor.
 - A exibição local do Zoom não deve colocar seu retorno no Program enviado à
   chamada. O OBS permanece responsável por Program e suas transições.
 - Texto do Ano em repouso corresponde a Palco; mídia real corresponde a Mídia e,

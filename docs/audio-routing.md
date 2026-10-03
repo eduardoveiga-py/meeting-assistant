@@ -1,80 +1,87 @@
-# Arquitetura de áudio — JW Library, OBS, Zoom e WhatsApp
+# Áudio da mesa e das mídias
 
-## Objetivo
+A câmera virtual transmite vídeo. O áudio entra no Zoom e no WhatsApp pelos
+microfones virtuais configurados manualmente nos dois aplicativos. O retorno do
+WhatsApp começa silenciado pelo app; seu botão controla apenas os alto-falantes
+recebidos do WhatsApp, preservando Zoom, mídias e o volume geral.
 
-Enviar para o Zoom e para o WhatsApp o mesmo mix local — microfones da mesa
-mais mídias do JW Library, VLC, Edge ou Chrome — sem depender de
-compartilhamento de tela/som do Zoom.
+## Perfil comum — um cabo
 
-O vídeo continuará chegando ao Zoom pela câmera virtual do OBS. Como câmera virtual transporta vídeo, o áudio precisa entrar no Zoom por um dispositivo de entrada de áudio separado.
+| Fonte | Monitoramento OBS para CABLE Input | Microfone Zoom | Microfone WhatsApp |
+| --- | --- | --- | --- |
+| Entrada física da mesa | Sim | CABLE Output | CABLE Output |
+| JW Library / VLC / navegador selecionado | Sim | CABLE Output | CABLE Output |
+| Retorno remoto do Zoom | Não | Excluído | Excluído |
+| Retorno remoto do WhatsApp | Não | Excluído | Excluído |
 
-## Arquitetura recomendada
+Em Ajustes → Áudio, escolha **Mesa + mídias nos dois aplicativos**. Selecione
+explicitamente a entrada física da mesa e somente os aplicativos usados.
+Configure **CABLE Input** como dispositivo de monitoramento do OBS;
+**CABLE Output** como microfone dos dois aplicativos. A saída física continua
+alimentando a mesa/caixas do salão. O app bloqueia Zoom como fonte neste perfil.
 
-```text
-JW Library ──> OBS (Application Audio Capture) ─┐
-                                                ├─> Mix de monitoramento do OBS
-Mesa/Microfone ──> OBS (Audio Input Capture) ──┘
-                                                        │
-                                                        v
-                                              CABLE Input (VB-CABLE)
-                                                        │
-                                                        v
-                                      CABLE Output (microfone compartilhado)
-                                               ┌────────┴────────┐
-                                               v                 v
-                                       Microfone do Zoom  Microfone do WhatsApp
+O app confere o dispositivo no perfil local salvo do OBS. O WebSocket não fornece
+uma consulta da saída global de monitoramento em execução; a confirmação do
+operador e o teste remoto continuam obrigatórios. Perfis portáteis não encontrados
+precisam ser configurados pelo OBS antes de ativar essa rota.
 
-Zoom (áudio remoto) ──> saída física / mesa / caixas
-WhatsApp (áudio remoto) ──> mesma saída, silenciado por padrão no app
-                             NÃO retornar ao mix enviado aos aplicativos
+O OBS usa **Monitorar apenas (silenciar saída)** nas fontes locais do app;
+nenhuma das seis faixas Program recebe essas fontes. Assim outro monitoramento
+não deve duplicar a mistura. Outras fontes pessoais não são reconfiguradas:
+se estiverem sendo monitoradas, a ativação pede revisão e permanece silenciada.
+
+## Perfil opcional — WhatsApp recebe também os participantes do Zoom
+
+Um cabo único não pode entregar dois mixes diferentes. Instale/configure uma
+**segunda entrada virtual**, com endpoint de gravação correspondente, e o plugin
+[Audio Monitor 0.10.1 do Exeldro](https://github.com/exeldro/obs-audio-monitor/releases/tag/0.10.1)
+no OBS. A implementação usa os filtros do plugin; não modifica o driver de áudio
+nem os componentes nativos da câmera. O plugin é distribuído por seu autor sob GPL-2.0;
+a instalação é separada, pela distribuição oficial.
+
+```mermaid
+flowchart TD
+    A["Mesa e mídias"] --> B["Cabo 1: microfone Zoom"]
+    A --> C["Cabo 2: microfone WhatsApp"]
+    D["Retorno remoto Zoom"] --> C
+    D --> E["Caixas do salão"]
 ```
 
-## Princípios
+1. Instale o segundo cabo e Audio Monitor e reinicie OBS/Windows conforme os instaladores.
+2. Em Ajustes → Áudio, prepare as listas e escolha **WhatsApp também recebe participantes do Zoom**.
+3. Selecione a segunda entrada virtual para WhatsApp. Ela deve ser diferente de
+   **CABLE Input**, usado no monitoramento global do OBS.
+4. Selecione mesa, mídias e a janela/processo de áudio do Zoom. No Zoom, mantenha
+   o primeiro **CABLE Output** como microfone e a saída física como alto-falante.
+5. No WhatsApp, selecione o endpoint de gravação correspondente ao segundo cabo
+   como microfone; a saída física permanece silenciada pelo app até ser liberada.
+6. Confirme o roteamento e ative. O retorno Zoom fica **sem monitoramento global**
+   e sem faixas Program; apenas o filtro dedicado o envia ao segundo cabo.
 
-1. O OBS é a fonte de verdade do mix enviado aos dois aplicativos.
-2. O JW Library deve ser capturado como áudio de aplicativo quando possível.
-3. Zoom e WhatsApp recebem um único mix pronto como se fosse um microfone.
-4. A entrada física da mesa não deve conter o retorno dos aplicativos.
-5. O áudio remoto do Zoom e do WhatsApp sai somente para o salão.
-6. Nenhum fluxo essencial deve depender de cliques por imagem.
+Plugin ausente, destino desconectado, cabos iguais ou filtro não confirmado
+bloqueiam a ativação. Fontes gerenciadas são silenciadas em falhas parciais.
+Nenhum retorno WhatsApp é capturado. Não selecione um cabo virtual como entrada da mesa.
 
-## Implementação prevista
+## Ganho e distorção
 
-- Capturar o JW Library por `Application Audio Capture` do OBS no Windows.
-- Capturar a mesa/microfone como uma fonte independente no OBS.
-- Configurar um dispositivo virtual de áudio como dispositivo de monitoramento do OBS.
-- Marcar apenas as fontes destinadas ao Zoom como `Monitor and Output`.
-- Configurar o endpoint de gravação correspondente como microfone do Zoom e do WhatsApp.
-- Manter os alto-falantes dos aplicativos na saída física que alimenta a mesa.
-- Deixar o retorno do WhatsApp silenciado pelo Meeting Assistant até o operador liberá-lo.
-- Desativar o `Desktop Audio` global do OBS para não recapturar Zoom/WhatsApp.
+Cada fonte tem ganho ajustável de **0 a 18 dB**, seguido de limitador em **−3 dB**.
+Comece em 0 dB, teste fala e uma mídia conhecida e aumente em pequenos passos.
+O app lê os medidores do OBS; os níveis medidos não comprovam o volume recebido
+no aparelho remoto. O limitador contém picos, mas não recupera áudio já distorcido
+na entrada USB/mesa. Os filtros precisam ser confirmados pelo OBS para ativar.
+Os antigos filtros de ganho/limitador do app são desativados ao migrar, evitando
+somar o ganho antigo ao novo. As escolhas de perfil/ganho são salvas nos ajustes;
+a ativação das fontes fica na coleção de cenas do OBS.
 
-## Controle do retorno do WhatsApp
+## Limite físico a verificar
 
-O botão **WhatsApp** na tela principal controla somente a sessão de reprodução do
-WhatsApp no Windows. Ele não altera o microfone, o Zoom, o JW Library ou o volume
-geral do notebook. O estado inicial é silenciado por segurança; o guardião reaplica
-o mute quando o WhatsApp recria sua sessão de áudio durante uma chamada.
+A entrada USB da mesa deve conter apenas os microfones locais. Se ela também
+recebe o áudio das mídias ou dos participantes Zoom, capturar esse mesmo áudio
+por aplicativo cria duplicação ou retorno ao próprio Zoom. Software não separa
+com confiabilidade canais já somados em um sinal analógico. Nesse caso, primeiro
+revise a ligação física ou separe os retornos antes de chegarem à mesa.
 
-O controle usa sessões do Windows Core Audio, não um mute global. Se o WhatsApp não
-estiver aberto ou ainda não tiver uma sessão, o app permanece em estado seguro e
-aguarda a chamada.
-
-## Mix-minus
-
-Se a mesa física devolve para o computador um sinal que já contém o áudio remoto do Zoom, é obrigatório usar um bus/auxiliar mix-minus na mesa ou uma separação de software. O sinal enviado de volta ao Zoom deve excluir o próprio retorno do Zoom.
-
-## Configuração inicial do Zoom e do WhatsApp
-
-O aplicativo orienta a seleção manual de `CABLE Output` nos dois aplicativos.
-O controle de áudio do Windows pode ser automatizado com segurança, mas a seleção
-de microfone dentro de Zoom/WhatsApp não é forçada por cliques frágeis.
-
-Para mídias, `Original sound for musicians` pode ser útil porque reduz processamento agressivo de fala. A opção de cancelamento de eco e modos de alta fidelidade deve depender da topologia real da instalação; não será forçada sem teste de loop/eco.
-
-## Dependência de dispositivo virtual
-
-O VB-CABLE é instalado separadamente pelo pacote oficial. O Meeting Assistant não
-redistribui o driver sem validação de licença; ele detectará os endpoints e orientará
-a configuração. Sem um endpoint virtual, o Windows não oferece uma entrada de
-microfone para a qual um aplicativo comum possa escrever um mix de outros programas.
+Teste fora da reunião: fala, mídia, comentário Zoom ouvido no WhatsApp,
+WhatsApp silenciado no salão e ausência de eco em ambos os sentidos. A rota
+separada deste lote ainda exige validação física; o sucesso anterior com um
+cabo não valida automaticamente este segundo perfil.

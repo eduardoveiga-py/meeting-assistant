@@ -18,3 +18,26 @@ def collect_qt_objects_between_tests(qt_application):
     gc.collect()
     yield
     gc.collect()
+
+
+@pytest.fixture(autouse=True)
+def isolate_operator_uia(monkeypatch):
+    # UI unit tests never enumerate/control the runner's real Zoom UI. Direct
+    # service regressions inject their own finder instead of this default.
+    def unavailable():
+        raise ValueError("No Zoom controls in unit tests")
+
+    monkeypatch.setattr("meeting_assistant.services.zoom_audio.find_control", unavailable)
+
+
+@pytest.fixture
+def audio_monitor_profile(tmp_path, monkeypatch):
+    appdata = tmp_path / "profile-data"
+    profile = appdata / "obs-studio/basic/profiles/unit"
+    profile.mkdir(parents=True)
+    (profile / "basic.ini").write_text(
+        "[General]\nName=Unit audio\n[Audio]\nMonitoringDeviceId=cable\nMonitoringDeviceName=CABLE Input\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("APPDATA", str(appdata))
+    return profile

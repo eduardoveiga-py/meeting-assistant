@@ -46,7 +46,9 @@ def test_decode_image_data_rejects_invalid_base64() -> None:
     assert decode_image_data("data:image/jpeg;base64,not-valid-@@") is None
 
 
-def test_handle_set_scene_uses_explicit_obs_request_after_fade_setup() -> None:
+def test_handle_set_scene_uses_explicit_obs_request_after_fade_setup(monkeypatch) -> None:
+    # Capture safety is exercised separately with unsafe and unavailable inputs.
+    monkeypatch.setattr("meeting_assistant.services.obs_capture_safety.assert_safe_media", lambda *a: None)
     class FakeClient:
         def __init__(self) -> None:
             self.calls: list[tuple[str, dict | None, bool]] = []

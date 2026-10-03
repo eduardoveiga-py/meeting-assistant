@@ -9,6 +9,7 @@ from meeting_assistant.ui import hall_setup_dialog
 
 def test_preview_does_not_save_until_operator_confirms(tmp_path, monkeypatch):
     controller = ObsController()
+    controller.local_connection = True
     store = YeartextStore(tmp_path)
     target = {"hwnd": 7, "rect": (0, 0, 1920, 1080), "selectors": []}
     monkeypatch.setattr(hall_setup_dialog, "capture_png", lambda value: png())

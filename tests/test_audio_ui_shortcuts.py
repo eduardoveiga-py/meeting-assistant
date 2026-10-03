@@ -92,6 +92,7 @@ def test_controller_reports_disconnection_and_sanitizes_audio_errors(monkeypatch
     assert received[-1][2] is False
     assert "desconectado" in received[-1][3]["message"]
     controller._client = object()
+    controller.local_connection = True
     monkeypatch.setattr(
         "meeting_assistant.services.obs_audio.run_audio_task",
         Mock(side_effect=RuntimeError("private SDK request contents")),

@@ -294,7 +294,7 @@ def test_guard_and_media_policy_through_entire_zoom_cycle(enabled):
     assert module.hall_runtime_flags(enabled, False, False) == (enabled, enabled)
     assert module.hall_runtime_flags(enabled, False, False, True) == (False, False)
     assert module.hall_runtime_flags(enabled, True, False) == (False, False)
-    assert module.hall_runtime_flags(enabled, True, True) == (True, False)
+    assert module.hall_runtime_flags(enabled, True, True) == (False, False)
     assert module.hall_runtime_flags(enabled, False, False) == (enabled, enabled)
 
 

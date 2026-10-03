@@ -26,7 +26,7 @@ def run_launcher(monkeypatch, *, initially_open=False, disappears_at=None):
 
     monkeypatch.setattr(meeting_launcher.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(
-        meeting_launcher.time, "sleep", lambda duration: clock.__setitem__(0, clock[0] + duration)
+        service, "_wait", lambda duration: clock.__setitem__(0, clock[0] + duration)
     )
     monkeypatch.setattr(service, "_process_snapshot", snapshot)
     monkeypatch.setattr(service, "_launch_jwl", lambda: launches.append(True) or True)

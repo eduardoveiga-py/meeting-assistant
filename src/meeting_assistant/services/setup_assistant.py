@@ -76,8 +76,10 @@ def process_running(name):
 def configure_websocket(settings, directory=None):
     if os.name != "nt" and directory is None:
         raise ValueError("Configuração local disponível somente no Windows.")
-    if settings.obs_host.casefold() not in {"localhost", "127.0.0.1", "::1"}:
-        raise ValueError("Esta preparação exige OBS neste computador.")
+    from meeting_assistant.services.local_host import is_local_host
+
+    if not is_local_host(settings.obs_host):
+        raise ValueError("Configuração de arquivo WebSocket exige OBS neste computador.")
     if process_running("obs64.exe") or process_running("obs32.exe"):
         raise ValueError("Feche o OBS antes de configurar o WebSocket. Depois use Abrir OBS.")
     if not settings.obs_password or not 1 <= settings.obs_port <= 65535:

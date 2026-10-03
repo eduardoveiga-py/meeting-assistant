@@ -186,7 +186,6 @@ def main() -> int:
     telemetry.event("whatsapp_camera_state", **whatsapp_camera_session.diagnostic())
 
     update_service = UpdateService()
-    update_service.check_for_updates_async()
 
     window = MainWindow(
         update_service=update_service,
@@ -215,10 +214,25 @@ def main() -> int:
     )
     telemetry.sync_status_changed.connect(window.set_telemetry_status)
 
-    if getattr(settings, "window_layouts", None) and "meeting_assistant" in settings.window_layouts:
-        layout = settings.window_layouts["meeting_assistant"]
-        if len(layout) == 4:
-            window.setGeometry(layout[0], layout[1], layout[2], layout[3])
+    from meeting_assistant.services.external_media_service import ExternalMediaService
+
+    window.external_media = ExternalMediaService(current_hall_display, obs_controller, zoom_hall)
+    window.external_media.state_changed.connect(window._external_state)
+    window.external_media.candidates_ready.connect(window._choose_external_media)
+
+    from meeting_assistant.services.window_layout import WindowLayoutService
+    from meeting_assistant.ui.app_layout import operator_fraction, restore_app
+
+    restore_app(window, settings.window_layouts)
+    window.layout_service = WindowLayoutService(
+        lambda: settings, lambda: jwl_secondary.current or jwl_fast_guard.cached_candidate
+    )
+    meeting_launcher.restore_layout_requested.connect(
+        lambda: window.layout_service.restore(operator_fraction(window))
+    )
+    window.layout_service.status_changed.connect(window.start_meeting_button.setToolTip)
+    window.layout_service.captured.connect(window._layout_captured)
+    update_service.check_for_updates_async()
 
     if settings.always_on_top:
         window.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
@@ -337,8 +351,7 @@ def main() -> int:
             )
             recovery_started_at = None
 
-        if state.automation_enabled and not zoom_hall.active:
-            media_automation.set_enabled(True)
+        apply_automation_runtime(state.automation_enabled)
 
     def record_jwl_candidate(hwnd: int, source: str) -> None:
         telemetry.event(
@@ -393,11 +406,12 @@ def main() -> int:
 
     def apply_automation_runtime(enabled: bool, *, switching_to_zoom: bool = False) -> None:
         protect_jwl, effective = hall_runtime_flags(
-            enabled, zoom_hall.active, zoom_hall.returning, switching_to_zoom
+            enabled,
+            zoom_hall.active,
+            zoom_hall.returning,
+            switching_to_zoom,
+            external_active=window.external_media.active,
         )
-        # O usuário solicitou que o guardião só atue se a automação global estiver ligada,
-        # e que o guardião deve isolar a tela secundária do JWL.
-        protect_jwl = enabled and not zoom_hall.active and not switching_to_zoom
 
         telemetry.event(
             "automation_runtime",
@@ -409,6 +423,9 @@ def main() -> int:
         jwl_fast_guard.set_enabled(protect_jwl)
         media_automation.set_enabled(effective and not jwl_fast_guard.recovering)
 
+    window.external_media.state_changed.connect(
+        lambda _active, _message: apply_automation_runtime(state.automation_enabled)
+    )
     zoom_hall.returning_changed.connect(lambda _: apply_automation_runtime(state.automation_enabled))
     zoom_hall.transition_diagnostic.connect(lambda detail: telemetry.event("zoom_hall_transition", **detail))
     window.automation_enabled_changed.connect(apply_automation_runtime)
@@ -425,6 +442,10 @@ def main() -> int:
         )
     )
 
+    app.aboutToQuit.connect(window.external_media.stop)
+    app.aboutToQuit.connect(meeting_launcher.stop)
+    app.aboutToQuit.connect(update_service.stop)
+    app.aboutToQuit.connect(window.layout_service.stop)
     app.aboutToQuit.connect(media_automation.stop)
     app.aboutToQuit.connect(lambda: zoom_hall.restore_jwl() if zoom_hall.active else None)
     app.aboutToQuit.connect(jwl_fast_guard.stop)
@@ -438,11 +459,26 @@ def main() -> int:
     app.aboutToQuit.connect(telemetry.stop)
 
     window.show()
+    window.layout_service.start()
+    QTimer.singleShot(600, lambda: window.layout_service.restore(operator_fraction(window)))
     if settings_service.recovery_message:
         QTimer.singleShot(
             0, lambda: QMessageBox.warning(window, "Ajustes recuperados", settings_service.recovery_message)
         )
     telemetry.event("ui_shown", session_id=telemetry.session_id)
+    meeting_launcher.end_finished.connect(
+        lambda result: telemetry.event(
+            "meeting_shutdown_finished",
+            complete=result.complete,
+            pending=result.pending,
+            errors=result.errors,
+        )
+    )
+    window.external_media.state_changed.connect(
+        lambda active, message: telemetry.event(
+            "external_media_state", active=active, phase=window.external_media.phase, message=message
+        )
+    )
     display_service.start()
     jwl_service.start()
     jwl_secondary.start()

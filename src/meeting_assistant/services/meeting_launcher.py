@@ -7,18 +7,13 @@ import subprocess
 import sys
 import threading
 import time
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import psutil
 from PySide6.QtCore import QObject, Signal
-
-try:
-    import win32gui
-except ImportError:  # pragma: no cover - Windows-only
-    win32gui = None
-
 
 _JWL_FALLBACK_AUMID = "WatchtowerBibleandTractSo.45909CDBADF3C_5rz59y55nfz3e!App"
 _ZOOM_MEETING_CLASS = "ConfMultiTabContentWndClass"
@@ -86,56 +81,80 @@ def looks_like_jwl_process(name: str) -> bool:
 class MeetingLauncherService(QObject):
     progress_changed = Signal(str)
     finished = Signal(object)
+    end_finished = Signal(object)
+    restore_layout_requested = Signal()
 
     def __init__(self, settings_provider) -> None:
         super().__init__()
         self._settings_provider = settings_provider
         self._thread: threading.Thread | None = None
+        self._cancel = threading.Event()
+        self._launch_settings = None
+        self._ending = False
+        from meeting_assistant.services.meeting_shutdown import MeetingShutdownService
+
+        self.shutdown = MeetingShutdownService()
+        self.shutdown.progress_changed.connect(self.progress_changed)
+        self.shutdown.finished.connect(self._end_finished)
 
     @property
     def busy(self) -> bool:
-        return bool(self._thread and self._thread.is_alive())
+        return bool(self._ending or self.shutdown.busy or (self._thread and self._thread.is_alive()))
 
     def start_meeting(self) -> bool:
         if self.busy:
             return False
+        self._cancel.clear()
+        self._launch_settings = deepcopy(self._settings_provider())
         self._thread = threading.Thread(
-            target=self._run,
+            target=self._safe_run,
             name="MeetingAssistant-Launcher",
             daemon=True,
         )
         self._thread.start()
         return True
 
-    def end_meeting(self) -> None:
-        if sys.platform != "win32":
-            return
+    def stop(self):
+        self._cancel.set()
+        self.shutdown.stop()
 
-        def callback(hwnd, _):
-            import win32con
-            import win32gui
-            import win32process
+    def _end_finished(self, summary):
+        self._ending = False
+        self.end_finished.emit(summary)
 
-            if not win32gui.IsWindowVisible(hwnd):
-                return True
-            _, pid = win32process.GetWindowThreadProcessId(hwnd)
-            try:
-                pname = psutil.Process(pid).name().casefold()
-                if pname in ("obs64.exe", "obs32.exe", "zoom.exe", "jwlibrary.exe", "whatsapp.exe"):
-                    win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
-            except Exception:
-                pass
-            return True
+    def end_meeting(self):
+        if self._ending or self.shutdown.busy:
+            return False
+        self._ending = True
+        self._cancel.set()
 
+        def after_startup():
+            if self._thread and self._thread.is_alive():
+                self._thread.join(timeout=6)
+            if self._thread and self._thread.is_alive():
+                from meeting_assistant.services.meeting_shutdown import EndSummary
+
+                self.end_finished.emit(EndSummary((), (), ("abertura dos programas ainda em andamento",)))
+                self._ending = False
+            else:
+                self.shutdown.start()
+
+        threading.Thread(target=after_startup, daemon=True, name="Cancel meeting launch").start()
+        return True
+
+    def _wait(self, seconds):
+        return self._cancel.wait(seconds)
+
+    def _safe_run(self):
         try:
-            import win32gui
-
-            win32gui.EnumWindows(callback, None)
+            self._run()
         except Exception:
-            pass
+            if not self._cancel.is_set():
+                self.progress_changed.emit("Falha na abertura. Confira os programas e tente novamente.")
+                self.finished.emit(LaunchSummary(False, False, False, False, ("Abertura não confirmada",)))
 
     def _run(self) -> None:
-        settings = self._settings_provider()
+        settings = self._launch_settings or self._settings_provider()
         notes: list[str] = []
 
         snapshot = self._process_snapshot()
@@ -150,6 +169,8 @@ class MeetingLauncherService(QObject):
         else:
             notes.append("OBS já estava aberto")
 
+        if self._cancel.is_set():
+            return
         if not any(looks_like_jwl_process(name) for name in snapshot.values()):
             self.progress_changed.emit("Abrindo JW Library…")
             if self._launch_jwl():
@@ -160,6 +181,8 @@ class MeetingLauncherService(QObject):
         else:
             notes.append("JW Library já estava aberto")
 
+        if self._cancel.is_set():
+            return
         zoom_meeting = self._zoom_meeting_active()
         zoom_running = any(looks_like_zoom_process(name) for name in snapshot.values())
         join_url = str(getattr(settings, "zoom_join_url", "") or "").strip()
@@ -182,6 +205,8 @@ class MeetingLauncherService(QObject):
         else:
             notes.append("Zoom já está em uma reunião")
 
+        if self._cancel.is_set():
+            return
         self.progress_changed.emit("Abrindo WhatsApp…")
         if self._open_uri("whatsapp://"):
             notes.append("WhatsApp solicitado")
@@ -200,7 +225,7 @@ class MeetingLauncherService(QObject):
         obs_running = False
         jwl_running = False
         zoom_running = False
-        while time.monotonic() < deadline:
+        while not self._cancel.is_set() and time.monotonic() < deadline:
             snapshot = self._process_snapshot()
             obs_running = any(looks_like_obs_process(name) for name in snapshot.values())
             jwl_running = any(looks_like_jwl_process(name) for name in snapshot.values())
@@ -211,7 +236,7 @@ class MeetingLauncherService(QObject):
             jwl_seen = jwl_seen or jwl_running
             if not jwl_requested and obs_running and jwl_running and zoom_running:
                 break
-            time.sleep(0.45)
+            self._wait(0.45)
 
         zoom_meeting = self._zoom_meeting_active()
         if jwl_exited:
@@ -238,66 +263,9 @@ class MeetingLauncherService(QObject):
             jwl_exited_during_startup=jwl_exited,
         )
 
-        try:
-            import win32con
-            import win32gui
-            import win32process
-
-            layouts = getattr(settings, "window_layouts", {}) or {}
-
-            def apply_layout(hwnd, _):
-                if not win32gui.IsWindowVisible(hwnd):
-                    return True
-                _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                try:
-                    pname = psutil.Process(pid).name().casefold()
-                    cname = win32gui.GetClassName(hwnd)
-
-                    if pname == "whatsapp.exe" and cname == "ApplicationFrameWindow":
-                        # Push WhatsApp to bottom instead of minimizing to prevent PiP crash
-                        win32gui.SetWindowPos(
-                            hwnd,
-                            win32con.HWND_BOTTOM,
-                            0,
-                            0,
-                            0,
-                            0,
-                            win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE,
-                        )
-                    elif pname in ("obs64.exe", "obs32.exe") and cname == "Qt5QWindowIcon":
-                        # Push OBS to bottom or minimize
-                        win32gui.SetWindowPos(
-                            hwnd,
-                            win32con.HWND_BOTTOM,
-                            0,
-                            0,
-                            0,
-                            0,
-                            win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE,
-                        )
-
-                    elif pname == "zoom.exe" and cname in ("ZPContentViewWndClass", "ZPPTopWndClass"):
-                        if "zoom" in layouts:
-                            ly = layouts["zoom"]
-                            wp = win32gui.GetWindowPlacement(hwnd)
-                            # Update rcNormalPosition
-                            win32gui.SetWindowPlacement(
-                                hwnd, (wp[0], wp[1], wp[2], wp[3], (ly[0], ly[1], ly[2], ly[3]))
-                            )
-                    elif pname == "jwlibrary.exe" and "Windows.UI.Core.CoreWindow" in cname:
-                        if "jwlibrary" in layouts:
-                            ly = layouts["jwlibrary"]
-                            wp = win32gui.GetWindowPlacement(hwnd)
-                            win32gui.SetWindowPlacement(
-                                hwnd, (wp[0], wp[1], wp[2], wp[3], (ly[0], ly[1], ly[2], ly[3]))
-                            )
-                except Exception:
-                    pass
-                return True
-
-            win32gui.EnumWindows(apply_layout, None)
-        except Exception:
-            pass
+        if self._cancel.is_set():
+            return
+        self.restore_layout_requested.emit()
 
         self.progress_changed.emit(
             "Verificação concluída; há pendências na abertura dos programas."
@@ -434,26 +402,12 @@ class MeetingLauncherService(QObject):
             return False
 
     @staticmethod
-    def _zoom_meeting_active() -> bool:
-        if win32gui is None:
+    def _zoom_meeting_active():
+        if sys.platform != "win32":
             return False
-        active = False
+        from meeting_assistant.services.window_inventory import WindowBackend
 
-        def callback(hwnd: int, _: object) -> bool:
-            nonlocal active
-            try:
-                if (
-                    win32gui.GetClassName(hwnd) == _ZOOM_MEETING_CLASS
-                    and win32gui.GetWindowText(hwnd).strip() == "Zoom Meeting"
-                ):
-                    active = True
-                    return False
-            except (OSError, RuntimeError):
-                pass
-            return not active
-
-        try:
-            win32gui.EnumWindows(callback, None)
-        except (OSError, RuntimeError):
-            return False
-        return active
+        return any(
+            w.process == "zoom.exe" and (w.meeting_controls or w.class_name == _ZOOM_MEETING_CLASS)
+            for w in WindowBackend().windows()
+        )

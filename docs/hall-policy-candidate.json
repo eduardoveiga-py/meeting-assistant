@@ -1,0 +1,10 @@
+{
+  "base_commit": "b4cd185cc578c5ba0aadc166243faee6b6ad297c",
+  "authorization": "guardian_only_when_automation_enabled",
+  "validation": "physical_pending",
+  "scope": "Policy adapter only; native JWL/Zoom switch commands unchanged. Historical baseline preserved.",
+  "sha256": {
+    "src/meeting_assistant/services/zoom_hall_service.py": "44ec28bd622a3191daf5dff2c0f00ea37f50ed42dd0e3c92f92e722520789b05",
+    "tests/test_zoom_hall_discovery.py": "6ddde739089ebc333585b2f4d89d124fbef84dc677f34c2b999459a34661f8e4"
+  }
+}

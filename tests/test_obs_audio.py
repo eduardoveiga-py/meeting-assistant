@@ -17,6 +17,8 @@ from meeting_assistant.services.obs_audio import (
     prepare,
 )
 
+pytestmark = pytest.mark.usefixtures("audio_monitor_profile")
+
 
 class FakeObs:
     def __init__(self):
@@ -26,10 +28,55 @@ class FakeObs:
         self.scenes = {"Texto do Ano": [], "Palco": [], "Mídias": []}
         self.calls = []
         self.failure_name = None
+        self.filters = {}
+        self.monitor_device = {"monitorDeviceId": "cable", "monitorDeviceName": "CABLE Input"}
+        self.ignore_filter_updates = False
+        self.plugin_available = True
 
-    def send(self, request, data, raw=True):
+    def send(self, request, data=None, raw=True):
+        data = data or {}
         self.calls.append((request, deepcopy(data)))
         name = data.get("inputName")
+        source = data.get("sourceName")
+        filters = self.filters.setdefault(source, [])
+        if request == "GetProfileList":
+            return {"currentProfileName": "Unit audio"}
+        if request == "GetSourceFilterList":
+            return {"filters": deepcopy(filters)}
+        if request == "CreateSourceFilter":
+            if data["filterKind"] == "audio_monitor" and not self.plugin_available:
+                raise RuntimeError("Plugin absent")
+            filters.append(
+                {
+                    "filterName": data["filterName"],
+                    "filterKind": data["filterKind"],
+                    "filterSettings": deepcopy(data["filterSettings"]),
+                    "filterEnabled": True,
+                }
+            )
+            return {}
+        if request in {
+            "SetSourceFilterSettings",
+            "SetSourceFilterEnabled",
+            "SetSourceFilterIndex",
+            "GetSourceFilter",
+        }:
+            current = next(f for f in filters if f["filterName"] == data["filterName"])
+            if request == "GetSourceFilter":
+                return deepcopy(current)
+            if request == "SetSourceFilterSettings" and not self.ignore_filter_updates:
+                current["filterSettings"].update(data["filterSettings"])
+            elif request == "SetSourceFilterEnabled":
+                current["filterEnabled"] = data["filterEnabled"]
+            elif request == "SetSourceFilterIndex":
+                filters.remove(current)
+                filters.insert(data["filterIndex"], current)
+            return {}
+        if request == "SetInputAudioTracks":
+            self.sources[name]["tracks"] = data["inputAudioTracks"]
+            return {}
+        if request == "GetInputAudioTracks":
+            return {"inputAudioTracks": self.sources[name]["tracks"]}
         if request == "GetInputKindList":
             return {"inputKinds": [MIC_KIND, APP_KIND]}
         if request == "GetInputList":

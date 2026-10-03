@@ -9,6 +9,14 @@ separate concern handled by the Windows audio-session guard.
 
 from obsws_python.error import OBSSDKRequestError
 
+from meeting_assistant.services.audio_routes import (
+    configure_filters,
+    enable_extra_route,
+    silence_extra_routes,
+    validate_route,
+    virtual_outputs,
+)
+
 BUS = "Meeting Assistant - Áudio"
 MIC = "Meeting Assistant - Mesa"
 APPS = {
@@ -50,10 +58,21 @@ def mute_managed(client):
     for name, kind in SOURCES.items():
         if name not in rows or rows[name]["inputKind"] != kind:
             continue
+        # A filter failure must not prevent the independent mute/monitor
+        # commands. Attempt each path before reporting unverified silence.
+        try:
+            silence_extra_routes(client, name)
+        except Exception:
+            failed.append(name)
         try:
             call(client, "SetInputMute", inputName=name, inputMuted=True)
-            call(client, "SetInputAudioMonitorType", inputName=name, monitorType=NONE)
             if not call(client, "GetInputMute", inputName=name)["inputMuted"]:
+                failed.append(name)
+        except Exception:
+            failed.append(name)
+        try:
+            call(client, "SetInputAudioMonitorType", inputName=name, monitorType=NONE)
+            if call(client, "GetInputAudioMonitorType", inputName=name)["monitorType"] != NONE:
                 failed.append(name)
         except Exception:
             failed.append(name)
@@ -141,6 +160,7 @@ def discover(client):
         "message": "Preparado, envio silenciado. Selecione as fontes e confira o roteamento abaixo.",
         "microphones": physical_choices(client),
         "applications": {label: application_choices(client, label) for label in APPS},
+        "outputs": virtual_outputs(),
         "selected": {
             name: call(client, "GetInputSettings", inputName=name)["inputSettings"] for name in SOURCES
         },
@@ -149,10 +169,7 @@ def discover(client):
 
 def validate_selection(client, data):
     if data.get("routing_confirmed") is not True:
-        raise ValueError(
-            "Confirme CABLE Input no OBS, microfone da Mesa no Zoom, "
-            "CABLE Output no WhatsApp, e o retorno separado da mesa."
-        )
+        raise ValueError("Confirme os microfones virtuais do perfil escolhido e o retorno separado da mesa.")
     mic = data.get("microphone", "")
     if mic not in {x["itemValue"] for x in physical_choices(client)}:
         raise ValueError("Selecione a entrada física da mesa conectada; atualize as listas se necessário.")
@@ -173,7 +190,9 @@ def activate(client, data):
     check_kinds(rows)
     if not all(name in rows for name in SOURCES):
         raise ValueError("Prepare as fontes antes de ativar o envio.")
+    mute_managed(client)
     selected = validate_selection(client, data)
+    profile, whatsapp_device = validate_route(client, data)
     scenes = tuple(dict.fromkeys(data.get("scenes", [])))
     existing = {s["sceneName"] for s in call(client, "GetSceneList")["scenes"]}
     if len(scenes) != 3 or BUS in scenes or not set(scenes).issubset(existing):
@@ -210,44 +229,46 @@ def activate(client, data):
                 set_item(client, scene, matches[0]["sceneItemId"], True)
             else:
                 call(client, "CreateSceneItem", sceneName=scene, sourceName=BUS, sceneItemEnabled=True)
-        try:
-            filters = call(client, "GetSourceFilterList", sourceName=MIC)["filters"]
-            if not any(f["filterName"] == "Gain (WhatsApp)" for f in filters):
-                call(
-                    client,
-                    "CreateSourceFilter",
-                    sourceName=MIC,
-                    filterName="Gain (WhatsApp)",
-                    filterKind="gain_filter",
-                    filterSettings={"db": 8.0},
-                )
-            if not any(f["filterName"] == "Limiter (WhatsApp)" for f in filters):
-                call(
-                    client,
-                    "CreateSourceFilter",
-                    sourceName=MIC,
-                    filterName="Limiter (WhatsApp)",
-                    filterKind="limiter_filter",
-                    filterSettings={"threshold": -3.0, "release_time": 60},
-                )
-        except Exception:
-            pass
+        gains = data.get("gains_db", {})
+        for name in selected:
+            configure_filters(
+                client, name, gains.get(name, 0), whatsapp_device if profile == "whatsapp_zoom" else ""
+            )
+        for name in selected:
+            call(
+                client,
+                "SetInputAudioTracks",
+                inputName=name,
+                inputAudioTracks={str(i): False for i in range(1, 7)},
+            )
+            if any(call(client, "GetInputAudioTracks", inputName=name)["inputAudioTracks"].values()):
+                raise ValueError("OBS não confirmou o isolamento do áudio das faixas Program.")
 
         for name in selected:
-            call(client, "SetInputAudioMonitorType", inputName=name, monitorType=MONITOR)
+            monitor = NONE if name == app_name("Zoom") else MONITOR
+            call(client, "SetInputAudioMonitorType", inputName=name, monitorType=monitor)
+            if profile == "whatsapp_zoom":
+                enable_extra_route(client, name)
             call(client, "SetInputMute", inputName=name, inputMuted=False)
             if (
                 call(client, "GetInputMute", inputName=name)["inputMuted"]
-                or call(client, "GetInputAudioMonitorType", inputName=name)["monitorType"] != MONITOR
+                or call(client, "GetInputAudioMonitorType", inputName=name)["monitorType"] != monitor
             ):
                 raise ValueError("OBS não confirmou a ativação do áudio.")
     except Exception:
         mute_managed(client)
         raise
+    microphones = (
+        "CABLE Output no Zoom e no WhatsApp"
+        if profile == "shared"
+        else "CABLE Output no Zoom e a saída de gravação do segundo cabo no WhatsApp"
+    )
     return {
-        "message": "OBS confirmou as fontes e o monitoramento. Selecione o Microfone da Mesa "
-        "no Zoom e CABLE Output no WhatsApp; o retorno do WhatsApp começa silenciado "
-        "pelo Meeting Assistant. O OBS mantém essa configuração ao fechar o app."
+        "message": f"OBS confirmou o envio. Use {microphones}. "
+        "Retorno WhatsApp silenciado pelo app. Confira volumes durante uma chamada de teste.",
+        "profile": profile,
+        "whatsapp_device": whatsapp_device,
+        "gains_db": gains,
     }
 
 

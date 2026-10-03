@@ -40,6 +40,8 @@ class SettingsDialog(QDialog):
     hall_setup_requested = Signal()
     setup_assistant_requested = Signal()
     update_history_requested = Signal()
+    save_layout_requested = Signal()
+    restore_layout_requested = Signal()
 
     def __init__(
         self,
@@ -82,6 +84,8 @@ class SettingsDialog(QDialog):
                 ("Áudio da mesa e das mídias → Zoom + WhatsApp…", self.audio_setup_requested),
                 ("Observar mídia no JW Library (20 s)", self.observe_requested),
                 ("Calibrar Texto do Ano", self.calibrate_requested),
+                ("Salvar disposição atual das janelas", self.save_layout_requested),
+                ("Aplicar disposição salva / JWL à direita", self.restore_layout_requested),
             ):
                 button = QPushButton(text)
                 button.clicked.connect(signal.emit)
@@ -93,7 +97,7 @@ class SettingsDialog(QDialog):
             hint.setWordWrap(True)
             tools_layout.addWidget(hint)
 
-            update_btn = QPushButton("Versões Anteriores (Restaurar App)")
+            update_btn = QPushButton("Atualizações e versões anteriores")
             update_btn.clicked.connect(self.update_history_requested.emit)
             tools_layout.addWidget(update_btn)
             root.addWidget(tools_group)

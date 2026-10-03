@@ -40,6 +40,9 @@ class AppSettings:
     telemetry_screenshots: bool = False
     telemetry_repo_url: str = "https://github.com/eduardoveiga-py/meeting-assistant-diagnostics.git"
     window_layouts: dict = field(default_factory=dict)
+    audio_profile: str = "shared"
+    whatsapp_audio_device: str = ""
+    audio_gains_db: dict = field(default_factory=dict)
 
 
 class SettingsService:
@@ -94,6 +97,19 @@ class SettingsService:
                 valid = type(value) is type(default)
                 if valid and field.name in {"obs_port", "camera_rtsp_port"}:
                     valid = 1 <= value <= 65535
+                if valid and field.name == "window_layouts":
+                    from meeting_assistant.services.window_layout import valid_layout
+
+                    valid = valid_layout(value)
+                if valid and field.name == "audio_profile":
+                    valid = value in {"shared", "whatsapp_zoom"}
+                if valid and field.name == "audio_gains_db":
+                    import math
+
+                    valid = all(
+                        isinstance(k, str) and type(v) in (int, float) and math.isfinite(v) and 0 <= v <= 18
+                        for k, v in value.items()
+                    )
                 if valid and field.name == "display_settings_version":
                     valid = value >= 1
                 if valid and field.name in {"obs_host", "scene_background", "scene_speaker", "scene_media"}:

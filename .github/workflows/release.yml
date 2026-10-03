@@ -76,7 +76,8 @@ jobs:
           $process = Start-Process dist/MeetingAssistant/MeetingAssistant.exe -ArgumentList '--self-check runtime-check.json' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw 'Packaged runtime failed' }
           $check = Get-Content runtime-check.json -Raw | ConvertFrom-Json
-          if (-not $check.ok -or -not $check.frozen -or $check.app_version -ne '0.8.1') { throw 'Invalid runtime report' }
+          $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
+          if (-not $check.ok -or -not $check.frozen -or $check.app_version -ne $version) { throw 'Invalid runtime report' }
           Copy-Item -Recurse build/video-native/package dist/MeetingAssistant/native
           Compress-Archive -Path dist/MeetingAssistant -DestinationPath build/MeetingAssistant-0.8.1-Windows11-x64-portable.zip
       - name: Install Inno Setup if missing
@@ -89,7 +90,8 @@ jobs:
       - name: Build installer and checksums
         shell: pwsh
         run: |
-          & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" /DMyAppVersion=0.8.1 packaging/MeetingAssistant.iss
+          $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
+          & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" "/DMyAppVersion=$version" packaging/MeetingAssistant.iss
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
           Copy-Item build/MeetingAssistant-0.8.1-Windows11-x64-portable.zip release
           Copy-Item runtime-check.json release
