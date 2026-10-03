@@ -288,9 +288,10 @@ class ObsController(QObject):
                 result = prepare_camera(self._client, data["mode"], data["value"])
                 self._refresh_scene_list()
             elif action == "stop_virtual":
-                self._client.send("StopVirtualCam", raw=True)
                 if self._client.send("GetVirtualCamStatus", raw=True)["outputActive"]:
-                    raise ValueError("OBS não confirmou a câmera virtual desligada.")
+                    self._client.send("StopVirtualCam", raw=True)
+                    if self._client.send("GetVirtualCamStatus", raw=True)["outputActive"]:
+                        raise ValueError("OBS não confirmou a câmera virtual desligada.")
                 result = "Câmera virtual desligada. Encerre a reunião diretamente no Zoom."
             else:
                 raise ValueError("Ação desconhecida.")
