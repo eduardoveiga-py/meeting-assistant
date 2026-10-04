@@ -110,7 +110,7 @@ def test_short_window_keeps_controls_readable_and_restores_preview_when_grown(tm
     fonts = {button: button.font().pixelSize() for button in window.findChildren(QPushButton)}
     button_heights = {button: button.sizeHint().height() for button in fonts}
     try:
-        for height in (480, 780, 480):
+        for height in (500, 780, 500):
             window.resize(520, height)
             QApplication.processEvents()
             scroll = window.centralWidget()

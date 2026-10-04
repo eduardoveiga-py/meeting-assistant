@@ -71,7 +71,7 @@ def test_main_window_shows_all_controls_without_scrolling(app, height):
     services[2].snapshot.return_value = []
     services[3].snapshot.return_value = []
     services[6].active = False
-    window = MainWindow(AppState(), AppSettings(), *services)
+    window = MainWindow(AppState(), AppSettings(whatsapp_enabled=True), *services)
     window.show()
     app.processEvents()
     window.set_telemetry_session("MA-20260918-001933-25DE")
@@ -98,7 +98,7 @@ def test_launch_summary_does_not_expand_main_window_horizontally(app, height):
     services[2].snapshot.return_value = []
     services[3].snapshot.return_value = []
     services[6].active = False
-    window = MainWindow(AppState(), AppSettings(), *services)
+    window = MainWindow(AppState(), AppSettings(whatsapp_enabled=True), *services)
     window.show()
     app.processEvents()
     fit_window(window, QRect(0, 0, 800, height))
@@ -139,7 +139,7 @@ def test_main_window_camera_button_and_auto_start(app):
     services[3].snapshot.return_value = []
     services[6].active = False
     camera = FakeCameraSession()
-    window = MainWindow(AppState(), AppSettings(), *services, camera_session=camera)
+    window = MainWindow(AppState(), AppSettings(whatsapp_enabled=True), *services, camera_session=camera)
     window.show()
     app.processEvents()
     try:
