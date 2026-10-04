@@ -1,5 +1,24 @@
 # Registro de decisão
 
+## 2026-10-03 — pendências visíveis na ativação do áudio
+
+**Problema relatado:** fontes criadas no OBS, três confirmações marcadas e botão
+Aplicar desabilitado. A captura não mostra os campos de entrada/destino; não permite
+atribuir a falha real a um deles. O código exige mesa e, no perfil com Zoom, segundo
+cabo, mas não explicava essa pendência. Atualizar as listas também descartava
+seleções editadas quando os ajustes salvos no OBS não correspondiam a elas.
+
+**Decisão:** exibir os campos pendentes no rodapé e mostrar o primeiro após preparar.
+Preservar escolhas disponíveis e ganhos na mesma tela; não selecionar substitutos
+de dispositivos removidos nem dispensar confirmação do roteamento. Ganho de fonte
+não selecionada fica desabilitado. Rede e filtros continuam no serviço OBS existente.
+
+**Evidência:** testes de cliques/teclas Qt reproduzem o bloqueio com confirmações
+marcadas, atualização após recriar entradas, remoção de dispositivos e troca de
+perfil. O clique Aplicar percorre o serviço de áudio com OBS simulado, confirma ganho
+e verifica que o retorno Zoom vai somente ao segundo cabo. Ensaio físico pendente;
+esta alteração não diagnostica nem remove o ruído relatado na entrada da mesa.
+
 ## 2026-09-17 — saída do Salão
 
 **Decisão:** manter o JW Library como player e usar sua segunda janela nativa como saída física do Salão.

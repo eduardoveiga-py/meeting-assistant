@@ -111,7 +111,9 @@ class SetupAssistantDialog(QDialog):
                 layout, f"Baixar e instalar {app} (WinGet)", lambda _=False, app=app: self._install(app)
             )
         self._button(layout, "Obter JW Library — Microsoft Store", self._store)
-        self._button(layout, "Instalar Cabos Virtuais A e B (requer arquivo .zip)", self._install_virtual_cables)
+        self._button(
+            layout, "Instalar Cabos Virtuais A e B (requer arquivo .zip)", self._install_virtual_cables
+        )
         self._button(layout, "Configurar WebSocket local (OBS fechado)", self._websocket)
         self._button(layout, "Instalar/atualizar câmera e ponte nativas (OBS fechado)", self._native)
         self._button(layout, "Abrir OBS", self._open_obs)
@@ -267,9 +269,9 @@ class SetupAssistantDialog(QDialog):
             return
 
         def work():
+            import subprocess
             import tempfile
             import zipfile
-            import subprocess
             from pathlib import Path
 
             try:
@@ -285,7 +287,9 @@ class SetupAssistantDialog(QDialog):
                     results = []
                     for setup in setups:
                         cmd = f'Start-Process -FilePath "{setup}" -ArgumentList "-i", "-h" -Wait -Verb RunAs'
-                        res = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True)
+                        res = subprocess.run(
+                            ["powershell", "-NoProfile", "-Command", cmd], capture_output=True
+                        )
                         if res.returncode != 0:
                             results.append(f"Falha na instalação de {setup.name}.")
                         else:

@@ -29,11 +29,14 @@ class AudioSetupDialog(QDialog):
         self.settings_service = settings_service
         self.token = uuid4().hex
         self.busy = False
+        self._lists_loaded = False
+        self._prepare_selection = None
         self.setWindowTitle("Áudio da mesa e das mídias → Zoom + WhatsApp")
         self.resize(590, 690)
         self.setMinimumSize(360, 280)
         outer = QVBoxLayout(self)
         scroll = QScrollArea()
+        self.scroll = scroll
         scroll.setWidgetResizable(True)
         content = QWidget()
         body = QVBoxLayout(content)
@@ -85,7 +88,8 @@ class AudioSetupDialog(QDialog):
             form.addRow("Ganho: " + name.removeprefix("Meeting Assistant - "), gain)
         body.addLayout(form)
         advanced = QLabel(
-            "O perfil com participantes Zoom requer dois cabos virtuais (como o pacote CABLE A+B disponível em "
+            "O perfil com participantes Zoom requer dois cabos virtuais "
+            "(como o pacote CABLE A+B disponível em "
             '<a href="https://vb-audio.com/Cable/">vb-audio.com/Cable</a>) e o plugin '
             '<a href="https://github.com/exeldro/obs-audio-monitor/releases/tag/0.10.1">'
             "Audio Monitor 0.10.1</a> instalado no OBS. "
@@ -139,6 +143,10 @@ class AudioSetupDialog(QDialog):
         self.status.setWordWrap(True)
         self.status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         outer.addWidget(self.status)
+        self.readiness = QLabel()
+        self.readiness.setWordWrap(True)
+        self.readiness.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        outer.addWidget(self.readiness)
         self.levels = QLabel("Medidores OBS: aguardando sinal.")
         self.levels.setWordWrap(True)
         outer.addWidget(self.levels)
@@ -170,16 +178,31 @@ class AudioSetupDialog(QDialog):
         combo.addItem("Não selecionado", "")
         return combo
 
+    def _activation_blockers(self):
+        blockers = []
+        if not self.microphone.currentData():
+            blockers.append(("selecione a entrada física da mesa", self.microphone))
+        if self.profile.currentData() == "whatsapp_zoom" and not self.whatsapp_device.currentData():
+            blockers.append(
+                ("selecione o segundo cabo virtual para WhatsApp", self.whatsapp_device)
+            )
+        missing_confirmation = next((c for c in self.confirmations if not c.isChecked()), None)
+        if missing_confirmation is not None:
+            blockers.append(("confirme as três verificações de roteamento", missing_confirmation))
+        return blockers
+
     def refresh_enabled(self):
+        blockers = self._activation_blockers()
         self.prepare_button.setEnabled(not self.busy)
         self.mute_button.setEnabled(not self.busy)
         self.close_button.setEnabled(not self.busy)
-        self.activate_button.setEnabled(
-            not self.busy
-            and bool(self.microphone.currentData())
-            and (self.profile.currentData() != "whatsapp_zoom" or bool(self.whatsapp_device.currentData()))
-            and all(c.isChecked() for c in self.confirmations)
+        self.activate_button.setEnabled(not self.busy and not blockers)
+        self.readiness.setText(
+            "Para habilitar Aplicar: " + "; ".join(message for message, _ in blockers) + "."
+            if blockers
+            else ""
         )
+        self.readiness.setVisible(bool(blockers) and not self.busy)
         for widget in (
             self.microphone,
             self.profile,
@@ -191,6 +214,11 @@ class AudioSetupDialog(QDialog):
             widget.setEnabled(not self.busy)
         self.applications["Zoom"].setEnabled(not self.busy and self.profile.currentData() == "whatsapp_zoom")
         self.whatsapp_device.setEnabled(not self.busy and self.profile.currentData() == "whatsapp_zoom")
+        for label, combo in self.applications.items():
+            self.gains[app_name(label)].setEnabled(
+                not self.busy and combo.isEnabled() and bool(combo.currentData())
+            )
+        self.gains[MIC].setEnabled(not self.busy and bool(self.microphone.currentData()))
 
     def _profile_changed(self):
         if self.profile.currentData() == "shared":
@@ -201,6 +229,10 @@ class AudioSetupDialog(QDialog):
 
     def request(self, action):
         if self.busy:
+            return
+        if action == "activate" and self._activation_blockers():
+            self.refresh_enabled()
+            self.scroll.ensureWidgetVisible(self._activation_blockers()[0][1], 50, 40)
             return
         data = {
             "profile": self.profile.currentData(),
@@ -215,6 +247,10 @@ class AudioSetupDialog(QDialog):
                 self.settings.scene_media,
             ],
         }
+        if action == "prepare":
+            # First discovery restores OBS's saved choices. Subsequent refreshes
+            # preserve the operator's edits, including deliberate deselection.
+            self._prepare_selection = data if self._lists_loaded else None
         self.busy = True
         self.refresh_enabled()
         self.status.setText("Aguardando OBS…")
@@ -237,16 +273,32 @@ class AudioSetupDialog(QDialog):
                         "Rota aplicada, mas ajustes do app não foram salvos. Confira permissões."
                     )
         if ok and action == "prepare":
+            prior = self._prepare_selection
             self.populate(
-                self.whatsapp_device, result.get("outputs", []), self.settings.whatsapp_audio_device
+                self.whatsapp_device,
+                result.get("outputs", []),
+                prior["whatsapp_device"] if prior is not None else self.settings.whatsapp_audio_device,
             )
-            self.populate(self.microphone, result["microphones"], result["selected"][MIC].get("device_id"))
+            self.populate(
+                self.microphone,
+                result["microphones"],
+                prior["microphone"] if prior is not None else result["selected"][MIC].get("device_id"),
+            )
             for label, combo in self.applications.items():
                 self.populate(
-                    combo, result["applications"][label], result["selected"][app_name(label)].get("window")
+                    combo,
+                    result["applications"][label],
+                    prior["applications"][label]
+                    if prior is not None
+                    else result["selected"][app_name(label)].get("window"),
                 )
+            self._lists_loaded = True
             self._profile_changed()
+        if action == "prepare":
+            self._prepare_selection = None
         self.refresh_enabled()
+        if ok and action == "prepare" and self._activation_blockers():
+            self.scroll.ensureWidgetVisible(self._activation_blockers()[0][1], 50, 40)
 
     def populate(self, combo, choices, selected):
         combo.clear()

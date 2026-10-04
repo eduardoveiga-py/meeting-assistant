@@ -80,13 +80,22 @@ estar conectada. Anote antes qual microfone o Zoom está usando, para restaurá-
 9. Clique **Aplicar seleção e ativar envio ao Zoom e WhatsApp**. O app confirma
    fontes/monitoramento no OBS, mas não certifica que alguém ouviu o som. Faça o Teste C.
 
-O app mantém o nome compatível `Meeting Assistant - Áudio Zoom` (o rótulo é legado;
-o bus agora atende Zoom e WhatsApp), contendo a entrada da mesa e quatro fontes
-independentes de captura por aplicativo. Essa cena é incluída em Texto do Ano, Palco e Mídias.
+O app usa a cena `Meeting Assistant - Áudio`, contendo a entrada da mesa e as fontes
+independentes de captura por aplicativo. `Meeting Assistant - Áudio Zoom` identifica
+agora a captura específica do Zoom, habilitada somente no perfil com destino separado
+para WhatsApp. A cena de áudio é incluída em Texto do Ano, Palco e Mídias.
 Somente as fontes selecionadas são habilitadas e monitoradas. A cena Program e as janelas
 JWL/Zoom não são trocadas por esta configuração. OBS salva fontes, seleção e ativação;
 fechar o Meeting Assistant **não silencia o áudio**. Preparar novamente silencia as fontes
 criadas pelo módulo; ative novamente depois de conferir.
+
+Para verificar a tela: após preparar, marque as três confirmações com a entrada da
+mesa ainda em **Não selecionado**. Aplicar deve permanecer desabilitado, com a razão
+visível no rodapé. Escolha a mesa; no perfil comum o botão deve habilitar. No perfil
+com retorno Zoom, ele exige também a segunda entrada virtual. Ajuste um ganho,
+aplique e confira o valor no filtro da fonte correspondente no OBS. Preparar
+novamente preserva escolhas disponíveis e ganhos, mas limpa as confirmações;
+aplique novamente somente após conferir o roteamento.
 
 Se a mesa já inclui o áudio de mídia no sinal enviado ao notebook, não ative também sua
 captura por aplicativo: isso duplica o som. Se ela inclui o retorno do Zoom, ajuste uma saída

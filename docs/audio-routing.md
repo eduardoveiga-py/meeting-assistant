@@ -64,6 +64,32 @@ Nenhum retorno WhatsApp é capturado. Não selecione um cabo virtual como entrad
 
 ## Ganho e distorção
 
+### Preparar e aplicar na tela do app
+
+**Preparar fontes / atualizar listas** cria fontes ainda silenciadas e consulta
+dispositivos e aplicativos. Não ativa o envio nem aplica o ganho escolhido.
+Após recriar as fontes no OBS, selecione a entrada física da mesa novamente se
+ela não estiver escolhida. No perfil com retorno do Zoom, selecione também uma
+segunda entrada virtual; instalar Audio Monitor não instala esse segundo cabo.
+
+As três confirmações não substituem essas seleções. Enquanto falta um campo,
+a mensagem **Para habilitar Aplicar** mostra a pendência fora da área de rolagem.
+Depois da preparação, a tela mostra o primeiro campo que exige revisão. Fontes
+sem seleção têm seu controle de ganho desabilitado; ajustar ganho não seleciona
+uma fonte nem habilita a captura do Zoom no perfil comum.
+
+Na mesma abertura da tela, atualizar as listas preserva escolhas ainda disponíveis
+e ganhos, inclusive a decisão de deixar um aplicativo sem seleção. Dispositivos
+ou janelas ausentes voltam a **Não selecionado**, sem substituir a entrada por
+outra. A preparação silencia o envio e exige conferir as três confirmações novamente.
+
+**Aplicar seleção e ativar envio** envia os valores pelo WebSocket configurado,
+confere os filtros e o roteamento no OBS e salva os ajustes após a confirmação.
+O campo de ganho não funciona em tempo real; **0 dB** mantém o nível original,
+não silencia. Ouvir o resultado no dispositivo remoto continua obrigatório.
+
+### Níveis
+
 Cada fonte tem ganho ajustável de **0 a 18 dB**, seguido de limitador em **−3 dB**.
 Comece em 0 dB, teste fala e uma mídia conhecida e aumente em pequenos passos.
 O app lê os medidores do OBS; os níveis medidos não comprovam o volume recebido

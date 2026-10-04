@@ -1,5 +1,11 @@
 # Roteiro de conclusão — 21/09/2026
 
+Atualização de 03/10/2026: a tela de áudio explica campos pendentes junto ao botão
+Aplicar e preserva escolhas disponíveis/ganhos ao atualizar listas. Confirmações
+continuam obrigatórias, com nova conferência após preparar. Testes Qt e OBS simulado
+cobrem os dois perfis e o envio Zoom somente ao segundo cabo; validação física desta
+revisão permanece pendente. [Roteiro de áudio](audio-routing.md).
+
 Requisitos ampliados pelo operador. O checkpoint JWL ↔ Zoom é preservado conforme o [contrato](validated-hall-contract.md).
 A política atual de guardião só com automação ligada tem candidato separado, pendente de ensaio físico. Novas funções usarão módulos separados e interfaces existentes.
 
