@@ -14,7 +14,7 @@ recebidos do WhatsApp, preservando Zoom, mídias e o volume geral.
 | Retorno remoto do Zoom | Não | Excluído | Excluído |
 | Retorno remoto do WhatsApp | Não | Excluído | Excluído |
 
-Em Ajustes → Áudio, escolha **Mesa + mídias nos dois aplicativos**. Selecione
+Em Ajustes → Áudio → Envio, escolha **Mesa e mídias nos dois aplicativos**. Selecione
 explicitamente a entrada física da mesa e somente os aplicativos usados.
 Configure **CABLE-A Input** como dispositivo de monitoramento do OBS;
 **CABLE-A Output** como microfone dos dois aplicativos. A saída física continua
@@ -48,7 +48,7 @@ flowchart TD
 ```
 
 1. Instale os Cabos A e B e Audio Monitor e reinicie OBS/Windows conforme os instaladores.
-2. Em Ajustes → Áudio, prepare as listas e escolha **WhatsApp também recebe participantes do Zoom**.
+2. Em Ajustes → Áudio → Envio, atualize a lista e escolha **Incluir participantes do Zoom no WhatsApp**.
 3. Selecione a segunda entrada virtual (CABLE-B Input) para WhatsApp. Ela deve ser diferente de
    **CABLE-A Input**, usado no monitoramento global do OBS.
 4. Selecione mesa, mídias e a janela/processo de áudio do Zoom. No Zoom, mantenha
@@ -64,29 +64,41 @@ Nenhum retorno WhatsApp é capturado. Não selecione um cabo virtual como entrad
 
 ## Ganho e distorção
 
-### Preparar e aplicar na tela do app
+### Envio, Volumes e Ajuda
 
-**Preparar fontes** cria fontes ainda silenciadas e consulta
-dispositivos e aplicativos. Não ativa o envio nem aplica o ganho escolhido.
-Após recriar as fontes no OBS, selecione a entrada física da mesa novamente se
-ela não estiver escolhida. No perfil com retorno do Zoom, selecione também uma
-segunda entrada virtual; instalar Audio Monitor não instala esse segundo cabo.
+Abrir a tela ou clicar em **Atualizar lista** consulta a configuração existente do
+OBS sem criar fontes, silenciar ou alterar o envio. A aba **Envio** mostra mesa,
+JWL e, no perfil com retorno, Zoom e o segundo cabo. VLC e navegadores ficam em
+**Outras mídias**. As instruções de instalação e conferência ficam em **Ajuda**.
 
-As três confirmações não substituem essas seleções. Enquanto falta um campo,
-a mensagem **Para habilitar Aplicar** mostra a pendência fora da área de rolagem.
-Depois da preparação, a tela mostra o primeiro campo que exige revisão. Fontes
-sem seleção têm seu controle de ganho desabilitado; ajustar ganho não seleciona
-uma fonte nem habilita a captura do Zoom no perfil comum.
+**Criar fontes** aparece quando faltam fontes ou a cena de áudio. Essa operação
+cria/repara a estrutura silenciada; o envio só volta depois de **Ativar envio**.
+Escolhas e ganhos editados permanecem quando disponíveis. Dispositivos ausentes
+voltam a **Não selecionado**, sem selecionar outra entrada automaticamente.
 
-Na mesma abertura da tela, atualizar as listas preserva escolhas ainda disponíveis
-e ganhos, inclusive a decisão de deixar um aplicativo sem seleção. Dispositivos
-ou janelas ausentes voltam a **Não selecionado**, sem substituir a entrada por
-outra. A preparação silencia o envio e exige conferir as três confirmações novamente.
+No perfil com Zoom, escolha uma segunda entrada virtual, diferente do monitoramento
+OBS. Cabos ativos são enumerados pelo valor do estado Core Audio, incluindo o
+`AudioDeviceState` do pycaw 20240210. O cabo usado pelo monitoramento é removido
+das opções do segundo destino. Instalar Audio Monitor não instala esse segundo cabo.
+Se ele não for encontrado, a tela orienta instalar e depois atualizar a lista.
 
-**Aplicar seleção e ativar envio** envia os valores pelo WebSocket configurado,
-confere os filtros e o roteamento no OBS e salva os ajustes após a confirmação.
-O campo de ganho não funciona em tempo real; **0 dB** mantém o nível original,
-não silencia. Ouvir o resultado no dispositivo remoto continua obrigatório.
+Confira os dispositivos das chamadas e o caminho físico da mesa e marque a confirmação
+de roteamento. **Ativar envio** fica clicável: se faltar algo, mostra a pendência e
+foca o campo, sem enviar uma seleção inválida. Alterar uma seleção exige reconfirmar;
+atualização somente de leitura com as mesmas escolhas preserva a confirmação.
+
+Para aumentar apenas uma fonte já configurada: **Volumes → ganho → Salvar volumes**.
+Essa ação usa a fila WebSocket existente e escreve somente nos filtros de ganho
+alterados. Preserva mute, monitoramento, faixas, cenas, dispositivos e envio separado
+ao WhatsApp; não exige reconfirmar o roteamento nem selecionar o segundo cabo novamente.
+Os filtros de ganho e limitador devem estar configurados e habilitados. Fontes sem
+esses filtros precisam da configuração inicial na aba Envio e não aparecem como prontas.
+
+Os ganhos existentes são lidos do OBS. A mudança é confirmada por leitura do filtro
+e salva no app; diante de falha, tenta restaurar os ganhos anteriores sem silenciar
+o mix. Restauração incompleta é informada. O campo não atua em tempo real: é preciso
+clicar em **Salvar volumes**. **0 dB** mantém o nível original. Ouvir no dispositivo
+remoto continua obrigatório.
 
 ### Níveis
 

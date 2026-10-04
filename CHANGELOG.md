@@ -1,5 +1,18 @@
 # Histórico de alterações
 
+## Não lançado — configuração de áudio simplificada — 03/10/2026
+
+- Corrigida enumeração de cabos virtuais: estado Enum do pycaw era comparado com
+  inteiro, descartando dispositivos ativos da lista.
+- Tela separada em Envio, Volumes e Ajuda; aplicativos extras ficam recolhidos.
+- Abertura e Atualizar lista consultam o OBS sem silenciar o envio existente.
+- Ganho de uma fonte pode ser salvo separadamente, com leitura de confirmação e
+  restauração em falha, preservando dispositivos, mute e roteamento.
+- Ativar envio explica e foca campos pendentes; segundo cabo permanece obrigatório
+  para enviar participantes Zoom ao WhatsApp sem retorno ao próprio Zoom.
+- Regressões incluem dispositivos Enum, cliques Qt, dois perfis, filtros e layout.
+  Áudio físico e escuta remota desta revisão ainda exigem teste do operador.
+
 ## 0.6.0 — em avaliação
 
 - Checkpoint da release estável 0.5.1 antes das mudanças.

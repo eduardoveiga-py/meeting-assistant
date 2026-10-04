@@ -26,8 +26,7 @@ def test_audio_dialog_requires_selection_and_all_confirmations_and_fits():
     dialog.show()
     fit_window(dialog, QRect(0, 0, 800, 560))
     app.processEvents()
-    assert not dialog.activate_button.isEnabled()
-    dialog.request("prepare")
+    assert not dialog.activate_button.isEnabled()  # The automatic read is still pending.
     assert dialog.busy
     assert not dialog.close_button.isEnabled()
     result = {
@@ -37,11 +36,15 @@ def test_audio_dialog_requires_selection_and_all_confirmations_and_fits():
         "selected": {n: {} for n in SOURCES},
     }
     result["selected"][MIC] = {"device_id": "usb"}
-    controller.audio_task_finished.emit("wrong-dialog", "prepare", True, result)
+    controller.audio_task_finished.emit("wrong-dialog", "inspect", True, result)
     assert dialog.busy
-    controller.audio_task_finished.emit(dialog.token, "prepare", True, result)
+    controller.audio_task_finished.emit(dialog.token, "inspect", True, result)
     assert not dialog.busy
-    assert not dialog.activate_button.isEnabled()
+    assert dialog.activate_button.isEnabled()
+    controller.audio_task.reset_mock()
+    QTest.mouseClick(dialog.activate_button, Qt.MouseButton.LeftButton)
+    controller.audio_task.assert_not_called()
+    assert "confirmação" in dialog.status.text()
     for check in dialog.confirmations:
         check.setChecked(True)
     assert dialog.activate_button.isEnabled()

@@ -27,7 +27,7 @@ def virtual_outputs():
         for device in AudioUtilities.GetAllDevices():
             name = str(device.FriendlyName or "")
             if (
-                device.state == 1
+                getattr(device.state, "value", device.state) == 1
                 and AudioUtilities.GetEndpointDataFlow(device.id, 1) == 0
                 and any(t in name.casefold() for t in ("cable", "virtual", "voicemeeter"))
             ):

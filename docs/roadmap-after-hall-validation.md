@@ -1,6 +1,11 @@
 # Roteiro de conclusão — 21/09/2026
 
-Atualização de 03/10/2026: a tela de áudio explica campos pendentes junto ao botão
+Atualização de 03/10/2026 após novo retorno: corrigida detecção de cabos ativos
+com estado Enum. A configuração passa a Envio, Volumes e Ajuda; abrir/atualizar
+preserva áudio e o ganho usa ação independente. Falta ensaio físico desta revisão,
+incluindo segundo cabo, Zoom ouvido no WhatsApp, ganho e ausência de eco.
+
+Registro anterior de 03/10/2026, substituído pelo fluxo acima: a tela de áudio explicava campos pendentes junto ao botão
 Aplicar e preserva escolhas disponíveis/ganhos ao atualizar listas. Confirmações
 continuam obrigatórias, com nova conferência após preparar. Testes Qt e OBS simulado
 cobrem os dois perfis e o envio Zoom somente ao segundo cabo; validação física desta

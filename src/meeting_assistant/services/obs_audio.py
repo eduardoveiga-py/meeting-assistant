@@ -1,10 +1,10 @@
 """Explicit, isolated OBS audio provisioning; never changes Program or windows.
 
 The monitoring device and Zoom/WhatsApp devices require operator confirmation.
-OBS owns persistence. Discovery/preparation mutes our sources; activation is
-never automatic. Both call applications intentionally receive the same mix via
-the shared VB-CABLE recording endpoint; their physical speakers remain a
-separate concern handled by the Windows audio-session guard.
+OBS owns persistence. Discovery preserves live audio; preparation mutes our
+sources and activation is never automatic. The shared profile sends the same
+local mix to both calls. Adding Zoom participants to WhatsApp uses a separate
+virtual cable. Physical speakers are handled by the Windows audio-session guard.
 """
 
 from obsws_python.error import OBSSDKRequestError
@@ -16,6 +16,8 @@ from meeting_assistant.services.audio_routes import (
     validate_route,
     virtual_outputs,
 )
+from meeting_assistant.services.obs_audio_gain import apply_gains, gain_state
+from meeting_assistant.services.obs_monitor_device import monitoring_device
 
 BUS = "Meeting Assistant - Áudio"
 MIC = "Meeting Assistant - Mesa"
@@ -134,7 +136,9 @@ def prepare(client):
             call(client, "SetInputAudioMonitorType", inputName=name, monitorType=NONE)
         if not any(x["sourceName"] == name for x in items(client, BUS)):
             call(client, "CreateSceneItem", sceneName=BUS, sourceName=name, sceneItemEnabled=False)
-    return discover(client)
+    result = discover(client)
+    result["message"] = "Fontes preparadas. Envio silenciado até clicar em Ativar envio."
+    return result
 
 
 def choices(client, name, prop):
@@ -163,14 +167,49 @@ def application_choices(client, label):
 
 
 def discover(client):
+    """Read existing sources and devices; opening/refreshing the UI never mutes audio."""
+    rows = inputs(client)
+    check_kinds(rows)
+    present = {name for name in SOURCES if name in rows}
+    selected = {
+        name: call(client, "GetInputSettings", inputName=name)["inputSettings"]
+        if name in present else {} for name in SOURCES
+    }
+    scenes = {s["sceneName"] for s in call(client, "GetSceneList")["scenes"]}
+    if BUS in scenes:
+        enabled = {r["sourceName"] for r in items(client, BUS) if r["sceneItemEnabled"]}
+        for label in APPS:
+            name = app_name(label)
+            if name not in enabled:
+                selected[name] = selected[name] | {"window": ""}
+    states = {name: gain_state(client, name) for name in present}
+    destinations = {
+        f["filterSettings"].get("device", "")
+        for name in present
+        for f in call(client, "GetSourceFilterList", sourceName=name)["filters"]
+        if f["filterName"] == "Meeting Assistant - WhatsApp" and f["filterKind"] == "audio_monitor"
+    } - {""}
+    monitor, monitor_error = {}, ""
+    try:
+        monitor = monitoring_device(client)
+    except ValueError as exc:
+        monitor_error = str(exc)
     return {
-        "message": "Preparado, envio silenciado. Selecione as fontes e confira o roteamento abaixo.",
-        "microphones": physical_choices(client),
-        "applications": {label: application_choices(client, label) for label in APPS},
-        "outputs": virtual_outputs(),
-        "selected": {
-            name: call(client, "GetInputSettings", inputName=name)["inputSettings"] for name in SOURCES
+        "message": "Configuração lida do OBS. O envio atual foi preservado."
+        if len(present) == len(SOURCES) else "Clique em Criar fontes para preparar o áudio no OBS.",
+        "microphones": physical_choices(client) if MIC in present else [],
+        "applications": {
+            label: application_choices(client, label) if app_name(label) in present else []
+            for label in APPS
         },
+        "outputs": virtual_outputs(),
+        "selected": selected,
+        "source_states": states,
+        "missing_sources": [name for name in SOURCES if name not in present],
+        "needs_prepare": len(present) != len(SOURCES) or BUS not in scenes,
+        "monitor": monitor,
+        "monitor_error": monitor_error,
+        "whatsapp_device": next(iter(destinations)) if len(destinations) == 1 else "",
     }
 
 
@@ -266,13 +305,13 @@ def activate(client, data):
         mute_managed(client)
         raise
     microphones = (
-        "CABLE Output no Zoom e no WhatsApp"
+        "a saída do cabo de monitoramento do OBS no Zoom e no WhatsApp"
         if profile == "shared"
-        else "CABLE Output no Zoom e a saída de gravação do segundo cabo no WhatsApp"
+        else "a saída do primeiro cabo no Zoom e a saída de gravação do segundo cabo no WhatsApp"
     )
     return {
         "message": f"OBS confirmou o envio. Use {microphones}. "
-        "Retorno WhatsApp silenciado pelo app. Confira volumes durante uma chamada de teste.",
+        "Confira volumes durante uma chamada de teste.",
         "profile": profile,
         "whatsapp_device": whatsapp_device,
         "gains_db": gains,
@@ -280,6 +319,10 @@ def activate(client, data):
 
 
 def run_audio_task(client, action, data):
+    if action == "inspect":
+        return discover(client)
+    if action == "gains":
+        return apply_gains(client, data.get("gains_db"), SOURCES)
     if action == "prepare":
         try:
             return prepare(client)

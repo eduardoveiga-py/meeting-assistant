@@ -1,5 +1,32 @@
 # Registro de decisão
 
+## 2026-10-03 — leitura sem interrupção e volumes independentes
+
+**Retorno:** a nova captura mostra perfil com retorno Zoom e segundo cabo não
+selecionado. O operador considera a configuração confusa e continua sem ativar.
+Além do campo ausente, foi encontrado erro na enumeração: `device.state == 1`
+descartava o `AudioDeviceState.Active`, um Enum usado pelo pycaw 20240210 fixado
+no projeto. Fontes primárias conferidas: [utils.py](https://github.com/AndreMiras/pycaw/blob/v20240210/pycaw/utils.py)
+e [constants.py](https://github.com/AndreMiras/pycaw/blob/v20240210/pycaw/constants.py).
+
+**Decisão:** comparar o valor do estado, preservando compatibilidade com wrappers
+inteiros. Separar UI em Envio, Volumes e Ajuda; uma confirmação explícita cobre os
+dispositivos das chamadas e o caminho físico. Ativar explica e foca uma pendência
+em vez de permanecer desabilitado. Não dispensar segundo cabo nem mix-minus.
+
+Abertura/atualização agora usa ação `inspect` somente de leitura na fila serial
+existente. Criação de fontes continua explícita e silenciada. A ação `gains`, em
+módulo separado, valida filtros de fontes gerenciadas e altera somente os ganhos
+editados; confirma leitura e tenta restaurar valores em falha. Não cria fontes,
+reativa filtros, troca destinos ou silencia o áudio. A UI lê os ganhos já presentes
+no OBS e salva somente resultados confirmados.
+
+**Evidência:** testes usam o mesmo formato Enum da biblioteca, incluindo exclusão
+de dispositivos inativos/captura/físicos, liberação COM e validação do segundo
+cabo. Cliques Qt percorrem serviço OBS simulado nos dois perfis, incluindo ganho
+sem segunda seleção/confirmação, atualização sem interrupção, falha de escrita,
+remoção de dispositivo e layouts/fontes ampliados. Ensaio físico pendente.
+
 ## 2026-10-03 — pendências visíveis na ativação do áudio
 
 **Problema relatado:** fontes criadas no OBS, três confirmações marcadas e botão
