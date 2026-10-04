@@ -94,14 +94,20 @@ class MeetingShutdownService(QObject):
                     else:
                         continue
                 
-                window = primary[0]
-                tracked.append(window)
-                self.progress_changed.emit(f"Solicitando fechamento normal: {window.process}")
-                try:
-                    self.backend.close(window)
-                    requested.append(window.process)
-                except Exception:
-                    errors.append(window.process + " não aceitou fechamento")
+                # Envia fechamento para TODAS as janelas principais encontradas
+                self.progress_changed.emit(f"Solicitando fechamento normal: {process_name}")
+                success = False
+                for window in primary:
+                    tracked.append(window)
+                    try:
+                        self.backend.close(window)
+                        success = True
+                    except Exception:
+                        pass
+                if success:
+                    requested.append(process_name)
+                else:
+                    errors.append(process_name + " não aceitou fechamento")
 
             deadline = time.monotonic() + self.timeout
             while not self._cancel.is_set():
