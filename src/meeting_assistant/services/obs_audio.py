@@ -126,7 +126,9 @@ def prepare(client):
                 )
             except OBSSDKRequestError as exc:
                 if exc.code == 601:
-                    raise ValueError(f"Já existe cena ou grupo chamado '{name}' no OBS. Exclua para continuar.")
+                    raise ValueError(
+                        f"Já existe cena ou grupo chamado '{name}' no OBS. Exclua para continuar."
+                    ) from exc
                 raise
             call(client, "SetInputMute", inputName=name, inputMuted=True)
             call(client, "SetInputAudioMonitorType", inputName=name, monitorType=NONE)

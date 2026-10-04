@@ -108,7 +108,9 @@ def _prepare_obs(client, settings, renamed) -> None:
             )
         except OBSSDKRequestError as exc:
             if exc.code == 601:
-                raise ValueError(f"A fonte '{CAMERA_SOURCE}' já existe como cena ou grupo no OBS. Exclua para continuar.")
+                raise ValueError(
+                    f"A fonte '{CAMERA_SOURCE}' já existe como cena ou grupo no OBS. Exclua para continuar."
+                ) from exc
             raise
     # Avoid accidental inclusion of the camera microphone in the existing audio mix.
     client.send("SetInputMute", {"inputName": CAMERA_SOURCE, "inputMuted": True}, raw=True)

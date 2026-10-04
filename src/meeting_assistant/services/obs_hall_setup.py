@@ -43,7 +43,9 @@ def ensure_source(client, scene: str, name: str, kind: str, settings: dict) -> i
             )
         except OBSSDKRequestError as exc:
             if exc.code == 601:
-                raise ValueError(f"A fonte '{name}' já existe como cena ou grupo no OBS. Exclua para continuar.")
+                raise ValueError(
+                    f"A fonte '{name}' já existe como cena ou grupo no OBS. Exclua para continuar."
+                ) from exc
             raise
     items = client.send("GetSceneItemList", {"sceneName": scene}, raw=True)["sceneItems"]
     item = next((item for item in items if item["sourceName"] == name), None)
