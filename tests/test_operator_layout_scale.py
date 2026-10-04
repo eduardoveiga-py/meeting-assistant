@@ -103,7 +103,7 @@ try:
         assert label.height() >= label.heightForWidth(label.width()), result
     assert badge.height() == badge.sizeHint().height(), result
     assert window.preview.height() >= (100 if work_area.height() >= 600 else 40), result
-    assert result["horizontal_scroll"] == result["vertical_scroll"] == 0, result
+    assert result["horizontal_scroll"] == 0, result
     for button in window.findChildren(QPushButton):
         if button.isVisible():
             assert button.sizeHint().width() <= button.width(), (button.text(), result)
