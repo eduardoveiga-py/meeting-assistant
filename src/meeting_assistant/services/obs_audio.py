@@ -281,14 +281,17 @@ def activate(client, data):
                 client, name, gains.get(name, 0), whatsapp_device if profile == "whatsapp_zoom" else ""
             )
         for name in selected:
+            tracks = {str(i): False for i in range(1, 7)}
+            tracks["6"] = True  # OBS 30+ warns if no tracks are selected; assign to unused track 6.
             call(
                 client,
                 "SetInputAudioTracks",
                 inputName=name,
-                inputAudioTracks={str(i): False for i in range(1, 7)},
+                inputAudioTracks=tracks,
             )
-            if any(call(client, "GetInputAudioTracks", inputName=name)["inputAudioTracks"].values()):
-                raise ValueError("OBS não confirmou o isolamento do áudio das faixas Program.")
+            actual_tracks = call(client, "GetInputAudioTracks", inputName=name)["inputAudioTracks"]
+            if any(actual_tracks[str(i)] for i in range(1, 6)):
+                raise ValueError("OBS não confirmou o isolamento do áudio das faixas Program principais.")
 
         for name in selected:
             monitor = NONE if name == app_name("Zoom") else MONITOR

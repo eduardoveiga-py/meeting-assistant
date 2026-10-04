@@ -289,7 +289,7 @@ def test_actual_apply_click_configures_obs_filters_and_preserves_mix_minus(
         if profile == "whatsapp_zoom":
             route = next(f for f in obs.filters[zoom] if f["filterName"] == WHATSAPP_MONITOR)
             assert route["filterEnabled"] and route["filterSettings"]["device"] == "second-cable"
-            assert all(not track for track in obs.sources[zoom]["tracks"].values())
+            assert all(track is (k == "6") for k, track in obs.sources[zoom]["tracks"].items())
         else:
             assert obs.sources[zoom]["mute"] and not obs.filters.get(zoom)
     finally:
