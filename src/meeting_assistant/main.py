@@ -235,7 +235,7 @@ def main() -> int:
     meeting_launcher.restore_layout_requested.connect(
         lambda: window.layout_service.restore(operator_fraction(window))
     )
-    window.layout_service.status_changed.connect(window.start_meeting_button.setToolTip)
+    window.layout_service.status_changed.connect(window.power_button.setToolTip)
     window.layout_service.captured.connect(window._layout_captured)
     update_service.check_for_updates_async()
 
