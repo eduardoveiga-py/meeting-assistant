@@ -62,20 +62,16 @@ class MeetingShutdownService(QObject):
         requested, errors, pending = [], [], []
         try:
             windows = [w for w in self.backend.windows() if w.process in TARGETS]
-            # Close a main window per process. Do not close a secondary call
-            # window to approximate ending the call; hidden OBS is included.
-            processes = {}
-            for window in windows:
-                processes.setdefault((window.pid, window.created), []).append(window)
             monitors = self.backend.monitors()
             work = next((m["work"] for m in monitors if m["primary"]), None)
             jwl = main_jwl(windows, work) if work else None
-            if hasattr(self.backend, "processes"):
-                for pid, created, name in self.backend.processes():
-                    if (pid, created) not in processes:
-                        errors.append(name + " sem janela disponível para fechamento normal")
+            
+            by_exe = {}
+            for window in windows:
+                by_exe.setdefault(window.process, []).append(window)
+                
             tracked = []
-            for candidates in processes.values():
+            for process_name, candidates in by_exe.items():
                 primary = [
                     w
                     for w in candidates
@@ -91,9 +87,13 @@ class MeetingShutdownService(QObject):
                     or (w.process == "whatsapp.exe" and w.title)
                 ]
                 if not primary:
-                    errors.append(candidates[0].process + " sem janela principal identificada")
-                    continue
-                # Prefer the operator's main/root window over an owned dialog.
+                    # Tenta qualquer janela visível com título
+                    visible = [w for w in candidates if w.visible and w.title]
+                    if visible:
+                        primary = visible
+                    else:
+                        continue
+                
                 window = primary[0]
                 tracked.append(window)
                 self.progress_changed.emit(f"Solicitando fechamento normal: {window.process}")
@@ -101,15 +101,18 @@ class MeetingShutdownService(QObject):
                     self.backend.close(window)
                     requested.append(window.process)
                 except Exception:
-                    errors.append(window.process + " não aceitou o pedido de fechamento")
+                    errors.append(window.process + " não aceitou fechamento")
+
             deadline = time.monotonic() + self.timeout
             while not self._cancel.is_set():
                 pending = sorted({w.process for w in tracked if self.backend.same_process(w)})
                 if not pending or time.monotonic() >= deadline:
                     break
                 self._cancel.wait(0.2)
+                
             if self._cancel.is_set():
                 errors.append("verificação cancelada")
         except Exception:
             errors.append("inventário dos programas indisponível")
+            
         self.finished.emit(EndSummary(tuple(sorted(set(requested))), tuple(pending), tuple(errors)))

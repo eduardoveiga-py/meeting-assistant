@@ -136,7 +136,7 @@ def test_end_meeting_pauses_automation_and_waits_for_verified_result(tmp_path):
     window._end_meeting()
     assert not window.state.automation_enabled
     assert window._meeting_ending
-    assert not window.end_meeting_button.isEnabled()
+    assert not window.power_button.isEnabled()
     window.obs.operator_task.assert_called_with("stop_virtual")
     window._on_end_finished(EndSummary(("zoom.exe",), ("zoom.exe",), ()))
     assert "pendente" in window.mode_label.text()

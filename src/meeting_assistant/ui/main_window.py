@@ -347,9 +347,9 @@ class MainWindow(QMainWindow):
         self.automation_status.setWordWrap(True)
         controls.addWidget(self.automation_status)
 
-        panic = QPushButton("🛟 Contingência")
+        panic = QPushButton("🚨 Emergência (Tela Preta)")
         panic.setObjectName("DangerButton")
-        panic.setToolTip("Pausa automação; câmera disponível: Palco. Falha ou dúvida: Texto do Ano.")
+        panic.setToolTip("Corta o vídeo para o Texto do Ano. Usa-se em caso de pânico ou erro inesperado.")
         panic.clicked.connect(self._activate_safe_scene)
         automation_row.addWidget(panic, 1)
 
@@ -367,11 +367,11 @@ class MainWindow(QMainWindow):
         controls.addSpacing(2)
         controls.addWidget(self._section_label("SISTEMA"))
 
-        self.start_meeting_button = QPushButton("▶️ Iniciar reunião")
-        self.start_meeting_button.setToolTip(
+        self.power_button = QPushButton("▶️ Iniciar reunião")
+        self.power_button.setToolTip(
             "Abre OBS, JW Library e Zoom. Se o link estiver configurado, o Zoom entra diretamente na reunião."
         )
-        self.start_meeting_button.clicked.connect(self._start_meeting)
+        self.power_button.clicked.connect(self._start_meeting)
 
         system_grid = QGridLayout()
         self._system_grid = system_grid
@@ -381,11 +381,15 @@ class MainWindow(QMainWindow):
         diagnostics.clicked.connect(self._show_diagnostics)
 
         # Row 0
-        system_grid.addWidget(self.start_meeting_button, 0, 0)
-        self.end_meeting_button = QPushButton("🔴 Encerrar")
-        self.end_meeting_button.setToolTip("Encerra OBS, JW Library, Zoom e WhatsApp.")
-        self.end_meeting_button.clicked.connect(self._end_meeting)
-        system_grid.addWidget(self.end_meeting_button, 0, 1)
+        self.power_button = QPushButton("🟢 Iniciar reunião")
+        self.power_button.setToolTip("Abre OBS, JW Library e Zoom. Clique novamente para encerrar.")
+        self.power_button.clicked.connect(self._toggle_meeting)
+        system_grid.addWidget(self.power_button, 0, 0)
+
+        self.force_jwl_button = QPushButton("🛡️ Forçar JWL Telão")
+        self.force_jwl_button.setToolTip("Garante que o JW Library esteja no telão e encerra o modo Zoom se estiver ativo.")
+        self.force_jwl_button.clicked.connect(self._force_jwl)
+        system_grid.addWidget(self.force_jwl_button, 0, 1)
         settings_button = QPushButton("⚙️ Ajustes")
         settings_button.clicked.connect(self._show_settings)
         system_grid.addWidget(settings_button, 1, 1)
@@ -417,8 +421,8 @@ class MainWindow(QMainWindow):
         for column in range(2):
             system_grid.setColumnStretch(column, 1)
         for button in (
-            self.start_meeting_button,
-            self.end_meeting_button,
+            self.power_button,
+            self.power_button,
             settings_button,
             self.ext_media_button,
             self.camera_button,
@@ -1045,17 +1049,37 @@ class MainWindow(QMainWindow):
         except (ValueError, OSError) as exc:
             self._update_status(str(exc), False)
 
+    def _toggle_meeting(self):
+        if self._meeting_active:
+            self._end_meeting()
+        else:
+            self._start_meeting()
+
+    def _force_jwl(self):
+        self.settings.automation_enabled = True
+        self.automation_toggle.blockSignals(True)
+        self.automation_toggle.setChecked(True)
+        self.automation_toggle.blockSignals(False)
+        if self.zoom_hall:
+            self.zoom_hall.restore_jwl()
+            self.zoom_hall_button.blockSignals(True)
+            self.zoom_hall_button.setChecked(False)
+            self.zoom_hall_button.blockSignals(False)
+        if hasattr(self.hall_guard, "_clear_cache"):
+            self.hall_guard._clear_cache("manual_force")
+        self.mode_label.setText("Guardião ativado: JW Library forçado ao telão.")
+
     def _start_meeting(self) -> None:
         self._meeting_active = True
         if self.camera_session:
             self.camera_session.start()
         if not self.settings.zoom_join_url.strip():
             self.mode_label.setText("Abrindo programas; configure o link da reunião do Zoom em Ajustes.")
-        self.start_meeting_button.setEnabled(False)
-        self.start_meeting_button.setText("⏳ Iniciando…")
+        self.power_button.setEnabled(False)
+        self.power_button.setText("⏳ Iniciando…")
         if not self.launcher.start_meeting():
-            self.start_meeting_button.setEnabled(True)
-            self.start_meeting_button.setText("▶️ Iniciar reunião")
+            self.power_button.setEnabled(True)
+            self.power_button.setText("▶️ Iniciar reunião")
 
     def _end_meeting(self):
         if self._meeting_ending:
@@ -1066,9 +1090,8 @@ class MainWindow(QMainWindow):
         if self.camera_session:
             self.camera_session.stop()
         self.obs.operator_task("stop_virtual")
-        self.start_meeting_button.setEnabled(False)
-        self.end_meeting_button.setEnabled(False)
-        self.end_meeting_button.setText("⏳ Encerrando…")
+        self.power_button.setEnabled(False)
+        self.power_button.setText("⏳ Encerrando…")
         self.mode_label.setText("Solicitando fechamento; confirme o encerramento no Zoom se solicitado.")
         if self.external_media and self.external_media.active:
             self.external_media.stop_external_media()
@@ -1083,10 +1106,11 @@ class MainWindow(QMainWindow):
         self._meeting_ending = False
         complete = bool(summary and summary.complete)
         self._meeting_active = not complete
-        self.end_meeting_button.setEnabled(True)
-        self.end_meeting_button.setText("🔴 Encerrar")
-        self.start_meeting_button.setEnabled(True)
-        self.start_meeting_button.setText("▶️ Iniciar reunião")
+        if self._meeting_active:
+            self.power_button.setText("🔴 Encerrar reunião")
+        else:
+            self.power_button.setText("🟢 Iniciar reunião")
+        self.power_button.setEnabled(True)
         self.mode_label.setText(
             summary.message if summary else "Encerramento não confirmado. Confira os programas."
         )
@@ -1095,15 +1119,21 @@ class MainWindow(QMainWindow):
         self.mode_label.setText(message)
 
     def _on_launch_finished(self, payload: object) -> None:
-        self.start_meeting_button.setEnabled(True)
-        self.start_meeting_button.setText("▶️ Iniciar reunião")
         if not isinstance(payload, LaunchSummary):
             self.mode_label.setText("Inicialização concluída.")
+            self.power_button.setEnabled(True)
+            self.power_button.setText("🟢 Iniciar reunião")
             return
 
         self._meeting_active = bool(payload.zoom_running or payload.jwl_running)
         if payload.obs_running:
             self.obs.ensure_virtual_camera()
+
+        if self._meeting_active:
+            self.power_button.setText("🔴 Encerrar reunião")
+        else:
+            self.power_button.setText("🟢 Iniciar reunião")
+        self.power_button.setEnabled(True)
 
         if payload.zoom_running:
             zoom_text = "● Zoom"
