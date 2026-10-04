@@ -45,7 +45,9 @@ def _set_windows_app_id() -> None:
 
 
 def _configure_qt_logging() -> None:
-    QLoggingCategory.setFilterRules("qt.qpa.fonts.warning=false")
+    QLoggingCategory.setFilterRules("qt.qpa.fonts.warning=false\nqt.multimedia.ffmpeg.info=false")
+    import logging
+    logging.getLogger("obsws_python").setLevel(logging.CRITICAL)
 
 
 def _load_app_icon() -> QIcon:

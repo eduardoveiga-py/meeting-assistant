@@ -256,6 +256,7 @@ def activate(client, data):
         except OBSSDKRequestError as exc:
             if exc.code == 604:  # OBS: this input does not support audio
                 continue
+            print(f"ERROR on global monitor check for {name}: {repr(exc)}")
             raise
         if monitor != NONE:
             raise ValueError(f'Desative o monitoramento da fonte "{name}" no OBS antes de ativar.')
