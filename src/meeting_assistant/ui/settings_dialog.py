@@ -105,6 +105,10 @@ class SettingsDialog(QDialog):
         output_group = QGroupBox("Saída do Salão")
         output_form = QFormLayout(output_group)
 
+        self.whatsapp_check = QCheckBox("Usar WhatsApp e câmera virtual")
+        self.whatsapp_check.setChecked(settings.whatsapp_enabled)
+        output_form.addRow("WhatsApp", self.whatsapp_check)
+
         self.simulation_check = QCheckBox("Usar modo de simulação")
         self.simulation_check.setChecked(settings.simulation_enabled)
         self.simulation_check.setToolTip(
@@ -355,6 +359,7 @@ class SettingsDialog(QDialog):
         settings.camera_rtsp_port = self.camera_port_spin.value()
         settings.obs_start_at_logon = self.obs_logon_check.isChecked()
         settings.simulation_enabled = self.simulation_check.isChecked()
+        settings.whatsapp_enabled = self.whatsapp_check.isChecked()
         settings.hall_display_key = str(self.hall_display_combo.currentData() or "")
         settings.obs_host = self.host_edit.text().strip() or "127.0.0.1"
         settings.obs_port = self.port_spin.value()
