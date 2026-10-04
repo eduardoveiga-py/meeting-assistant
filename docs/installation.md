@@ -7,7 +7,7 @@
 - Zoom para desktop.
 - WhatsApp Desktop quando for usar o retorno do salão.
 - JW Library para Windows.
-- VB-CABLE quando for usar o áudio de mídia no Zoom ou no WhatsApp.
+- VB-CABLE A+B quando for usar o áudio de mídia no Zoom ou no WhatsApp.
 
 **Python não é necessário.** O instalador do Meeting Assistant inclui o runtime e as bibliotecas Python usadas pelo aplicativo.
 
@@ -72,21 +72,21 @@ Python, bibliotecas e Microsoft Visual C++ x64 estão incluídos.
 
 ## 2. Instalar os aplicativos externos
 
-O Meeting Assistant não redistribui OBS, Zoom, JW Library ou VB-CABLE.
+O Meeting Assistant não redistribui OBS, Zoom, JW Library ou VB-CABLE A+B.
 
-Na primeira abertura, use **Assistente de instalação e configuração** para verificar o ambiente. O assistente pode solicitar o WinGet para instalar OBS e Zoom. Para JW Library, use a Microsoft Store/site oficial. Para VB-CABLE, use o instalador do fabricante.
+Na primeira abertura, use **Assistente de instalação e configuração** para verificar o ambiente. O assistente pode solicitar o WinGet para instalar OBS e Zoom. Para JW Library, use a Microsoft Store/site oficial. Para VB-CABLE A+B, use o instalador do fabricante.
 
 ## 3. Configurar o OBS
 
 1. Abra o OBS.
 2. Habilite **WebSocket Server** e defina a mesma porta/senha usada no Meeting Assistant.
 3. Confirme as cenas `Texto do Ano`, `Palco` e `Mídias`.
-4. Em **Configurações → Áudio → Avançado**, defina o dispositivo de monitoramento como **CABLE Input**.
+4. Em **Configurações → Áudio → Avançado**, defina o dispositivo de monitoramento como **CABLE-A Input**.
 5. Não capture a mesma saída pelo `Desktop Audio` e pela captura de aplicativo.
 
 ## 4. Configurar Zoom e WhatsApp
 
-1. Em **Configurações → Áudio** dos dois aplicativos, selecione **CABLE Output** como microfone quando quiser enviar a mistura monitorada pelo OBS.
+1. Em **Configurações → Áudio** dos dois aplicativos, selecione **CABLE-A Output** como microfone quando quiser enviar a mistura monitorada pelo OBS.
 2. Use os alto-falantes físicos do Salão como saída de ambos. O Meeting Assistant inicia o retorno do WhatsApp silenciado e oferece um botão separado para liberá-lo.
 3. Se precisar de áudio estéreo, teste o modo de áudio original/estéreo do Zoom com outro dispositivo.
 4. Use **OBS Virtual Camera** como câmera quando necessário.
@@ -101,9 +101,9 @@ JW Library / VLC / Chrome / Edge
             ↓
       Mixer / monitoramento
             ↓
-        CABLE Input
+        CABLE-A Input
             ↓
-       CABLE Output
+       CABLE-A Output
             ↓
       Zoom + WhatsApp
 ```
@@ -135,7 +135,7 @@ Faça o ensaio sem público: voz, JW Library, VLC, Chrome/Edge, voz + mídia, ec
 
 **OBS não conecta:** confira WebSocket, porta, senha e OBS aberto.
 
-**CABLE Input/Output não existe:** instale VB-CABLE e reinicie o Windows se o fabricante solicitar.
+**CABLE-A Input/Output não existe:** instale VB-CABLE A+B e reinicie o Windows se o fabricante solicitar.
 
 **JWL sem medidor:** alguns aplicativos exigem método alternativo de captura/roteamento.
 

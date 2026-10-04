@@ -7,17 +7,17 @@ recebidos do WhatsApp, preservando Zoom, mídias e o volume geral.
 
 ## Perfil comum — um cabo
 
-| Fonte | Monitoramento OBS para CABLE Input | Microfone Zoom | Microfone WhatsApp |
+| Fonte | Monitoramento OBS para CABLE-A Input | Microfone Zoom | Microfone WhatsApp |
 | --- | --- | --- | --- |
-| Entrada física da mesa | Sim | CABLE Output | CABLE Output |
-| JW Library / VLC / navegador selecionado | Sim | CABLE Output | CABLE Output |
+| Entrada física da mesa | Sim | CABLE-A Output | CABLE-A Output |
+| JW Library / VLC / navegador selecionado | Sim | CABLE-A Output | CABLE-A Output |
 | Retorno remoto do Zoom | Não | Excluído | Excluído |
 | Retorno remoto do WhatsApp | Não | Excluído | Excluído |
 
 Em Ajustes → Áudio, escolha **Mesa + mídias nos dois aplicativos**. Selecione
 explicitamente a entrada física da mesa e somente os aplicativos usados.
-Configure **CABLE Input** como dispositivo de monitoramento do OBS;
-**CABLE Output** como microfone dos dois aplicativos. A saída física continua
+Configure **CABLE-A Input** como dispositivo de monitoramento do OBS;
+**CABLE-A Output** como microfone dos dois aplicativos. A saída física continua
 alimentando a mesa/caixas do salão. O app bloqueia Zoom como fonte neste perfil.
 
 O app confere o dispositivo no perfil local salvo do OBS. O WebSocket não fornece
@@ -32,8 +32,8 @@ se estiverem sendo monitoradas, a ativação pede revisão e permanece silenciad
 
 ## Perfil opcional — WhatsApp recebe também os participantes do Zoom
 
-Um cabo único não pode entregar dois mixes diferentes. Instale/configure uma
-**segunda entrada virtual**, com endpoint de gravação correspondente, e o plugin
+um cabo único não pode entregar dois mixes diferentes. Instale/configure uma
+**segunda entrada virtual (CABLE-B Input)**, com endpoint de gravação correspondente, e o plugin
 [Audio Monitor 0.10.1 do Exeldro](https://github.com/exeldro/obs-audio-monitor/releases/tag/0.10.1)
 no OBS. A implementação usa os filtros do plugin; não modifica o driver de áudio
 nem os componentes nativos da câmera. O plugin é distribuído por seu autor sob GPL-2.0;
@@ -41,22 +41,22 @@ a instalação é separada, pela distribuição oficial.
 
 ```mermaid
 flowchart TD
-    A["Mesa e mídias"] --> B["Cabo 1: microfone Zoom"]
-    A --> C["Cabo 2: microfone WhatsApp"]
+    A["Mesa e mídias"] --> B["Cabo A: microfone Zoom"]
+    A --> C["Cabo B: microfone WhatsApp"]
     D["Retorno remoto Zoom"] --> C
     D --> E["Caixas do salão"]
 ```
 
-1. Instale o segundo cabo e Audio Monitor e reinicie OBS/Windows conforme os instaladores.
+1. Instale os Cabos A e B e Audio Monitor e reinicie OBS/Windows conforme os instaladores.
 2. Em Ajustes → Áudio, prepare as listas e escolha **WhatsApp também recebe participantes do Zoom**.
-3. Selecione a segunda entrada virtual para WhatsApp. Ela deve ser diferente de
-   **CABLE Input**, usado no monitoramento global do OBS.
+3. Selecione a segunda entrada virtual (CABLE-B Input) para WhatsApp. Ela deve ser diferente de
+   **CABLE-A Input**, usado no monitoramento global do OBS.
 4. Selecione mesa, mídias e a janela/processo de áudio do Zoom. No Zoom, mantenha
-   o primeiro **CABLE Output** como microfone e a saída física como alto-falante.
-5. No WhatsApp, selecione o endpoint de gravação correspondente ao segundo cabo
+   o primeiro **CABLE-A Output** como microfone e a saída física como alto-falante.
+5. No WhatsApp, selecione o endpoint de gravação correspondente ao Cabo B
    como microfone; a saída física permanece silenciada pelo app até ser liberada.
 6. Confirme o roteamento e ative. O retorno Zoom fica **sem monitoramento global**
-   e sem faixas Program; apenas o filtro dedicado o envia ao segundo cabo.
+   e sem faixas Program; apenas o filtro dedicado o envia ao Cabo B.
 
 Plugin ausente, destino desconectado, cabos iguais ou filtro não confirmado
 bloqueiam a ativação. Fontes gerenciadas são silenciadas em falhas parciais.

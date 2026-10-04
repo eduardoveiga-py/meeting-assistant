@@ -50,8 +50,8 @@ O **Meeting Assistant** é um orquestrador open-source criado para simplificar e
 
 O fluxo de mídia automatizado reduz a carga cognitiva do operador. A rota padrão é:
 
-Mesa e mídias selecionadas alimentam o monitoramento OBS → **CABLE Input**.
-No perfil comum, Zoom e WhatsApp usam **CABLE Output** como microfone; nenhum
+Mesa e mídias selecionadas alimentam o monitoramento OBS → **CABLE-A Input**.
+No perfil comum, Zoom e WhatsApp usam **CABLE-A Output** como microfone; nenhum
 retorno dos aplicativos entra nesse mix. O perfil opcional com participantes do
 Zoom no WhatsApp exige uma segunda entrada virtual e o plugin Audio Monitor.
 Veja a [configuração dos dois perfis](docs/audio-routing.md).
@@ -76,7 +76,7 @@ Se esse retorno já contém tudo, o app não consegue separar os sinais depois d
 * **OBS Studio** (com configuração de WebSocket ativada)
 * **Zoom Desktop** e/se **WhatsApp (UWP)**
 * **JW Library para Windows**
-* **VB-CABLE** (Driver de áudio virtual, recomendado)
+* **VB-CABLE A+B** (Driver de áudio virtual, recomendado)
 
 ---
 

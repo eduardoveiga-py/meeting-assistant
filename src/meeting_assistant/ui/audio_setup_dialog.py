@@ -89,8 +89,8 @@ class AudioSetupDialog(QDialog):
             '<a href="https://vb-audio.com/Cable/">vb-audio.com/Cable</a>) e o plugin '
             '<a href="https://github.com/exeldro/obs-audio-monitor/releases/tag/0.10.1">'
             "Audio Monitor 0.10.1</a> instalado no OBS. "
-            "OBS monitora mesa + mídias no primeiro cabo (microfone do Zoom); "
-            "o plugin envia mesa + mídias + Zoom ao segundo cabo (microfone do WhatsApp). "
+            "OBS monitora mesa + mídias no Cabo A (microfone do Zoom); "
+            "o plugin envia mesa + mídias + Zoom ao Cabo B (microfone do WhatsApp). "
             "Os dois destinos precisam ser diferentes. Reinicie OBS após instalar o plugin. "
             "No perfil comum, Zoom não pode ser selecionado como fonte. "
             "O ganho fica antes do limitador a −3 dB. Comece em 0 dB e aumente aos poucos; "
