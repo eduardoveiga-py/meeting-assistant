@@ -145,6 +145,10 @@ class SettingsDialog(QDialog):
         startup_group = QGroupBox("Inicialização da reunião")
         startup_form = QFormLayout(startup_group)
 
+        self.congregation_name_edit = QLineEdit(settings.congregation_name)
+        self.congregation_name_edit.setPlaceholderText("Ex: Congregação Ticuna")
+        startup_form.addRow("Congregação", self.congregation_name_edit)
+
         self.zoom_join_edit = QLineEdit(settings.zoom_join_url)
         self.zoom_join_edit.setPlaceholderText("https://...zoom.us/j/123456789?pwd=...")
         self.zoom_join_edit.setToolTip(
@@ -343,6 +347,7 @@ class SettingsDialog(QDialog):
         return combo
 
     def apply_to(self, settings: AppSettings) -> None:
+        settings.congregation_name = self.congregation_name_edit.text().strip()
         settings.global_shortcuts = self.global_hotkeys_check.isChecked()
         settings.camera_ip = self.camera_ip_edit.text().strip()
         settings.camera_username = self.camera_user_edit.text().strip()

@@ -26,6 +26,8 @@ class AppSettings:
     zoom_join_url: str = ""
     camera_source_name: str = "Meeting Assistant - Câmera IP"
     congregation_language: str = "T"
+    congregation_name: str = ""
+    whatsapp_enabled: bool = True
     global_shortcuts: bool = False
     camera_ip: str = "10.0.0.40"
     camera_rtsp_port: int = 554

@@ -116,6 +116,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(360, 280)
 
         self._build_ui()
+        self._apply_whatsapp_visibility()
         self._apply_style()
         from meeting_assistant.ui.shortcuts import MainWindowShortcuts
 
@@ -231,6 +232,20 @@ class MainWindow(QMainWindow):
         self.automation_badge.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         header.addWidget(self.automation_badge, alignment=Qt.AlignVCenter)
         root.addLayout(header)
+
+        profile_layout = QHBoxLayout()
+        profile_layout.setSpacing(10)
+        profile_layout.setContentsMargins(0, 0, 0, 5)
+        self.congregation_label = QLabel(self.settings.congregation_name or "Congregação não configurada")
+        self.congregation_label.setObjectName("ProfileLabel")
+        self.congregation_label.setStyleSheet("font-weight: bold; color: #555;")
+        self.whatsapp_toggle = QCheckBox("Usar WhatsApp")
+        self.whatsapp_toggle.setChecked(self.settings.whatsapp_enabled)
+        self.whatsapp_toggle.toggled.connect(self._on_whatsapp_toggle)
+        profile_layout.addWidget(self.congregation_label)
+        profile_layout.addStretch()
+        profile_layout.addWidget(self.whatsapp_toggle)
+        root.addLayout(profile_layout)
 
         status_grid = QGridLayout()
         status_grid.setHorizontalSpacing(5)
@@ -1134,6 +1149,19 @@ class MainWindow(QMainWindow):
         self.camera_button.setToolTip("Câmera virtual WhatsApp: " + self.camera_session.message)
         self.camera_button.setAccessibleName("Câmera virtual WhatsApp: " + text)
 
+    def _on_whatsapp_toggle(self, checked: bool) -> None:
+        self.settings.whatsapp_enabled = checked
+        if hasattr(self, "settings_service"):
+            self.settings_service.save(self.settings)
+        self._apply_whatsapp_visibility()
+
+    def _apply_whatsapp_visibility(self) -> None:
+        visible = self.settings.whatsapp_enabled
+        if hasattr(self, "whatsapp_audio_button"):
+            self.whatsapp_audio_button.setVisible(visible)
+        if hasattr(self, "camera_button"):
+            self.camera_button.setVisible(visible)
+            
     def _toggle_whatsapp_audio(self) -> None:
         if self.whatsapp_audio_guard is None:
             return

@@ -32,7 +32,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="MeetingAssistant",
+    name="MeetingAssistant", icon=str(source / "meeting_assistant/resources/app_icon.ico"),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
