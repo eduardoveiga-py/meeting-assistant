@@ -27,7 +27,7 @@ class AppSettings:
     camera_source_name: str = "Meeting Assistant - Câmera IP"
     congregation_language: str = "T"
     congregation_name: str = ""
-    whatsapp_enabled: bool = True
+    whatsapp_enabled: bool = False
     global_shortcuts: bool = False
     camera_ip: str = "10.0.0.40"
     camera_rtsp_port: int = 554

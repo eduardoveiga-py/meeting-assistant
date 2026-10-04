@@ -76,6 +76,9 @@ class ToggleSwitch(QCheckBox):
         painter.setPen(Qt.NoPen)
         painter.drawPath(knob_path)
 
+    def hitButton(self, pos):
+        return self.rect().contains(pos)
+
 
 class MainWindow(QMainWindow):
     automation_enabled_changed = Signal(bool)
