@@ -195,25 +195,6 @@ def inspect_environment(settings):
     import obsws_python as obs
 
     rows.extend(inspect_obs(settings, obs.ReqClient))
-    client = None
-    try:
-        client = obs.ReqClient(
-            host=settings.obs_host, port=settings.obs_port, password=settings.obs_password, timeout=3
-        )
-        client.send("GetVersion", raw=True)
-        rows.append(("WebSocket conectado e autenticado", True))
-        names = {r["sceneName"] for r in client.send("GetSceneList", raw=True)["scenes"]}
-        for name in (settings.scene_background, settings.scene_speaker, settings.scene_media):
-            rows.append((f"Cena {name}", name in names))
-        rows.append(
-            ("Câmera virtual ativa", bool(client.send("GetVirtualCamStatus", raw=True)["outputActive"]))
-        )
-    except Exception as exc:
-        rows.append(("WebSocket conectado e autenticado", False))
-        rows.append((f"Diagnóstico WebSocket: {websocket_failure_reason(exc)}", False))
-    finally:
-        if client is not None:
-            client.disconnect()
     return rows
 
 

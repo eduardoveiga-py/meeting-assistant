@@ -28,17 +28,23 @@ def ensure_source(client, scene: str, name: str, kind: str, settings: dict) -> i
                 raw=True,
             )
     else:
-        client.send(
-            "CreateInput",
-            {
-                "sceneName": scene,
-                "inputName": name,
-                "inputKind": kind,
-                "inputSettings": settings,
-                "sceneItemEnabled": False,
-            },
-            raw=True,
-        )
+        from obsws_python.error import OBSSDKRequestError
+        try:
+            client.send(
+                "CreateInput",
+                {
+                    "sceneName": scene,
+                    "inputName": name,
+                    "inputKind": kind,
+                    "inputSettings": settings,
+                    "sceneItemEnabled": False,
+                },
+                raw=True,
+            )
+        except OBSSDKRequestError as exc:
+            if exc.code == 601:
+                raise ValueError(f"A fonte '{name}' já existe como cena ou grupo no OBS. Exclua para continuar.")
+            raise
     items = client.send("GetSceneItemList", {"sceneName": scene}, raw=True)["sceneItems"]
     item = next((item for item in items if item["sourceName"] == name), None)
     if item:

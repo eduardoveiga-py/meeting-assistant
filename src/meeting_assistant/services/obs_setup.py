@@ -93,17 +93,23 @@ def _prepare_obs(client, settings, renamed) -> None:
             raw=True,
         )
     else:
-        client.send(
-            "CreateInput",
-            {
-                "sceneName": "Palco",
-                "inputName": CAMERA_SOURCE,
-                "inputKind": "ffmpeg_source",
-                "inputSettings": source_settings,
-                "sceneItemEnabled": True,
-            },
-            raw=True,
-        )
+        from obsws_python.error import OBSSDKRequestError
+        try:
+            client.send(
+                "CreateInput",
+                {
+                    "sceneName": "Palco",
+                    "inputName": CAMERA_SOURCE,
+                    "inputKind": "ffmpeg_source",
+                    "inputSettings": source_settings,
+                    "sceneItemEnabled": True,
+                },
+                raw=True,
+            )
+        except OBSSDKRequestError as exc:
+            if exc.code == 601:
+                raise ValueError(f"A fonte '{CAMERA_SOURCE}' já existe como cena ou grupo no OBS. Exclua para continuar.")
+            raise
     # Avoid accidental inclusion of the camera microphone in the existing audio mix.
     client.send("SetInputMute", {"inputName": CAMERA_SOURCE, "inputMuted": True}, raw=True)
     items = client.send("GetSceneItemList", {"sceneName": "Palco"}, raw=True)["sceneItems"]

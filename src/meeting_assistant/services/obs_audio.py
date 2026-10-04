@@ -114,15 +114,20 @@ def prepare(client):
     mute_managed(client)
     for name, kind in SOURCES.items():
         if name not in rows:
-            call(
-                client,
-                "CreateInput",
-                sceneName=BUS,
-                inputName=name,
-                inputKind=kind,
-                inputSettings={"device_id": "__unconfigured__"} if name == MIC else {"window": ""},
-                sceneItemEnabled=False,
-            )
+            try:
+                call(
+                    client,
+                    "CreateInput",
+                    sceneName=BUS,
+                    inputName=name,
+                    inputKind=kind,
+                    inputSettings={"device_id": "__unconfigured__"} if name == MIC else {"window": ""},
+                    sceneItemEnabled=False,
+                )
+            except OBSSDKRequestError as exc:
+                if exc.code == 601:
+                    raise ValueError(f"Já existe cena ou grupo chamado '{name}' no OBS. Exclua para continuar.")
+                raise
             call(client, "SetInputMute", inputName=name, inputMuted=True)
             call(client, "SetInputAudioMonitorType", inputName=name, monitorType=NONE)
         if not any(x["sourceName"] == name for x in items(client, BUS)):
