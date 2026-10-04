@@ -56,7 +56,8 @@ def test_stale_frame_is_cleared_and_reconnection_recovers(qt_application):
     monitor.mailbox.put(VideoUpdate(FrameStatus(True, True, 2, 100), frame, received_at=time.monotonic()))
     monitor.present_latest()
     assert received[-1] is frame and "last_error" not in monitor.diagnostic
-    monitor.last_received -= 2
+    monitor.last_received -= 4
+    monitor.last_fresh_time -= 4
     monitor.present_latest()
     assert received[-1] is None
 
