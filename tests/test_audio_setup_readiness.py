@@ -48,10 +48,11 @@ def select(dialog, combo, value):
     index = combo.findData(value)
     assert index >= 0
     combo.setFocus()
-    while combo.currentIndex() < index:
-        QTest.keyClick(combo, Qt.Key.Key_Down)
-    while combo.currentIndex() > index:
-        QTest.keyClick(combo, Qt.Key.Key_Up)
+    current = combo.currentIndex()
+    key = Qt.Key.Key_Down if current < index else Qt.Key.Key_Up
+    for _ in range(abs(index - current)):
+        QTest.keyClick(combo, key)
+    assert combo.currentIndex() == index, (combo.isEnabled(), combo.isVisible(), value)
 
 
 def discover(dialog, controller, result):
@@ -248,15 +249,16 @@ def test_actual_apply_click_configures_obs_filters_and_preserves_mix_minus(
 @pytest.mark.parametrize("width,height,points", [(590, 690, 10), (520, 520, 12), (390, 410, 12)])
 def test_missing_input_message_and_buttons_fit_with_the_operator_style(width, height, points):
     app = QApplication.instance()
-    original_font = app.font()
-    # The inherited stylesheet can reset child fonts to the application font;
-    # changing only the dialog font does not exercise the intended text scale.
-    app.setFont(QFont("Segoe UI", points))
     owner = QMainWindow()
     MainWindow._apply_style(owner)
     controller = Controller()
     dialog = AudioSetupDialog(controller, AppSettings(audio_profile="whatsapp_zoom"), owner)
     dialog.setFont(QFont("Segoe UI", points))
+    # Enforce the text scale in this dialog; inherited styles can reset fonts.
+    # Do not change the shared application's font or other tests' windows.
+    dialog.setStyleSheet(
+        f"QLabel, QComboBox, QDoubleSpinBox {{ font-size: {points}pt; }}"
+    )
     # Isolate the synthetic work area from the runner's real screen size.
     dialog.removeEventFilter(dialog._screen_fit)
     dialog._screen_fit._timer.stop()
@@ -283,7 +285,7 @@ def test_missing_input_message_and_buttons_fit_with_the_operator_style(width, he
         assert dialog.scroll.horizontalScrollBar().maximum() == 0
         for label in dialog.scroll.widget().findChildren(QLabel):
             assert label.width() > 0
-            assert label.height() >= label.heightForWidth(label.width())
+            assert label.height() >= label.heightForWidth(label.width()), label.text()
         capture_directory = environ.get("MEETING_ASSISTANT_LAYOUT_CAPTURE_DIRECTORY")
         if capture_directory:
             folder = Path(capture_directory)
@@ -292,4 +294,3 @@ def test_missing_input_message_and_buttons_fit_with_the_operator_style(width, he
     finally:
         dialog.reject()
         owner.close()
-        app.setFont(original_font)

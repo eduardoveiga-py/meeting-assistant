@@ -21,9 +21,11 @@ esta alteração não diagnostica nem remove o ruído relatado na entrada da mes
 
 **Layout no Windows:** a primeira execução do CI encontrou rolagem horizontal na
 menor área do teste (390 × 410). Os rótulos ficam acima dos campos e quebram linha,
-preservando o texto, os campos e os botões. O teste define também a fonte da aplicação,
-pois o estilo herdado pode ignorar a fonte escolhida apenas no diálogo, e verifica
-o texto completo de todos os rótulos além do rodapé.
+preservando o texto, os campos e os botões. O teste define a fonte dos controles por
+estilo local, pois o estilo herdado pode ignorar a fonte escolhida apenas no diálogo.
+Isso amplia o texto sem alterar outras janelas da suíte; todos os rótulos são
+verificados além do rodapé. A seleção por teclado usa uma quantidade limitada de
+eventos e exige alcançar o item esperado, sem laço infinito se uma tecla não atuar.
 
 ## 2026-09-17 — saída do Salão
 
