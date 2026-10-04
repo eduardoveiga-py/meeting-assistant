@@ -159,7 +159,8 @@ def physical_choices(client):
 
 
 def application_choices(client, label):
-    return [
+    generic = {"itemName": f"Qualquer janela ({label})", "itemValue": f"Qualquer:Qualquer:{APPS[label]}"}
+    return [generic] + [
         x
         for x in choices(client, app_name(label), "window")
         if x["itemValue"].rsplit(":", 1)[-1].casefold() == APPS[label]
@@ -225,7 +226,7 @@ def validate_selection(client, data):
             raise ValueError("Aplicativo não permitido na mistura.")
         if not value:
             continue
-        if value not in {x["itemValue"] for x in application_choices(client, label)}:
+        if value not in {x["itemValue"] for x in application_choices(client, label)} and value.rsplit(":", 1)[-1].casefold() != APPS[label]:
             raise ValueError(f"{label} não está disponível. Abra o aplicativo e atualize as listas.")
         selected[app_name(label)] = {"window": value, "priority": 2}
     return selected

@@ -468,7 +468,12 @@ class AudioSetupDialog(QDialog):
             combo.addItem(combo.property("placeholder"), "")
             for item in choices:
                 combo.addItem(item["itemName"], item["itemValue"])
-            combo.setCurrentIndex(max(0, combo.findData(selected)))
+            idx = combo.findData(selected)
+            if idx < 0 and selected:
+                name = selected.split(":", 1)[0] if ":" in selected else selected
+                combo.addItem(f"{name} (offline)", selected)
+                idx = combo.count() - 1
+            combo.setCurrentIndex(max(0, idx))
         finally:
             combo.blockSignals(False)
 
