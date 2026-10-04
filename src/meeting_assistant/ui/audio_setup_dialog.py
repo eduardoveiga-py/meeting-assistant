@@ -441,7 +441,7 @@ class AudioSetupDialog(QDialog):
             self.populate(
                 combo, result["applications"][label],
                 prior["applications"][label] if prior is not None
-                else result["selected"].get(app_name(label), {}).get("window", ""),
+                else result["selected"].get(app_name(label), {}).get("window", ""), allow_offline=True
             )
         for name, state in self._source_states.items():
             actual = state.get("gain_db")
@@ -461,7 +461,7 @@ class AudioSetupDialog(QDialog):
             self.other_sources.setChecked(True)
 
     @staticmethod
-    def populate(combo, choices, selected):
+    def populate(combo, choices, selected, allow_offline=False):
         combo.blockSignals(True)
         try:
             combo.clear()
@@ -469,7 +469,7 @@ class AudioSetupDialog(QDialog):
             for item in choices:
                 combo.addItem(item["itemName"], item["itemValue"])
             idx = combo.findData(selected)
-            if idx < 0 and selected:
+            if idx < 0 and selected and allow_offline:
                 name = selected.split(":", 1)[0] if ":" in selected else selected
                 combo.addItem(f"{name} (offline)", selected)
                 idx = combo.count() - 1
