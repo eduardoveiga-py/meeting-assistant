@@ -19,6 +19,12 @@ perfil. O clique Aplicar percorre o serviço de áudio com OBS simulado, confirm
 e verifica que o retorno Zoom vai somente ao segundo cabo. Ensaio físico pendente;
 esta alteração não diagnostica nem remove o ruído relatado na entrada da mesa.
 
+**Layout no Windows:** a primeira execução do CI encontrou rolagem horizontal na
+menor área do teste (390 × 410). Os rótulos ficam acima dos campos e quebram linha,
+preservando o texto, os campos e os botões. O teste define também a fonte da aplicação,
+pois o estilo herdado pode ignorar a fonte escolhida apenas no diálogo, e verifica
+o texto completo de todos os rótulos além do rodapé.
+
 ## 2026-09-17 — saída do Salão
 
 **Decisão:** manter o JW Library como player e usar sua segunda janela nativa como saída física do Salão.

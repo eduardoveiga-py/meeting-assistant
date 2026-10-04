@@ -61,7 +61,7 @@ class AudioSetupDialog(QDialog):
         self.prepare_button.clicked.connect(lambda: self.request("prepare"))
         body.addWidget(self.prepare_button)
         form = QFormLayout()
-        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         self.profile = self.combo()
         self.profile.clear()
         self.profile.addItem("Mesa + mídias nos dois aplicativos", "shared")
@@ -86,6 +86,9 @@ class AudioSetupDialog(QDialog):
             gain.setValue(settings.audio_gains_db.get(name, 0))
             self.gains[name] = gain
             form.addRow("Ganho: " + name.removeprefix("Meeting Assistant - "), gain)
+        # Native Windows fonts can make an unwrapped label wider than the dialog.
+        for row in range(form.rowCount()):
+            form.itemAt(row, QFormLayout.ItemRole.LabelRole).widget().setWordWrap(True)
         body.addLayout(form)
         advanced = QLabel(
             "O perfil com participantes Zoom requer dois cabos virtuais "

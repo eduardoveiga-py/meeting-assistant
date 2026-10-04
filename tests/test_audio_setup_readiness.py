@@ -9,7 +9,7 @@ import pytest
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QFont
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
 from test_audio_ui_shortcuts import Controller
 from test_obs_audio import FakeObs
 
@@ -248,6 +248,10 @@ def test_actual_apply_click_configures_obs_filters_and_preserves_mix_minus(
 @pytest.mark.parametrize("width,height,points", [(590, 690, 10), (520, 520, 12), (390, 410, 12)])
 def test_missing_input_message_and_buttons_fit_with_the_operator_style(width, height, points):
     app = QApplication.instance()
+    original_font = app.font()
+    # The inherited stylesheet can reset child fonts to the application font;
+    # changing only the dialog font does not exercise the intended text scale.
+    app.setFont(QFont("Segoe UI", points))
     owner = QMainWindow()
     MainWindow._apply_style(owner)
     controller = Controller()
@@ -277,6 +281,9 @@ def test_missing_input_message_and_buttons_fit_with_the_operator_style(width, he
             if hasattr(widget, "heightForWidth"):
                 assert widget.height() >= widget.heightForWidth(widget.width())
         assert dialog.scroll.horizontalScrollBar().maximum() == 0
+        for label in dialog.scroll.widget().findChildren(QLabel):
+            assert label.width() > 0
+            assert label.height() >= label.heightForWidth(label.width())
         capture_directory = environ.get("MEETING_ASSISTANT_LAYOUT_CAPTURE_DIRECTORY")
         if capture_directory:
             folder = Path(capture_directory)
@@ -285,3 +292,4 @@ def test_missing_input_message_and_buttons_fit_with_the_operator_style(width, he
     finally:
         dialog.reject()
         owner.close()
+        app.setFont(original_font)
