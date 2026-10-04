@@ -13,6 +13,7 @@ def run_launcher(monkeypatch, *, initially_open=False, disappears_at=None):
         lambda: SimpleNamespace(zoom_join_url="", obs_executable="")
     )
     launches = []
+    uris = []
     summaries = []
     messages = []
     service.finished.connect(summaries.append)
@@ -31,7 +32,10 @@ def run_launcher(monkeypatch, *, initially_open=False, disappears_at=None):
     monkeypatch.setattr(service, "_process_snapshot", snapshot)
     monkeypatch.setattr(service, "_launch_jwl", lambda: launches.append(True) or True)
     monkeypatch.setattr(service, "_zoom_meeting_active", lambda: True)
+    # Windows URI handlers can open apps or system dialogs and block the CI.
+    monkeypatch.setattr(service, "_open_uri", lambda uri: uris.append(uri) or True)
     service._run()
+    assert uris == ["whatsapp://"]
     return clock[0], launches, summaries[0], messages
 
 

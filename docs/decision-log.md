@@ -28,6 +28,11 @@ Isso amplia o texto sem alterar outras janelas da suíte; todos os rótulos são
 verificados além do rodapé. A seleção por teclado usa uma quantidade limitada de
 eventos e exige alcançar o item esperado, sem laço infinito se uma tecla não atuar.
 
+**Isolamento do CI:** o diagnóstico de uma execução parada encontrou um teste
+antigo de recuperação chamando `os.startfile("whatsapp://")` no Windows real.
+O helper desse teste agora simula a abertura e verifica a URI solicitada, evitando
+aplicativos/diálogos externos. O serviço de inicialização do app não foi alterado.
+
 ## 2026-09-17 — saída do Salão
 
 **Decisão:** manter o JW Library como player e usar sua segunda janela nativa como saída física do Salão.
