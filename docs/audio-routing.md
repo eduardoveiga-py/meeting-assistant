@@ -66,7 +66,7 @@ Nenhum retorno WhatsApp é capturado. Não selecione um cabo virtual como entrad
 
 ### Preparar e aplicar na tela do app
 
-**Preparar fontes / atualizar listas** cria fontes ainda silenciadas e consulta
+**Preparar fontes** cria fontes ainda silenciadas e consulta
 dispositivos e aplicativos. Não ativa o envio nem aplica o ganho escolhido.
 Após recriar as fontes no OBS, selecione a entrada física da mesa novamente se
 ela não estiver escolhida. No perfil com retorno do Zoom, selecione também uma

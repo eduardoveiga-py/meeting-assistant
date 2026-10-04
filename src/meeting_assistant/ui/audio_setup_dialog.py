@@ -45,8 +45,10 @@ class AudioSetupDialog(QDialog):
             '1. Instale o <a href="https://vb-audio.com/Cable/">VB-CABLE oficial</a> '
             "e reinicie o Windows conforme o instalador.<br>"
             "2. OBS → Configurações → Áudio → Avançado → Dispositivo de monitoramento: "
-            "<b>CABLE Input</b>.<br>"
-            "3. Zoom e WhatsApp → Áudio → Microfone: <b>CABLE Output</b>. "
+            "<b>CABLE-A Input</b> (ou CABLE Input, conforme o primeiro cabo instalado).<br>"
+            "3. Zoom → Microfone: <b>CABLE-A Output</b> (ou CABLE Output). "
+            "No WhatsApp, use essa mesma saída no perfil comum; no perfil com participantes "
+            "do Zoom, use a saída do segundo cabo escolhido, como <b>CABLE-B Output</b>. "
             "Alto-falante: saída física do salão.<br>"
             "4. Abra os aplicativos de mídia, prepare as listas e selecione as fontes abaixo.<br>"
             "A preparação silencia as fontes deste módulo. A ativação afeta o áudio ao vivo. "
@@ -55,8 +57,11 @@ class AudioSetupDialog(QDialog):
         guide.setWordWrap(True)
         guide.setOpenExternalLinks(True)
         body.addWidget(guide)
-        self.prepare_button = QPushButton("Preparar fontes / atualizar listas")
-        self.prepare_button.setToolTip("Prepara as fontes e silencia o envio antes de alterar a seleção.")
+        self.prepare_button = QPushButton("Preparar fontes")
+        self.prepare_button.setToolTip(
+            "Prepara as fontes, atualiza as listas de dispositivos e aplicativos "
+            "e silencia o envio antes de alterar a seleção."
+        )
         self.prepare_button.clicked.connect(lambda: self.request("prepare"))
         body.addWidget(self.prepare_button)
         form = QVBoxLayout()
@@ -119,7 +124,7 @@ class AudioSetupDialog(QDialog):
         body.addWidget(note)
         self.confirmations = []
         for text in (
-            "Conferi CABLE Input como monitoramento do OBS.",
+            "Conferi o primeiro cabo (CABLE-A Input ou CABLE Input) no monitoramento do OBS.",
             "Conferi os microfones virtuais do perfil escolhido e a saída física como alto-falante.",
             "Conferi que a entrada da mesa não devolve Zoom nem duplica as mídias.",
         ):
@@ -145,7 +150,10 @@ class AudioSetupDialog(QDialog):
         # Paragraphs and field labels wrap within the viewport instead of
         # imposing native-font minimum widths on the scroll area's content.
         for label in content.findChildren(QLabel):
-            label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            policy = label.sizePolicy()
+            policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+            policy.setHeightForWidth(label.wordWrap())
+            label.setSizePolicy(policy)
         self.status = QLabel(
             "Envio ainda não verificado nesta tela. Preparar altera somente as fontes de áudio do app."
         )

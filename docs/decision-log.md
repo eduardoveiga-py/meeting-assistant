@@ -28,6 +28,12 @@ Isso amplia o texto sem alterar outras janelas da suíte; todos os rótulos são
 verificados além do rodapé. A seleção por teclado usa uma quantidade limitada de
 eventos e exige alcançar o item esperado, sem laço infinito se uma tecla não atuar.
 
+As medidas nativas identificaram o botão de preparação: seu título longo impunha
+394 px a uma área de 332 px. O título agora é **Preparar fontes**; atualizar as listas
+continua na mesma ação e está descrito no tooltip. O teste salva a imagem antes de
+verificar medidas, confere todo o texto do botão e a altura variável dos rótulos.
+As políticas desses rótulos preservam a dependência entre altura e largura.
+
 **Isolamento do CI:** o diagnóstico de uma execução parada encontrou um teste
 antigo de recuperação chamando `os.startfile("whatsapp://")` no Windows real.
 O helper desse teste agora simula a abertura e verifica a URI solicitada, evitando

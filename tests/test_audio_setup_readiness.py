@@ -312,8 +312,10 @@ def test_missing_input_message_and_buttons_fit_with_the_operator_style(width, he
             dialog.scroll.widget().minimumSizeHint().toTuple(),
             layout_sizes(dialog.scroll.widget().layout()),
         )
+        assert dialog.prepare_button.width() >= dialog.prepare_button.minimumSizeHint().width()
         for label in dialog.scroll.widget().findChildren(QLabel):
             assert label.width() > 0
+            assert label.hasHeightForWidth()
             assert label.height() >= label.heightForWidth(label.width()), label.text()
     finally:
         dialog.reject()
