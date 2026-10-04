@@ -180,7 +180,9 @@ class ProgramVideo(QObject):
             return
         self.diagnostic.pop("last_error", None)
         self.diagnostic["bridge"] = update.status.diagnostic()
-        if not update.status.fresh or now - update.received_at > 1.0:
+        if update.status.fresh:
+            self.last_fresh_time = update.received_at
+        if self.last_fresh_time is None or now - self.last_fresh_time > 1.0 or now - update.received_at > 1.0:
             self._unavailable("Sem vídeo recente do OBS")
             return
         rendered = update.frame is not None
