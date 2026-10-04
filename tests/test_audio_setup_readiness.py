@@ -271,6 +271,11 @@ def test_missing_input_message_and_buttons_fit_with_the_operator_style(width, he
     try:
         discover(dialog, controller, prepared_result())
         confirm(dialog)
+        capture_directory = environ.get("MEETING_ASSISTANT_LAYOUT_CAPTURE_DIRECTORY")
+        if capture_directory:
+            folder = Path(capture_directory)
+            folder.mkdir(parents=True, exist_ok=True)
+            assert dialog.grab().save(str(folder / f"audio-pending-{width}-{height}-{points}.png"))
         assert dialog.readiness.isVisible()
         assert "entrada física da mesa" in dialog.readiness.text()
         assert "segundo cabo virtual" in dialog.readiness.text()
@@ -282,18 +287,34 @@ def test_missing_input_message_and_buttons_fit_with_the_operator_style(width, he
             assert dialog.rect().contains(widget.geometry())
             if hasattr(widget, "heightForWidth"):
                 assert widget.height() >= widget.heightForWidth(widget.width())
+        def layout_sizes(layout):
+            rows = []
+            for index in range(layout.count()):
+                item = layout.itemAt(index)
+                widget = item.widget()
+                if widget is not None:
+                    rows.append((
+                        type(widget).__name__,
+                        getattr(widget, "text", lambda: "")(),
+                        item.minimumSize().toTuple(),
+                        widget.minimumSize().toTuple(),
+                        widget.minimumSizeHint().toTuple(),
+                        widget.sizePolicy().horizontalPolicy().name,
+                        widget.font().pointSizeF(),
+                        widget.font().pixelSize(),
+                    ))
+                elif item.layout() is not None:
+                    rows.extend(layout_sizes(item.layout()))
+            return rows
+
         assert dialog.scroll.horizontalScrollBar().maximum() == 0, (
             dialog.scroll.viewport().size().toTuple(),
             dialog.scroll.widget().minimumSizeHint().toTuple(),
+            layout_sizes(dialog.scroll.widget().layout()),
         )
         for label in dialog.scroll.widget().findChildren(QLabel):
             assert label.width() > 0
             assert label.height() >= label.heightForWidth(label.width()), label.text()
-        capture_directory = environ.get("MEETING_ASSISTANT_LAYOUT_CAPTURE_DIRECTORY")
-        if capture_directory:
-            folder = Path(capture_directory)
-            folder.mkdir(parents=True, exist_ok=True)
-            assert dialog.grab().save(str(folder / f"audio-pending-{width}-{height}-{points}.png"))
     finally:
         dialog.reject()
         owner.close()
