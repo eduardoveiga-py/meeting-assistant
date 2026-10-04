@@ -167,7 +167,7 @@ class ProgramVideo(QObject):
         update = self.mailbox.take()
         now = time.monotonic()
         if update is None:
-            if self.last_received and now - self.last_received > 1.0:
+            if self.last_received and now - self.last_received > 3.0:
                 self._unavailable("Sem vídeo recente do OBS")
             return
         self.last_received = update.received_at
@@ -182,7 +182,7 @@ class ProgramVideo(QObject):
         self.diagnostic["bridge"] = update.status.diagnostic()
         if update.status.fresh:
             self.last_fresh_time = update.received_at
-        if self.last_fresh_time is None or now - self.last_fresh_time > 1.0 or now - update.received_at > 1.0:
+        if self.last_fresh_time is None or now - self.last_fresh_time > 3.0 or now - update.received_at > 3.0:
             self._unavailable("Sem vídeo recente do OBS")
             return
         rendered = update.frame is not None
