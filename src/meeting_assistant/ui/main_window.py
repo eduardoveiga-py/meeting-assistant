@@ -283,15 +283,15 @@ class MainWindow(QMainWindow):
         else:
             self.whatsapp_icon.setText("WA")
             
-        self.whatsapp_toggle = None # ToggleSwitch()
-        # self.whatsapp_toggle.setChecked(self.settings.whatsapp_enabled)
-        # self.whatsapp_toggle.setToolTip("Usar WhatsApp")
-        # self.whatsapp_toggle.toggled.connect(self._on_whatsapp_toggle)
+        self.whatsapp_toggle = ToggleSwitch()
+        self.whatsapp_toggle.setChecked(self.settings.whatsapp_enabled)
+        self.whatsapp_toggle.setToolTip("Usar WhatsApp")
+        self.whatsapp_toggle.toggled.connect(self._on_whatsapp_toggle)
         
         profile_layout.addWidget(self.congregation_label)
         profile_layout.addStretch()
-        # profile_layout.addWidget(self.whatsapp_icon)
-        # profile_layout.addWidget(self.whatsapp_toggle)
+        profile_layout.addWidget(self.whatsapp_icon)
+        profile_layout.addWidget(self.whatsapp_toggle)
         root.addLayout(profile_layout)
 
         status_grid = QGridLayout()
@@ -1209,6 +1209,10 @@ class MainWindow(QMainWindow):
 
     def _apply_whatsapp_visibility(self) -> None:
         enabled = self.settings.whatsapp_enabled
+        if hasattr(self, "whatsapp_toggle") and self.whatsapp_toggle:
+            self.whatsapp_toggle.blockSignals(True)
+            self.whatsapp_toggle.setChecked(enabled)
+            self.whatsapp_toggle.blockSignals(False)
         if hasattr(self, "whatsapp_audio_button"):
             self.whatsapp_audio_button.setEnabled(enabled)
             self.whatsapp_audio_button.setToolTip(
