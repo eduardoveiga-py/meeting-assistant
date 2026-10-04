@@ -6,13 +6,14 @@ from dataclasses import replace
 from PySide6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
+    QRectF,
     QSequentialAnimationGroup,
     Qt,
     QTimer,
     Signal,
     Slot,
 )
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -44,6 +45,36 @@ from meeting_assistant.ui.hall_setup_dialog import HallSetupDialog
 from meeting_assistant.ui.program_preview import ProgramPreview
 from meeting_assistant.ui.settings_dialog import SettingsDialog
 from meeting_assistant.ui.window_geometry import ScreenFitController
+
+
+class ToggleSwitch(QCheckBox):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(40, 22)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        track_path = QPainterPath()
+        track_rect = QRectF(0, 0, self.width(), self.height())
+        track_path.addRoundedRect(track_rect, 11, 11)
+        if self.isChecked():
+            painter.setBrush(QColor("#00a884"))
+            painter.setPen(Qt.NoPen)
+        else:
+            painter.setBrush(QColor("#1e2530"))
+            painter.setPen(QColor("#46546a"))
+        painter.drawPath(track_path)
+        knob_path = QPainterPath()
+        if self.isChecked():
+            knob_rect = QRectF(self.width() - 20, 2, 18, 18)
+        else:
+            knob_rect = QRectF(2, 2, 18, 18)
+        knob_path.addEllipse(knob_rect)
+        painter.setBrush(QColor("#ffffff"))
+        painter.setPen(Qt.NoPen)
+        painter.drawPath(knob_path)
 
 
 class MainWindow(QMainWindow):
@@ -240,11 +271,23 @@ class MainWindow(QMainWindow):
         self.congregation_label = QLabel(self.settings.congregation_name or "Congregação não configurada")
         self.congregation_label.setObjectName("ProfileLabel")
         self.congregation_label.setStyleSheet("font-weight: bold; color: #555;")
-        self.whatsapp_toggle = QCheckBox("Usar WhatsApp")
+        
+        self.whatsapp_icon = QLabel()
+        from pathlib import Path
+        whatsapp_svg = Path(__file__).parent.parent / "resources" / "whatsapp.svg"
+        if whatsapp_svg.is_file():
+            self.whatsapp_icon.setPixmap(QIcon(str(whatsapp_svg)).pixmap(20, 20))
+        else:
+            self.whatsapp_icon.setText("WA")
+            
+        self.whatsapp_toggle = ToggleSwitch()
         self.whatsapp_toggle.setChecked(self.settings.whatsapp_enabled)
+        self.whatsapp_toggle.setToolTip("Usar WhatsApp")
         self.whatsapp_toggle.toggled.connect(self._on_whatsapp_toggle)
+        
         profile_layout.addWidget(self.congregation_label)
         profile_layout.addStretch()
+        profile_layout.addWidget(self.whatsapp_icon)
         profile_layout.addWidget(self.whatsapp_toggle)
         root.addLayout(profile_layout)
 
@@ -1157,11 +1200,18 @@ class MainWindow(QMainWindow):
         self._apply_whatsapp_visibility()
 
     def _apply_whatsapp_visibility(self) -> None:
-        visible = self.settings.whatsapp_enabled
+        enabled = self.settings.whatsapp_enabled
         if hasattr(self, "whatsapp_audio_button"):
-            self.whatsapp_audio_button.setVisible(visible)
+            self.whatsapp_audio_button.setEnabled(enabled)
+            self.whatsapp_audio_button.setToolTip(
+                "Silencia ou libera o áudio do WhatsApp." 
+                if enabled else "WhatsApp desativado no perfil atual."
+            )
         if hasattr(self, "camera_button"):
-            self.camera_button.setVisible(visible)
+            self.camera_button.setEnabled(enabled)
+            self.camera_button.setToolTip(
+                "Câmera virtual WhatsApp" if enabled else "Câmera desativada no perfil atual."
+            )
             
     def _toggle_whatsapp_audio(self) -> None:
         if self.whatsapp_audio_guard is None:
