@@ -20,8 +20,9 @@ e verifica que o retorno Zoom vai somente ao segundo cabo. Ensaio físico penden
 esta alteração não diagnostica nem remove o ruído relatado na entrada da mesa.
 
 **Layout no Windows:** a primeira execução do CI encontrou rolagem horizontal na
-menor área do teste (390 × 410). Os rótulos ficam acima dos campos e quebram linha,
-preservando o texto, os campos e os botões. O teste define a fonte dos controles por
+menor área do teste (390 × 410). Rótulos acima dos campos e parágrafos usam um layout
+vertical e podem encolher na horizontal, preservando todo o texto por quebra de linha,
+os campos e os botões. O teste define a fonte dos controles por
 estilo local, pois o estilo herdado pode ignorar a fonte escolhida apenas no diálogo.
 Isso amplia o texto sem alterar outras janelas da suíte; todos os rótulos são
 verificados além do rodapé. A seleção por teclado usa uma quantidade limitada de

@@ -7,7 +7,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDoubleSpinBox,
-    QFormLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -60,35 +59,38 @@ class AudioSetupDialog(QDialog):
         self.prepare_button.setToolTip("Prepara as fontes e silencia o envio antes de alterar a seleção.")
         self.prepare_button.clicked.connect(lambda: self.request("prepare"))
         body.addWidget(self.prepare_button)
-        form = QFormLayout()
-        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+        form = QVBoxLayout()
+
+        def add_field(text, widget):
+            label = QLabel(text)
+            label.setWordWrap(True)
+            form.addWidget(label)
+            form.addWidget(widget)
+
         self.profile = self.combo()
         self.profile.clear()
         self.profile.addItem("Mesa + mídias nos dois aplicativos", "shared")
         self.profile.addItem("WhatsApp também recebe participantes do Zoom", "whatsapp_zoom")
         self.profile.setCurrentIndex(max(0, self.profile.findData(settings.audio_profile)))
-        form.addRow("Perfil", self.profile)
+        add_field("Perfil", self.profile)
         self.whatsapp_device = self.combo()
-        form.addRow("Segunda entrada virtual para WhatsApp", self.whatsapp_device)
+        add_field("Segunda entrada virtual para WhatsApp", self.whatsapp_device)
         self.profile.currentIndexChanged.connect(self._profile_changed)
         self.microphone = self.combo()
-        form.addRow("Entrada da mesa", self.microphone)
+        add_field("Entrada da mesa", self.microphone)
         self.applications = {}
         self.gains = {}
         for label in APPS:
             combo = self.combo()
             self.applications[label] = combo
-            form.addRow(label, combo)
+            add_field(label, combo)
         for name in (MIC, *(app_name(label) for label in APPS)):
             gain = QDoubleSpinBox()
             gain.setRange(0, 18)
             gain.setSuffix(" dB")
             gain.setValue(settings.audio_gains_db.get(name, 0))
             self.gains[name] = gain
-            form.addRow("Ganho: " + name.removeprefix("Meeting Assistant - "), gain)
-        # Native Windows fonts can make an unwrapped label wider than the dialog.
-        for row in range(form.rowCount()):
-            form.itemAt(row, QFormLayout.ItemRole.LabelRole).widget().setWordWrap(True)
+            add_field("Ganho: " + name.removeprefix("Meeting Assistant - "), gain)
         body.addLayout(form)
         advanced = QLabel(
             "O perfil com participantes Zoom requer dois cabos virtuais "
@@ -140,6 +142,10 @@ class AudioSetupDialog(QDialog):
         hint.setWordWrap(True)
         body.addWidget(hint)
         body.addStretch()
+        # Paragraphs and field labels wrap within the viewport instead of
+        # imposing native-font minimum widths on the scroll area's content.
+        for label in content.findChildren(QLabel):
+            label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.status = QLabel(
             "Envio ainda não verificado nesta tela. Preparar altera somente as fontes de áudio do app."
         )
