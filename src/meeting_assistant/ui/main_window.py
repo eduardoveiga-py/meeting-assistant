@@ -1166,6 +1166,8 @@ class MainWindow(QMainWindow):
         self.mode_label.setText(message)
 
     def _auto_start_camera(self) -> None:
+        if getattr(self.settings, "whatsapp_enabled", True) is False:
+            return
         if not self.obs_connected or self.camera_session is None:
             return
         if self.camera_session.state == "off":
@@ -1201,6 +1203,9 @@ class MainWindow(QMainWindow):
         if hasattr(self, "settings_service"):
             self.settings_service.save(self.settings)
         self._apply_whatsapp_visibility()
+        if not checked and getattr(self, "camera_session", None):
+            if self.camera_session.state in ("running", "starting"):
+                self.camera_session.stop()
 
     def _apply_whatsapp_visibility(self) -> None:
         enabled = self.settings.whatsapp_enabled
