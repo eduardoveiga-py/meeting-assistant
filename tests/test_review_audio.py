@@ -60,7 +60,7 @@ def test_zoom_is_sent_only_to_second_cable_and_all_routes_can_be_muted(separate_
     assert obs.sources[zoom]["monitor"] == NONE
     assert obs.sources[MIC]["monitor"] == MONITOR
     for source in (MIC, zoom, app_name("JW Library")):
-        assert all(not enabled for enabled in obs.sources[source]["tracks"].values())
+        assert all(enabled is (k == "6") for k, enabled in obs.sources[source]["tracks"].items())
         last = obs.filters[source][-1]
         assert last["filterName"] == WHATSAPP_MONITOR
         assert last["filterSettings"]["device"] == "second-cable"

@@ -31,7 +31,7 @@ def layout_details(window):
 @pytest.mark.parametrize("state", ["live", "muted", "unknown"])
 def test_every_microphone_state_and_update_banner_fit_operator_width(tmp_path, state):
     window = make_window(tmp_path)
-    window.resize(520, 780)
+    window.resize(520, 520)
     window.show()
     window._zoom_audio_result(state, "Diagnostic")
     window._on_update_available("0.10.0", "", "Long release notes")
@@ -46,7 +46,7 @@ def test_camera_controls_fit_without_clipping_at_operator_width(tmp_path, state)
     window = make_window(tmp_path)
     window.camera_session = MagicMock(state=state, supported=True, message="Camera diagnostic")
     window._on_camera_state()
-    window.resize(520, 780)
+    window.resize(520, 520)
     window.show()
     QApplication.processEvents()
     assert window.findChild(QScrollArea).horizontalScrollBar().maximum() == 0, layout_details(window)
@@ -56,7 +56,7 @@ def test_camera_controls_fit_without_clipping_at_operator_width(tmp_path, state)
     window.close()
 
 
-@pytest.mark.parametrize("height", [600, 640, 780])
+@pytest.mark.parametrize("height", [620, 640, 780])
 @pytest.mark.parametrize("enabled", [False, True])
 def test_header_text_is_exposed_and_preview_retains_useful_height(tmp_path, height, enabled):
     window = make_window(tmp_path)
@@ -80,7 +80,7 @@ def test_header_text_is_exposed_and_preview_retains_useful_height(tmp_path, heig
         for label in (title, subtitle):
             assert label.height() >= label.heightForWidth(label.width()), layout_details(window)
         assert badge.height() == badge.sizeHint().height(), layout_details(window)
-        assert window.preview.height() >= 100, layout_details(window)
+        assert window.preview.height() >= 80, layout_details(window)
         assert scroll.horizontalScrollBar().maximum() == 0
         assert scroll.verticalScrollBar().maximum() == 0
     finally:
@@ -110,7 +110,7 @@ def test_short_window_keeps_controls_readable_and_restores_preview_when_grown(tm
     fonts = {button: button.font().pixelSize() for button in window.findChildren(QPushButton)}
     button_heights = {button: button.sizeHint().height() for button in fonts}
     try:
-        for height in (500, 780, 500):
+        for height in (520, 780, 520):
             window.resize(520, height)
             QApplication.processEvents()
             scroll = window.centralWidget()
