@@ -118,20 +118,33 @@ def apply_yeartext(client, photo: dict, scene: str) -> None:
     fit_and_enable(client, scene, item_id)
 
 
-def select_exact_window(items: list[dict], selectors: list[str]) -> str:
+def select_exact_window(items: list[dict], selectors: list[str], *, allow_ambiguous: bool = False) -> str:
     available = [item["itemValue"] for item in items if item.get("itemEnabled", True)]
     for selector in selectors:
         if selector not in available:
             continue
         title = selector.split(":", 1)[0].casefold()
+        matches = [v for v in available if v.split(":", 1)[0].casefold() == title]
         # OBS title matching cannot distinguish two windows with the same title.
-        if sum(value.split(":", 1)[0].casefold() == title for value in available) == 1:
+        # In simulation mode (allow_ambiguous=True) we accept the first match anyway.
+        if len(matches) == 1 or allow_ambiguous:
             return selector
     raise ValueError("OBS não identificou uma janela JWL secundária única. Não foi usada captura de monitor.")
 
 
 def prepare_media(client, scene: str, selectors: list[str]) -> str:
-    if not selectors:
+    import json
+    from pathlib import Path
+
+    simulation = False
+    try:
+        settings_path = Path.home() / ".meeting-assistant" / "settings.json"
+        if settings_path.exists():
+            simulation = json.loads(settings_path.read_text("utf-8")).get("simulation_enabled", False)
+    except Exception:
+        pass
+
+    if not selectors and not simulation:
         raise ValueError("A identidade da janela secundária JWL não está disponível.")
     item_id = ensure_source(client, scene, MEDIA_SOURCE, "window_capture", {})
     items = client.send(
@@ -142,7 +155,15 @@ def prepare_media(client, scene: str, selectors: list[str]) -> str:
         },
         raw=True,
     )["propertyItems"]
-    selector = select_exact_window(items, selectors)
+
+    if simulation and not selectors:
+        # Em modo simulação sem segundo monitor, usa qualquer janela JWL disponível
+        jwl_items = [i for i in items if "jwlibrary" in i.get("itemValue", "").lower() and i.get("itemEnabled", True)]
+        if not jwl_items:
+            jwl_items = items[:1]  # último recurso: qualquer janela
+        selectors = [jwl_items[0]["itemValue"]] if jwl_items else []
+
+    selector = select_exact_window(items, selectors, allow_ambiguous=simulation)
     client.send(
         "SetInputSettings",
         {
