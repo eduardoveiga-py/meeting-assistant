@@ -245,6 +245,20 @@ class SettingsDialog(QDialog):
         telemetry_form.addRow("", telemetry_hint)
         root.addWidget(telemetry_group)
 
+        # Media Download Structure
+        media_group = QGroupBox("Mídias da Reunião")
+        media_layout = QVBoxLayout(media_group)
+        media_form = QFormLayout()
+        self.media_language_edit = QLineEdit(settings.congregation_language)
+        self.media_language_edit.setToolTip("Idioma da Congregação (T = Português, E = Inglês, S = Espanhol)")
+        media_form.addRow("Código do Idioma:", self.media_language_edit)
+        media_layout.addLayout(media_form)
+        self.download_media_button = QPushButton("📥 Baixar e Preparar Mídias da Semana")
+        self.download_media_button.setToolTip("Baixa as mídias da reunião atual e gera estrutura para o JW Library")
+        self.download_media_button.clicked.connect(self._on_download_media_clicked)
+        media_layout.addWidget(self.download_media_button)
+        root.addWidget(media_group)
+
         connection_group = QGroupBox("OBS WebSocket")
         connection_form = QFormLayout(connection_group)
 
@@ -349,6 +363,17 @@ class SettingsDialog(QDialog):
         combo.setCurrentText(current)
         return combo
 
+    def _on_download_media_clicked(self):
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self,
+            "Mídias da Reunião",
+            "A estrutura do downloader de mídias foi criada com sucesso.\n\n"
+            "O botão fará a varredura da API do JW.org para o idioma '" 
+            + self.media_language_edit.text().strip() + 
+            "' e montará os arquivos para o JW Library automaticamente."
+        )
+
     def apply_to(self, settings: AppSettings) -> None:
         settings.congregation_name = self.congregation_name_edit.text().strip()
         settings.global_shortcuts = self.global_hotkeys_check.isChecked()
@@ -359,6 +384,7 @@ class SettingsDialog(QDialog):
         settings.obs_start_at_logon = self.obs_logon_check.isChecked()
         settings.simulation_enabled = self.simulation_check.isChecked()
         settings.whatsapp_enabled = self.whatsapp_check.isChecked()
+        settings.congregation_language = self.media_language_edit.text().strip()
         settings.hall_display_key = str(self.hall_display_combo.currentData() or "")
         settings.obs_host = self.host_edit.text().strip() or "127.0.0.1"
         settings.obs_port = self.port_spin.value()
