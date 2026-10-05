@@ -250,8 +250,13 @@ class SettingsDialog(QDialog):
         media_layout = QVBoxLayout(media_group)
         media_form = QFormLayout()
         self.media_language_edit = QLineEdit(settings.congregation_language)
-        self.media_language_edit.setToolTip("Idioma da Congregação (T = Português, E = Inglês, S = Espanhol)")
-        media_form.addRow("Código do Idioma:", self.media_language_edit)
+        self.media_language_edit.setToolTip("Idioma da Congregacao (T = Portugues, E = Ingles, S = Espanhol)")
+        media_form.addRow("Codigo do Idioma:", self.media_language_edit)
+
+        self.auto_mute_mic_for_jwl_media = QCheckBox("Silenciar a mesa automaticamente (Auto-Ducking)")
+        self.auto_mute_mic_for_jwl_media.setChecked(settings.auto_mute_mic_for_jwl_media)
+        media_form.addRow("", self.auto_mute_mic_for_jwl_media)
+        
         media_layout.addLayout(media_form)
         self.download_media_button = QPushButton("📥 Baixar e Preparar Mídias da Semana")
         self.download_media_button.setToolTip("Baixa as mídias da reunião atual e gera estrutura para o JW Library")
@@ -385,6 +390,7 @@ class SettingsDialog(QDialog):
         settings.simulation_enabled = self.simulation_check.isChecked()
         settings.whatsapp_enabled = self.whatsapp_check.isChecked()
         settings.congregation_language = self.media_language_edit.text().strip()
+        settings.auto_mute_mic_for_jwl_media = self.auto_mute_mic_for_jwl_media.isChecked()
         settings.hall_display_key = str(self.hall_display_combo.currentData() or "")
         settings.obs_host = self.host_edit.text().strip() or "127.0.0.1"
         settings.obs_port = self.port_spin.value()

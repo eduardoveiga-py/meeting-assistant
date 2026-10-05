@@ -26,6 +26,7 @@ class AppSettings:
     zoom_join_url: str = ""
     camera_source_name: str = "Meeting Assistant - Câmera IP"
     congregation_language: str = "T"
+    auto_mute_mic_for_jwl_media: bool = True
     congregation_name: str = ""
     whatsapp_enabled: bool = False
     global_shortcuts: bool = False
