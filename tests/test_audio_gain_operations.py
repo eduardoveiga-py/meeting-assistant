@@ -148,5 +148,5 @@ def test_whatsapp_filter_remains_after_limiter_when_adjusting_zoom_volume(monkey
     filters = deepcopy(obs.filters[zoom])
     run_audio_task(obs, "gains", {"gains_db": {zoom: 3.0}})
     actual = obs.filters[zoom]
-    assert [f["filterName"] for f in actual] == [NOISE_SUPPRESSION, NOISE_GATE, COMPRESSOR, DUCKING, GAIN, LIMITER, WHATSAPP_MONITOR]
+    assert [f["filterName"] for f in actual] == [NOISE_SUPPRESSION, NOISE_GATE, COMPRESSOR, GAIN, LIMITER, WHATSAPP_MONITOR]
     assert actual[-1] == filters[-1] and actual[1] == filters[1]

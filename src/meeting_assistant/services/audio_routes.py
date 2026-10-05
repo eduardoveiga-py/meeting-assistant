@@ -153,15 +153,16 @@ def configure_filters(client, source, gain, whatsapp_destination="", extra_filte
         "output_gain": 0.0
     }, enabled=comp_enabled)
     
-    ducking_enabled = extra_filters.get("auto_ducking", False) and source == "Meeting Assistant - Mesa"
-    ensure_filter(client, source, DUCKING, "compressor_filter", {
-        "ratio": 32.0,
-        "threshold": -35.0,
-        "attack_time": 2,
-        "release_time": 800,
-        "output_gain": 0.0,
-        "sidechain_source": "Meeting Assistant - JW Library"
-    }, enabled=ducking_enabled)
+    if source == "Meeting Assistant - Mesa":
+        ducking_enabled = extra_filters.get("auto_ducking", False)
+        ensure_filter(client, source, DUCKING, "compressor_filter", {
+            "ratio": 32.0,
+            "threshold": -35.0,
+            "attack_time": 2,
+            "release_time": 800,
+            "output_gain": 0.0,
+            "sidechain_source": "Meeting Assistant - Áudio JW Library"
+        }, enabled=ducking_enabled)
     supp_enabled = extra_filters.get("noise_suppression", False)
     ensure_filter(client, source, NOISE_SUPPRESSION, "noise_suppress_filter", {
         "method": "rnnoise"
@@ -188,7 +189,11 @@ def configure_filters(client, source, gain, whatsapp_destination="", extra_filte
     filters = call(client, "GetSourceFilterList", sourceName=source)["filters"]
     # Put gain/limiter after operator filters, with the dedicated monitor last.
     ordered = [f["filterName"] for f in filters if f["filterName"] not in {GAIN, LIMITER, WHATSAPP_MONITOR, NOISE_GATE, COMPRESSOR, NOISE_SUPPRESSION, DUCKING}]
-    ordered += [NOISE_SUPPRESSION, NOISE_GATE, COMPRESSOR, DUCKING, GAIN, LIMITER]
+    base_ordered = [NOISE_SUPPRESSION, NOISE_GATE, COMPRESSOR]
+    if source == "Meeting Assistant - Mesa":
+        base_ordered.append(DUCKING)
+    base_ordered.extend([GAIN, LIMITER])
+    ordered += base_ordered
     if any(f["filterName"] == WHATSAPP_MONITOR for f in filters):
         ordered.append(WHATSAPP_MONITOR)
     for index, name in enumerate(ordered):
