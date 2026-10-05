@@ -24,6 +24,10 @@ class AudioSession(Protocol):
 
     def matches_whatsapp(self) -> bool: ...
 
+    def matches_jwl(self) -> bool: ...
+
+    def get_peak_value(self) -> float: ...
+
     @property
     def key(self) -> str: ...
 
@@ -57,6 +61,16 @@ class _PycawSession:
     def matches_whatsapp(self) -> bool:
         haystack = " ".join((self.process_name, self.display_name, self.identifier)).casefold()
         return "whatsapp" in haystack
+
+    def matches_jwl(self) -> bool:
+        haystack = " ".join((self.process_name, self.display_name, self.identifier)).casefold()
+        return "jwlibrary" in haystack
+
+    def get_peak_value(self) -> float:
+        try:
+            return float(self._session.AudioMeterInformation.GetPeakValue())
+        except Exception:
+            return 0.0
 
     def get_muted(self) -> bool:
         return bool(self._session.SimpleAudioVolume.GetMute())
@@ -312,10 +326,18 @@ class FakeAudioSession:
         self.key = key
         self.whatsapp = whatsapp
         self.muted = muted
+        self.jwl = False
+        self.peak_value = 0.0
         self.set_calls: list[bool] = []
 
     def matches_whatsapp(self) -> bool:
         return self.whatsapp
+
+    def matches_jwl(self) -> bool:
+        return self.jwl
+
+    def get_peak_value(self) -> float:
+        return self.peak_value
 
     def get_muted(self) -> bool:
         return self.muted

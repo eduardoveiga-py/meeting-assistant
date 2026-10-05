@@ -338,11 +338,11 @@ def run_audio_task(client, action, data):
             raise
     if action == "activate":
         return activate(client, data)
-    if action == "mute_mesa":
-        call(client, "SetInputMute", inputName="Meeting Assistant - Mesa", inputMuted=True)
+    if action == "ducking_start":
+        call(client, "SetInputMute", inputName=MIC, inputMuted=True)
         return {"ok": True}
-    if action == "unmute_mesa":
-        call(client, "SetInputMute", inputName="Meeting Assistant - Mesa", inputMuted=False)
+    if action == "ducking_end":
+        call(client, "SetInputMute", inputName=MIC, inputMuted=False)
         return {"ok": True}
     if action == "mute":
         return mute_managed(client)
