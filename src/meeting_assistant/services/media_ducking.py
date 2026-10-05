@@ -44,8 +44,7 @@ class JWLMediaDuckingService(QObject):
             # Debugging output to temp file
             import tempfile, os
             with open(os.path.join(tempfile.gettempdir(), 'ducking_debug.log'), 'a') as f:
-                f.write(f"Found JWL: {found_jwl}, Peak: {peak}, Ducking: {self._is_ducking}
-")
+                f.write(f"Found JWL: {found_jwl}, Peak: {peak}, Ducking: {self._is_ducking}\n")
 
             if peak > self._ducking_threshold:
                 self._silent_ticks = 0

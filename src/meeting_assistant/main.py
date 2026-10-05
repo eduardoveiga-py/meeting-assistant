@@ -32,6 +32,7 @@ from meeting_assistant.services.telemetry_service import TelemetryService
 from meeting_assistant.services.update_service import UpdateService
 from meeting_assistant.services.virtual_camera import camera_support
 from meeting_assistant.services.windows_audio import WhatsAppAudioGuard
+from meeting_assistant.services.media_ducking import JWLMediaDuckingService
 from meeting_assistant.services.zoom_hall_service import ZoomHallService, hall_runtime_flags
 from meeting_assistant.ui.main_window import MainWindow
 
@@ -120,6 +121,7 @@ def main() -> int:
 
     obs_config = current_obs_config()
     obs_controller = ObsController(poll_interval=0.5, screenshot_preview=False)
+    ducking_service = JWLMediaDuckingService(lambda: settings)
     display_service = DisplayService(app)
     jwl_service = JwlService(interval_ms=2000)
 
@@ -247,6 +249,13 @@ def main() -> int:
     media_automation.media_started.connect(obs_controller.set_program_scene)
     media_automation.media_ended.connect(obs_controller.set_program_scene)
     
+    # Auto-ducking for JW Library Media
+    ducking_service.ducking_started.connect(
+        lambda: obs_controller.audio_task("ducking", "ducking_start", {})
+    )
+    ducking_service.ducking_ended.connect(
+        lambda: obs_controller.audio_task("ducking", "ducking_end", {})
+    )
 
     media_automation.error.connect(window.set_automation_status)
 
@@ -462,6 +471,7 @@ def main() -> int:
     app.aboutToQuit.connect(whatsapp_audio_guard.stop)
     app.aboutToQuit.connect(jwl_probe.stop)
     app.aboutToQuit.connect(jwl_service.stop)
+    app.aboutToQuit.connect(ducking_service.stop)
     app.aboutToQuit.connect(lambda: telemetry.event("qt_about_to_quit"))
     app.aboutToQuit.connect(telemetry.stop)
 
@@ -492,6 +502,7 @@ def main() -> int:
     jwl_virtual_desktop.start()
     jwl_fast_guard.start()
     obs_controller.start(obs_config)
+    ducking_service.start()
     media_automation.start()
     apply_automation_runtime(False)
 
