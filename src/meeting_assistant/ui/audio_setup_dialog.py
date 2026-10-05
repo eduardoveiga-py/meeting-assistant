@@ -153,16 +153,30 @@ class AudioSetupDialog(QDialog):
             vol_layout = QHBoxLayout()
             import PySide6.QtWidgets as _qtw
             import PySide6.QtCore as _qtc
+            from functools import partial
             
             gain = _qtw.QSlider(_qtc.Qt.Orientation.Horizontal, group)
-            gain.setRange(0, 18)
+            gain.setRange(-30, 18)
             gain.setValue(int(self._saved_gains[name]))
             gain.setStyleSheet(slider_style)
             gain.setCursor(_qtc.Qt.CursorShape.PointingHandCursor)
             
+            db_label = QLabel("", group)
+            db_label.setFixedWidth(65)
+            db_label.setAlignment(_qtc.Qt.AlignmentFlag.AlignCenter)
+            
+            def _update_db(lbl, val):
+                prefix = "+" if val > 0 else ""
+                lbl.setText(f"{prefix}{val} dB")
+            
+            updater = partial(_update_db, db_label)
+            gain.valueChanged.connect(updater)
+            updater(gain.value())
+            
             vol_layout.addWidget(QLabel("🔈", group))
             vol_layout.addWidget(gain)
             vol_layout.addWidget(QLabel("🔊", group))
+            vol_layout.addWidget(db_label)
             layout.addLayout(vol_layout)
             
             filters_layout = QHBoxLayout()
