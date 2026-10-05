@@ -251,10 +251,10 @@ def main() -> int:
     
     # Auto-ducking for JW Library Media
     ducking_service.ducking_started.connect(
-        lambda: obs_controller.audio_task(obs_controller._generate_token(), "ducking_start", {})
+        lambda: obs_controller.audio_task("ducking", "ducking_start", {})
     )
     ducking_service.ducking_ended.connect(
-        lambda: obs_controller.audio_task(obs_controller._generate_token(), "ducking_end", {})
+        lambda: obs_controller.audio_task("ducking", "ducking_end", {})
     )
     media_automation.error.connect(window.set_automation_status)
 
