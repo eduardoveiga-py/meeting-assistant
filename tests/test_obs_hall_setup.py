@@ -86,7 +86,9 @@ def test_media_is_window_only_mutes_audio_and_keeps_single_source():
     assert ("SetInputMute", {"inputName": MEDIA_SOURCE, "inputMuted": True}) in client.calls
 
 
-def test_ambiguous_title_does_not_enable_capture():
+def test_ambiguous_title_does_not_enable_capture(monkeypatch):
+    from pathlib import Path
+    monkeypatch.setattr(Path, "exists", lambda self: False)
     client = FakeObs()
     client.options.append({"itemValue": "JWL media:Other:JWLibrary.exe"})
     with pytest.raises(ValueError, match="única"):

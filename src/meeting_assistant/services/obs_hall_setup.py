@@ -134,11 +134,16 @@ def select_exact_window(items: list[dict], selectors: list[str], *, allow_ambigu
 
 def prepare_media(client, scene: str, selectors: list[str]) -> str:
     import json
+    from os import environ
     from pathlib import Path
 
     simulation = False
     try:
-        settings_path = Path.home() / ".meeting-assistant" / "settings.json"
+        appdata = environ.get("APPDATA")
+        if appdata:
+            settings_path = Path(appdata) / "MeetingAssistant" / "settings.json"
+        else:
+            settings_path = Path.home() / ".meeting-assistant" / "settings.json"
         if settings_path.exists():
             simulation = json.loads(settings_path.read_text("utf-8")).get("simulation_enabled", False)
     except Exception:
