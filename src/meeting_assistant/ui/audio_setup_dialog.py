@@ -433,7 +433,7 @@ class AudioSetupDialog(QDialog):
             "profile": self.profile.currentData(),
             "whatsapp_device": self.whatsapp_device.currentData(),
             "gains_db": {name: gain.value() for name, gain in self.gains.items()},
-            "extra_filters": {name: {"noise_gate": self.noise_gates[name].isChecked(), "compressor": self.compressors[name].isChecked(), "noise_suppression": self.suppressions[name].isChecked() if name in self.suppressions else False} for name in self.gains},
+            "extra_filters": {name: {"noise_gate": self.noise_gates[name].isChecked(), "compressor": self.compressors[name].isChecked(), "noise_suppression": self.suppressions[name].isChecked() if name in self.suppressions else False, "auto_ducking": self.settings.auto_mute_mic_for_jwl_media} for name in self.gains},
             "microphone": self.microphone.currentData(),
             "applications": {k: v.currentData() for k, v in self.applications.items()},
             "routing_confirmed": self.route_confirmation.isChecked(),

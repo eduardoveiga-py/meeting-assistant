@@ -31,13 +31,21 @@ class JWLMediaDuckingService(QObject):
             self.ducking_ended.emit()
 
     def _check_peak(self):
-        if not self.settings_provider().auto_mute_mic_for_jwl_media:
-            return
         try:
+            if not self.settings_provider().auto_mute_mic_for_jwl_media:
+                return
             peak = 0.0
+            found_jwl = False
             for session in self.provider.sessions():
                 if session.matches_jwl():
+                    found_jwl = True
                     peak = max(peak, session.get_peak_value())
+
+            # Debugging output to temp file
+            import tempfile, os
+            with open(os.path.join(tempfile.gettempdir(), 'ducking_debug.log'), 'a') as f:
+                f.write(f"Found JWL: {found_jwl}, Peak: {peak}, Ducking: {self._is_ducking}
+")
 
             if peak > self._ducking_threshold:
                 self._silent_ticks = 0
@@ -50,5 +58,6 @@ class JWLMediaDuckingService(QObject):
                     if self._silent_ticks >= self._hold_ticks:
                         self._is_ducking = False
                         self.ducking_ended.emit()
-        except Exception:
-            pass  # Fail gracefully if pycaw throws
+        except Exception as e:
+            import sys
+            print(f'DUCKING ERROR: {e}', file=sys.stderr)
