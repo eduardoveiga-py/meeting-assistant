@@ -56,12 +56,29 @@ def disable_managed_display_captures(client, scenes):
 
 def assert_safe_media(client, scene):
     from meeting_assistant.services.obs_hall_setup import MEDIA_SOURCE, select_exact_window
+    import json
+    from pathlib import Path
+    
+    simulation = False
+    try:
+        settings_path = Path.home() / ".meeting-assistant" / "settings.json"
+        if settings_path.exists():
+            simulation = json.loads(settings_path.read_text("utf-8")).get("simulation_enabled", False)
+    except Exception:
+        pass
 
     if display_capture_items(client, scene):
-        raise ValueError("Captura de monitor ativa em Mídias. Prepare a fonte JWL em Ajustes antes de usar.")
+        if not simulation:
+            raise ValueError("Captura de monitor ativa em Mídias. Prepare a fonte JWL em Ajustes antes de usar.")
+            
     rows = call(client, "GetSceneItemList", sceneName=scene)["sceneItems"]
     if not any(i["sourceName"] == MEDIA_SOURCE and i.get("sceneItemEnabled") for i in rows):
-        raise ValueError("Fonte JWL secundária não preparada. Use Ajustes → Texto do Ano e fontes OBS.")
+        if not simulation:
+            raise ValueError("Fonte JWL secundária não preparada. Use Ajustes → Texto do Ano e fontes OBS.")
+            
+    if simulation:
+        return
+        
     values = call(client, "GetInputSettings", inputName=MEDIA_SOURCE)["inputSettings"]
     options = call(
         client, "GetInputPropertiesListPropertyItems", inputName=MEDIA_SOURCE, propertyName="window"
