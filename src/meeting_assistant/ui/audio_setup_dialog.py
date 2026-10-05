@@ -107,27 +107,81 @@ class AudioSetupDialog(QDialog):
         self.route_confirmation.toggled.connect(self.refresh_enabled)
         body.addStretch()
 
-        self.volume_scroll, volume_body = self._page("Volumes")
+        self.volume_scroll, volume_body = self._page("Volume e Melhorias")
         self._label(
             volume_body, "Aumente somente a fonte desejada e clique em Salvar volumes. "
             "Os dispositivos e o envio atual serão preservados. Comece com +3 dB."
         )
         self.volume_hint = self._label(volume_body, "")
         self.gains, self.gain_notes, self.gain_groups = {}, {}, {}
+        self.noise_gates = {}
+        self.compressors = {}
+
+        slider_style = '''
+        QSlider::groove:horizontal {
+            border: none;
+            height: 10px;
+            background: #202025;
+            border-radius: 5px;
+        }
+        QSlider::sub-page:horizontal {
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1055ff, stop:1 #9020ff);
+            border-radius: 5px;
+        }
+        QSlider::add-page:horizontal {
+            background: #202025;
+            border-radius: 5px;
+        }
+        QSlider::handle:horizontal {
+            background: white;
+            border: none;
+            width: 22px;
+            height: 22px;
+            margin-top: -6px;
+            margin-bottom: -6px;
+            border-radius: 11px;
+        }
+        '''
+
         for name in SOURCES:
-            label = "Mesa" if name == MIC else name.removeprefix("Meeting Assistant - Áudio ")
+            label = "Mesa de Som (Física)" if name == MIC else name.replace("Meeting Assistant - udio ", "").replace("Meeting Assistant - ", "")
             group = QGroupBox(label)
-            grid = QGridLayout(group)
-            grid.addWidget(QLabel("Ganho"), 0, 0)
-            gain = QDoubleSpinBox()
+            group.setStyleSheet("QGroupBox { font-weight: bold; margin-top: 10px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }")
+            layout = QVBoxLayout(group)
+            
+            vol_layout = QHBoxLayout()
+            import PySide6.QtWidgets as _qtw
+            import PySide6.QtCore as _qtc
+            
+            gain = _qtw.QSlider(_qtc.Qt.Orientation.Horizontal, group)
             gain.setRange(0, 18)
-            gain.setSuffix(" dB")
-            gain.setSingleStep(1.0)
-            gain.setValue(self._saved_gains[name])
-            gain.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
-            grid.addWidget(gain, 0, 1)
-            note = self._label(grid, "", row=1)
+            gain.setValue(int(self._saved_gains[name]))
+            gain.setStyleSheet(slider_style)
+            gain.setCursor(_qtc.Qt.CursorShape.PointingHandCursor)
+            
+            vol_layout.addWidget(QLabel("🔈", group))
+            vol_layout.addWidget(gain)
+            vol_layout.addWidget(QLabel("🔊", group))
+            layout.addLayout(vol_layout)
+            
+            filters_layout = QHBoxLayout()
+            ng = _qtw.QCheckBox("Filtro de Ruído", group)
+            ng.setToolTip("Corta o chiado da mesa de som quando ninguém está falando.")
+            comp = _qtw.QCheckBox("Compressor", group)
+            comp.setToolTip("Nivela vozes muito altas e baixas para a transmissão.")
+            
+            ng.stateChanged.connect(self.refresh_enabled)
+            comp.stateChanged.connect(self.refresh_enabled)
+            
+            filters_layout.addWidget(ng)
+            filters_layout.addWidget(comp)
+            layout.addLayout(filters_layout)
+
+            note = self._label(layout, "")
+            
             self.gains[name], self.gain_notes[name] = gain, note
+            self.noise_gates[name] = ng
+            self.compressors[name] = comp
             self.gain_groups[name] = group
             gain.valueChanged.connect(self.refresh_enabled)
             volume_body.addWidget(group)
@@ -183,7 +237,7 @@ class AudioSetupDialog(QDialog):
         self.activate_button = QPushButton("Ativar envio")
         self.activate_button.clicked.connect(lambda: self.request("activate"))
         outer.addWidget(self.activate_button)
-        self.gain_button = QPushButton("Salvar volumes")
+        self.gain_button = QPushButton("🪄 Salvar Volumes e Filtros")
         self.gain_button.clicked.connect(lambda: self.request("gains"))
         outer.addWidget(self.gain_button)
         row = QHBoxLayout()
@@ -354,6 +408,7 @@ class AudioSetupDialog(QDialog):
             "profile": self.profile.currentData(),
             "whatsapp_device": self.whatsapp_device.currentData(),
             "gains_db": {name: gain.value() for name, gain in self.gains.items()},
+            "extra_filters": {name: {"noise_gate": self.noise_gates[name].isChecked(), "compressor": self.compressors[name].isChecked()} for name in self.gains},
             "microphone": self.microphone.currentData(),
             "applications": {k: v.currentData() for k, v in self.applications.items()},
             "routing_confirmed": self.route_confirmation.isChecked(),

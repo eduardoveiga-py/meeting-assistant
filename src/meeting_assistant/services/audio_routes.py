@@ -8,6 +8,8 @@ from meeting_assistant.services.obs_monitor_device import monitoring_device
 GAIN = "Meeting Assistant - Ganho"
 LIMITER = "Meeting Assistant - Limitador"
 WHATSAPP_MONITOR = "Meeting Assistant - WhatsApp"
+NOISE_GATE = "Meeting Assistant - Noise Gate"
+COMPRESSOR = "Meeting Assistant - Compressor"
 LEGACY_FILTERS = {"Gain (WhatsApp)": "gain_filter", "Limiter (WhatsApp)": "limiter_filter"}
 
 
@@ -113,7 +115,8 @@ def silence_extra_routes(client, source):
                 raise ValueError("Silêncio do envio WhatsApp não confirmado.")
 
 
-def configure_filters(client, source, gain, whatsapp_destination=""):
+def configure_filters(client, source, gain, whatsapp_destination="", extra_filters=None):
+    extra_filters = extra_filters or {}
     for item in call(client, "GetSourceFilterList", sourceName=source)["filters"]:
         if LEGACY_FILTERS.get(item["filterName"]) == item["filterKind"]:
             call(
@@ -129,6 +132,24 @@ def configure_filters(client, source, gain, whatsapp_destination=""):
                 raise ValueError("OBS não confirmou a migração do ganho antigo.")
     ensure_filter(client, source, GAIN, "gain_filter", {"db": float(gain)})
     ensure_filter(client, source, LIMITER, "limiter_filter", {"threshold": -3.0, "release_time": 60})
+    
+    ng_enabled = extra_filters.get("noise_gate", False)
+    ensure_filter(client, source, NOISE_GATE, "noise_gate_filter", {
+        "open_threshold": -32.0,
+        "close_threshold": -38.0,
+        "attack_time": 25,
+        "hold_time": 200,
+        "release_time": 150
+    }, enabled=ng_enabled)
+
+    comp_enabled = extra_filters.get("compressor", False)
+    ensure_filter(client, source, COMPRESSOR, "compressor_filter", {
+        "ratio": 4.0,
+        "threshold": -18.0,
+        "attack_time": 2,
+        "release_time": 100,
+        "output_gain": 0.0
+    }, enabled=comp_enabled)
     if whatsapp_destination:
         # Exeldro Audio Monitor 0.10.1: mute=2 follows parent-source mute.
         # No global Zoom monitoring: this filter writes only to WhatsApp's cable.
@@ -150,8 +171,8 @@ def configure_filters(client, source, gain, whatsapp_destination=""):
         )
     filters = call(client, "GetSourceFilterList", sourceName=source)["filters"]
     # Put gain/limiter after operator filters, with the dedicated monitor last.
-    ordered = [f["filterName"] for f in filters if f["filterName"] not in {GAIN, LIMITER, WHATSAPP_MONITOR}]
-    ordered += [GAIN, LIMITER]
+    ordered = [f["filterName"] for f in filters if f["filterName"] not in {GAIN, LIMITER, WHATSAPP_MONITOR, NOISE_GATE, COMPRESSOR}]
+    ordered += [NOISE_GATE, COMPRESSOR, GAIN, LIMITER]
     if any(f["filterName"] == WHATSAPP_MONITOR for f in filters):
         ordered.append(WHATSAPP_MONITOR)
     for index, name in enumerate(ordered):

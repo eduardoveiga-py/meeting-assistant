@@ -279,9 +279,10 @@ def activate(client, data):
             else:
                 call(client, "CreateSceneItem", sceneName=scene, sourceName=BUS, sceneItemEnabled=True)
         gains = data.get("gains_db", {})
+        extra = data.get("extra_filters", {})
         for name in selected:
             configure_filters(
-                client, name, gains.get(name, 0), whatsapp_device if profile == "whatsapp_zoom" else ""
+                client, name, gains.get(name, 0), whatsapp_device if profile == "whatsapp_zoom" else "", extra.get(name, {})
             )
         for name in selected:
             tracks = {str(i): False for i in range(1, 7)}
