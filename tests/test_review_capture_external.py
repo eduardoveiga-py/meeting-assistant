@@ -65,7 +65,9 @@ def test_nested_shared_capture_disables_parent_not_shared_group_children():
     assert obs.scenes["Shared group"][0]["sceneItemEnabled"]
 
 
-def test_unsafe_media_rejected_before_program_switch():
+def test_unsafe_media_rejected_before_program_switch(monkeypatch):
+    from pathlib import Path
+    monkeypatch.setattr(Path, "exists", lambda self: False)
     obs = VisualObs()
     obs.inputs["Desktop"] = {"kind": "monitor_capture", "settings": {}}
     obs.scenes["Mídias"] = [{"sourceName": "Desktop", "sceneItemId": 1, "sceneItemEnabled": True}]
