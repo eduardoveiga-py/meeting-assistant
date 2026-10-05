@@ -48,7 +48,7 @@ Source: "{#SourcePath}..\README.md"; DestDir: "{app}\documentation"; Flags: igno
 Source: "{#SourcePath}..\CHANGELOG.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
 Source: "{#SourcePath}..\docs\operator-guide.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
 Source: "{#SourcePath}..\docs\installation.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
-Source: "{#SourcePath}..\docs\releases\v0.8.1.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
+Source: "{#SourcePath}..\docs\releases\v{#MyAppVersion}.md"; DestDir: "{app}\documentation"; Flags: ignoreversion
 Source: "{#SourcePath}..\build\video-native\package\*"; DestDir: "{app}\native"; Flags: ignoreversion
 Source: "{#SourcePath}..\build\prerequisites\vc_redist.x64.exe"; Flags: dontcopy
 Source: "{#SourcePath}installer-preflight.ps1"; Flags: dontcopy
@@ -59,6 +59,10 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Abrir {#MyAppName}"; Flags: nowait postinstall skipifsilent runasoriginaluser
+
+[UninstallRun]
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command \"Start-Process -FilePath '{sys}\WindowsPowerShell\v1.0\powershell.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ''{app}\native\install-video-native.ps1'' -Component RemoveCamera' -Verb RunAs -WindowStyle Hidden -Wait\""; Flags: runhidden
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command \"Start-Process -FilePath '{sys}\WindowsPowerShell\v1.0\powershell.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ''{app}\native\install-video-native.ps1'' -Component RemoveBridge' -Verb RunAs -WindowStyle Hidden -Wait\""; Flags: runhidden
 
 [Code]
 var
@@ -113,7 +117,7 @@ begin
     ExpandConstant('{app}\native\install-video-native.ps1') + '" -Component ' + Component;
   if Component = 'Bridge' then
     Parameters := Parameters + ' -ObsDirectory "' + ObsPage.Values[0] + '"';
-  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters,
+  if not ShellExec('runas', ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters,
     ExpandConstant('{app}\native'), SW_SHOW, ewWaitUntilTerminated, ExitCode) then
     RaiseException('Não foi possível executar o instalador da câmera/ponte.');
   if ExitCode <> 0 then

@@ -42,9 +42,11 @@ def build_display_key(
     height: int,
 ) -> str:
     identity = "|".join(part.strip() for part in (manufacturer, model, serial) if part.strip())
-    if identity:
-        return identity
-    return f"{name.strip()}|{x},{y}|{width}x{height}"
+    if not identity:
+        return f"{name.strip()}|{x},{y}|{width}x{height}"
+    if not serial.strip():
+        identity += f"|{name.strip()}"
+    return identity
 
 
 def resolve_hall_display(

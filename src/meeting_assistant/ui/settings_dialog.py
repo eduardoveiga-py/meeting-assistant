@@ -220,7 +220,6 @@ class SettingsDialog(QDialog):
         self.telemetry_sync_check = QCheckBox("Sincronizar com repositório (opcional)")
         self.telemetry_sync_check.setChecked(settings.telemetry_sync_enabled)
         self.telemetry_screenshots_check = QCheckBox("Incluir screenshots em eventos importantes")
-        self.telemetry_screenshots_check = QCheckBox("Incluir screenshots em eventos importantes")
         self.telemetry_screenshots_check.setChecked(settings.telemetry_screenshots)
         self.telemetry_repo_edit = QLineEdit(settings.telemetry_repo_url)
         self.telemetry_repo_edit.setPlaceholderText(

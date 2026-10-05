@@ -286,7 +286,16 @@ class SetupAssistantDialog(QDialog):
                     
                     results = []
                     for setup in setups:
-                        cmd = f'Start-Process -FilePath "{setup}" -ArgumentList "-i", "-h" -Wait -Verb RunAs'
+                        sig_check = subprocess.run(
+                            ["powershell", "-NoProfile", "-Command",
+                             f"(Get-AuthenticodeSignature '{setup}').Status -eq 'Valid'"],
+                            capture_output=True, text=True
+                        )
+                        if "True" not in sig_check.stdout:
+                            results.append(f"Segurança: {setup.name} não possui assinatura válida.")
+                            continue
+                        cmd = (f"$p = Start-Process -FilePath '{setup}' -Wait "
+                               f"-PassThru -Verb RunAs; exit $p.ExitCode")
                         res = subprocess.run(
                             ["powershell", "-NoProfile", "-Command", cmd], capture_output=True
                         )

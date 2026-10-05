@@ -387,7 +387,9 @@ class MainWindow(QMainWindow):
         system_grid.addWidget(self.power_button, 0, 0)
 
         self.force_jwl_button = QPushButton("🛡️ Forçar JWL Telão")
-        self.force_jwl_button.setToolTip("Garante que o JW Library esteja no telão e encerra o modo Zoom se estiver ativo.")
+        self.force_jwl_button.setToolTip(
+            "Garante que o JW Library esteja no telão e encerra o modo Zoom se ativo."
+        )
         self.force_jwl_button.clicked.connect(self._force_jwl)
         system_grid.addWidget(self.force_jwl_button, 0, 1)
         settings_button = QPushButton("⚙️ Ajustes")
@@ -1204,7 +1206,7 @@ class MainWindow(QMainWindow):
             self.camera_session.start()
 
     def _toggle_camera(self) -> None:
-        if self.camera_session is None:
+        if self.camera_session is None or not getattr(self.settings, "whatsapp_enabled", True):
             return
         if self.camera_session.state == "running":
             self.camera_session.stop()
@@ -1224,7 +1226,9 @@ class MainWindow(QMainWindow):
         else:
             text = "📹 Iniciar câmera"
         self.camera_button.setText(text)
-        self.camera_button.setEnabled(bool(self.camera_session.supported) and not busy)
+        enabled = bool(self.camera_session.supported) and not busy and \
+            getattr(self.settings, "whatsapp_enabled", True)
+        self.camera_button.setEnabled(enabled)
         self.camera_button.setToolTip("Câmera virtual WhatsApp: " + self.camera_session.message)
         self.camera_button.setAccessibleName("Câmera virtual WhatsApp: " + text)
 
