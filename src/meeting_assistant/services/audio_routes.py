@@ -9,6 +9,7 @@ GAIN = "Meeting Assistant - Ganho"
 LIMITER = "Meeting Assistant - Limitador"
 WHATSAPP_MONITOR = "Meeting Assistant - WhatsApp"
 NOISE_GATE = "Meeting Assistant - Noise Gate"
+NOISE_SUPPRESSION = "Meeting Assistant - Redução de Ruído"
 COMPRESSOR = "Meeting Assistant - Compressor"
 LEGACY_FILTERS = {"Gain (WhatsApp)": "gain_filter", "Limiter (WhatsApp)": "limiter_filter"}
 
@@ -150,6 +151,10 @@ def configure_filters(client, source, gain, whatsapp_destination="", extra_filte
         "release_time": 100,
         "output_gain": 0.0
     }, enabled=comp_enabled)
+    supp_enabled = extra_filters.get("noise_suppression", False)
+    ensure_filter(client, source, NOISE_SUPPRESSION, "noise_suppress_filter", {
+        "method": "rnnoise"
+    }, enabled=supp_enabled)
     if whatsapp_destination:
         # Exeldro Audio Monitor 0.10.1: mute=2 follows parent-source mute.
         # No global Zoom monitoring: this filter writes only to WhatsApp's cable.
@@ -171,8 +176,8 @@ def configure_filters(client, source, gain, whatsapp_destination="", extra_filte
         )
     filters = call(client, "GetSourceFilterList", sourceName=source)["filters"]
     # Put gain/limiter after operator filters, with the dedicated monitor last.
-    ordered = [f["filterName"] for f in filters if f["filterName"] not in {GAIN, LIMITER, WHATSAPP_MONITOR, NOISE_GATE, COMPRESSOR}]
-    ordered += [NOISE_GATE, COMPRESSOR, GAIN, LIMITER]
+    ordered = [f["filterName"] for f in filters if f["filterName"] not in {GAIN, LIMITER, WHATSAPP_MONITOR, NOISE_GATE, COMPRESSOR, NOISE_SUPPRESSION}]
+    ordered += [NOISE_SUPPRESSION, NOISE_GATE, COMPRESSOR, GAIN, LIMITER]
     if any(f["filterName"] == WHATSAPP_MONITOR for f in filters):
         ordered.append(WHATSAPP_MONITOR)
     for index, name in enumerate(ordered):

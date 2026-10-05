@@ -116,6 +116,7 @@ class AudioSetupDialog(QDialog):
         self.gains, self.gain_notes, self.gain_groups = {}, {}, {}
         self.noise_gates = {}
         self.compressors = {}
+        self.suppressions = {}
 
         slider_style = '''
         QSlider::groove:horizontal {
@@ -165,10 +166,18 @@ class AudioSetupDialog(QDialog):
             layout.addLayout(vol_layout)
             
             filters_layout = QHBoxLayout()
-            ng = _qtw.QCheckBox("Filtro de Ruído", group)
-            ng.setToolTip("Corta o chiado da mesa de som quando ninguém está falando.")
+            
+            supp = None
+            if name == MIC:
+                supp = _qtw.QCheckBox("Redução de Ruído", group)
+                supp.setToolTip("ATENÇÃO: Remove barulho de ar condicionado usando IA. Use apenas se necessário, pois pode engolir o som dos cânticos se vazar nos microfones.")
+                supp.stateChanged.connect(self.refresh_enabled)
+                filters_layout.addWidget(supp)
+
+            ng = _qtw.QCheckBox("Corte de Ruído", group)
+            ng.setToolTip("Noise Gate: Corta completamente o som quando ninguém está falando (ótimo para matar chiado de estática).")
             comp = _qtw.QCheckBox("Compressor", group)
-            comp.setToolTip("Nivela vozes muito altas e baixas para a transmissão.")
+            comp.setToolTip("Nivela o áudio: Abaixa quem fala muito perto do microfone e levanta o volume de quem fala baixo.")
             
             ng.stateChanged.connect(self.refresh_enabled)
             comp.stateChanged.connect(self.refresh_enabled)
@@ -182,6 +191,8 @@ class AudioSetupDialog(QDialog):
             self.gains[name], self.gain_notes[name] = gain, note
             self.noise_gates[name] = ng
             self.compressors[name] = comp
+            if supp:
+                self.suppressions[name] = supp
             self.gain_groups[name] = group
             gain.valueChanged.connect(self.refresh_enabled)
             volume_body.addWidget(group)
@@ -408,7 +419,7 @@ class AudioSetupDialog(QDialog):
             "profile": self.profile.currentData(),
             "whatsapp_device": self.whatsapp_device.currentData(),
             "gains_db": {name: gain.value() for name, gain in self.gains.items()},
-            "extra_filters": {name: {"noise_gate": self.noise_gates[name].isChecked(), "compressor": self.compressors[name].isChecked()} for name in self.gains},
+            "extra_filters": {name: {"noise_gate": self.noise_gates[name].isChecked(), "compressor": self.compressors[name].isChecked(), "noise_suppression": self.suppressions[name].isChecked() if name in self.suppressions else False} for name in self.gains},
             "microphone": self.microphone.currentData(),
             "applications": {k: v.currentData() for k, v in self.applications.items()},
             "routing_confirmed": self.route_confirmation.isChecked(),

@@ -5,7 +5,7 @@ from copy import deepcopy
 import pytest
 from test_obs_audio import FakeObs, selection
 
-from meeting_assistant.services.audio_routes import GAIN, LIMITER, WHATSAPP_MONITOR, NOISE_GATE, COMPRESSOR
+from meeting_assistant.services.audio_routes import GAIN, LIMITER, WHATSAPP_MONITOR, NOISE_GATE, COMPRESSOR, NOISE_SUPPRESSION
 from meeting_assistant.services.obs_audio import MIC, SOURCES, app_name, run_audio_task
 
 pytestmark = pytest.mark.usefixtures("audio_monitor_profile")
@@ -148,5 +148,5 @@ def test_whatsapp_filter_remains_after_limiter_when_adjusting_zoom_volume(monkey
     filters = deepcopy(obs.filters[zoom])
     run_audio_task(obs, "gains", {"gains_db": {zoom: 3.0}})
     actual = obs.filters[zoom]
-    assert [f["filterName"] for f in actual] == [NOISE_GATE, COMPRESSOR, GAIN, LIMITER, WHATSAPP_MONITOR]
+    assert [f["filterName"] for f in actual] == [NOISE_GATE, COMPRESSOR, NOISE_SUPPRESSION, GAIN, LIMITER, WHATSAPP_MONITOR]
     assert actual[-1] == filters[-1] and actual[1] == filters[1]
