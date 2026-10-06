@@ -163,7 +163,7 @@ def prepare_media(client, scene: str, selectors: list[str]) -> str:
 
     if simulation and not selectors:
         # Em modo simulação sem segundo monitor, usa qualquer janela JWL disponível
-        jwl_items = [i for i in items if "jwlibrary" in i.get("itemValue", "").lower() and i.get("itemEnabled", True)]
+        jwl_items = [i for i in items if "jwlibrary" in i.get("itemValue", "").lower() and i.get("itemEnabled", True)]  # noqa: E501
         if not jwl_items:
             jwl_items = items[:1]  # último recurso: qualquer janela
         selectors = [jwl_items[0]["itemValue"]] if jwl_items else []

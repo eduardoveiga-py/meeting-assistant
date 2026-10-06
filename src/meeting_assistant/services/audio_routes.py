@@ -188,7 +188,7 @@ def configure_filters(client, source, gain, whatsapp_destination="", extra_filte
         )
     filters = call(client, "GetSourceFilterList", sourceName=source)["filters"]
     # Put gain/limiter after operator filters, with the dedicated monitor last.
-    ordered = [f["filterName"] for f in filters if f["filterName"] not in {GAIN, LIMITER, WHATSAPP_MONITOR, NOISE_GATE, COMPRESSOR, NOISE_SUPPRESSION, DUCKING}]
+    ordered = [f["filterName"] for f in filters if f["filterName"] not in {GAIN, LIMITER, WHATSAPP_MONITOR, NOISE_GATE, COMPRESSOR, NOISE_SUPPRESSION, DUCKING}]  # noqa: E501
     base_ordered = [NOISE_SUPPRESSION, NOISE_GATE, COMPRESSOR]
     if source == "Meeting Assistant - Mesa":
         base_ordered.append(DUCKING)

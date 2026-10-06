@@ -80,7 +80,7 @@ def assert_safe_media(client, scene):
 
     if display_capture_items(client, scene):
         if not simulation:
-            raise ValueError("Captura de monitor ativa em Mídias. Prepare a fonte JWL em Ajustes antes de usar.")
+            raise ValueError("Captura de monitor ativa em Mídias. Prepare a fonte JWL em Ajustes antes de usar.")  # noqa: E501
 
     rows = call(client, "GetSceneItemList", sceneName=scene)["sceneItems"]
     if not any(i["sourceName"] == MEDIA_SOURCE and i.get("sceneItemEnabled") for i in rows):

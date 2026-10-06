@@ -259,7 +259,7 @@ class SettingsDialog(QDialog):
         
         media_layout.addLayout(media_form)
         self.download_media_button = QPushButton("📥 Baixar e Preparar Mídias da Semana")
-        self.download_media_button.setToolTip("Baixa as mídias da reunião atual e gera estrutura para o JW Library")
+        self.download_media_button.setToolTip("Baixa as mídias da reunião atual e gera estrutura para o JW Library")  # noqa: E501
         self.download_media_button.clicked.connect(self._on_download_media_clicked)
         media_layout.addWidget(self.download_media_button)
         root.addWidget(media_group)

@@ -42,7 +42,8 @@ class JWLMediaDuckingService(QObject):
                     peak = max(peak, session.get_peak_value())
 
             # Debugging output to temp file
-            import tempfile, os
+            import os
+            import tempfile
             with open(os.path.join(tempfile.gettempdir(), 'ducking_debug.log'), 'a') as f:
                 f.write(f"Found JWL: {found_jwl}, Peak: {peak}, Ducking: {self._is_ducking}\n")
 

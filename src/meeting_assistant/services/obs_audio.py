@@ -282,7 +282,7 @@ def activate(client, data):
         extra = data.get("extra_filters", {})
         for name in selected:
             configure_filters(
-                client, name, gains.get(name, 0), whatsapp_device if profile == "whatsapp_zoom" else "", extra.get(name, {})
+                client, name, gains.get(name, 0), whatsapp_device if profile == "whatsapp_zoom" else "", extra.get(name, {})  # noqa: E501
             )
         for name in selected:
             tracks = {str(i): False for i in range(1, 7)}

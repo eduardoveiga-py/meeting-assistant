@@ -29,7 +29,7 @@ def gain_state(client, source):
         and names.index(GAIN) < names.index(LIMITER)
         and (WHATSAPP_MONITOR not in names or names.index(LIMITER) < names.index(WHATSAPP_MONITOR))
     )
-    return {"gain_db": float(value) if valid_value else None, "gain_ready": ready, "sync_offset_ms": sync_offset}
+    return {"gain_db": float(value) if valid_value else None, "gain_ready": ready, "sync_offset_ms": sync_offset}  # noqa: E501
 
 
 def apply_gains(client, gains, source_kinds, sync_offsets=None):
@@ -59,14 +59,14 @@ def apply_gains(client, gains, source_kinds, sync_offsets=None):
             attempted.append(source)
             _set_verified(client, source, value)
             if source in sync_offsets:
-                call(client, "SetInputAudioSyncOffset", inputName=source, inputAudioSyncOffset=int(sync_offsets[source]))
+                call(client, "SetInputAudioSyncOffset", inputName=source, inputAudioSyncOffset=int(sync_offsets[source]))  # noqa: E501
     except Exception as exc:
         failed = []
         for source in reversed(attempted):
             try:
                 _set_verified(client, source, previous[source])
                 if source in sync_offsets:
-                    call(client, "SetInputAudioSyncOffset", inputName=source, inputAudioSyncOffset=int(previous_syncs.get(source, 0)))
+                    call(client, "SetInputAudioSyncOffset", inputName=source, inputAudioSyncOffset=int(previous_syncs.get(source, 0)))  # noqa: E501
             except Exception:
                 failed.append(source)
         if failed:

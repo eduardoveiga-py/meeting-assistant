@@ -7,8 +7,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
-    QDoubleSpinBox,
-    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -146,15 +144,16 @@ class AudioSetupDialog(QDialog):
         '''
 
         for name in SOURCES:
-            label = "Mesa de Som (Física)" if name == MIC else name.replace("Meeting Assistant - udio ", "").replace("Meeting Assistant - ", "")
+            label = "Mesa de Som (Física)" if name == MIC else name.replace("Meeting Assistant - udio ", "").replace("Meeting Assistant - ", "")  # noqa: E501
             group = QGroupBox(label)
-            group.setStyleSheet("QGroupBox { font-weight: bold; margin-top: 10px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }")
+            group.setStyleSheet("QGroupBox { font-weight: bold; margin-top: 10px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }")  # noqa: E501
             layout = QVBoxLayout(group)
             
             vol_layout = QHBoxLayout()
-            import PySide6.QtWidgets as _qtw
-            import PySide6.QtCore as _qtc
             from functools import partial
+
+            import PySide6.QtCore as _qtc
+            import PySide6.QtWidgets as _qtw
             
             gain = _qtw.QSlider(_qtc.Qt.Orientation.Horizontal, group)
             gain.setRange(-30, 18)
@@ -186,7 +185,7 @@ class AudioSetupDialog(QDialog):
 
             if name == MIC:
                 supp = _qtw.QCheckBox("Redução de Ruído", group)
-                supp.setToolTip("ATENÇÃO: Remove barulho de ar condicionado usando IA. Use apenas se necessário, pois pode engolir o som dos cânticos se vazar nos microfones.")
+                supp.setToolTip("ATENÇÃO: Remove barulho de ar condicionado usando IA. Use apenas se necessário, pois pode engolir o som dos cânticos se vazar nos microfones.")  # noqa: E501
                 supp.stateChanged.connect(self.refresh_enabled)
                 
                 sync_layout = QHBoxLayout()
@@ -218,9 +217,9 @@ class AudioSetupDialog(QDialog):
                 filters_layout.addWidget(supp)
 
             ng = _qtw.QCheckBox("Corte de Ruído", group)
-            ng.setToolTip("Noise Gate: Corta completamente o som quando ninguém está falando (ótimo para matar chiado de estática).")
+            ng.setToolTip("Noise Gate: Corta completamente o som quando ninguém está falando (ótimo para matar chiado de estática).")  # noqa: E501
             comp = _qtw.QCheckBox("Compressor", group)
-            comp.setToolTip("Nivela o áudio: Abaixa quem fala muito perto do microfone e levanta o volume de quem fala baixo.")
+            comp.setToolTip("Nivela o áudio: Abaixa quem fala muito perto do microfone e levanta o volume de quem fala baixo.")  # noqa: E501
             
             ng.stateChanged.connect(self.refresh_enabled)
             comp.stateChanged.connect(self.refresh_enabled)
@@ -427,7 +426,7 @@ class AudioSetupDialog(QDialog):
         for button in (self.refresh_button, self.prepare_button, self.mute_button,
                        self.close_button, self.activate_button):
             button.setEnabled(not self.busy)
-        self.gain_button.setEnabled(not self.busy and (bool(self._gain_changes()) or bool(self._sync_changes())))
+        self.gain_button.setEnabled(not self.busy and (bool(self._gain_changes()) or bool(self._sync_changes())))  # noqa: E501
         for widget in (self.profile, self.microphone, self.whatsapp_device,
                        self.route_confirmation, self.other_sources, *self.applications.values()):
             widget.setEnabled(not self.busy)
@@ -469,7 +468,7 @@ class AudioSetupDialog(QDialog):
             "whatsapp_device": self.whatsapp_device.currentData(),
             "gains_db": {name: gain.value() for name, gain in self.gains.items()},
             "sync_offsets_ms": {name: sync.value() for name, sync in self.sync_offsets.items()},
-            "extra_filters": {name: {"noise_gate": self.noise_gates[name].isChecked(), "compressor": self.compressors[name].isChecked(), "noise_suppression": self.suppressions[name].isChecked() if name in self.suppressions else False, "auto_ducking": self.settings.auto_mute_mic_for_jwl_media} for name in self.gains},
+            "extra_filters": {name: {"noise_gate": self.noise_gates[name].isChecked(), "compressor": self.compressors[name].isChecked(), "noise_suppression": self.suppressions[name].isChecked() if name in self.suppressions else False, "auto_ducking": self.settings.auto_mute_mic_for_jwl_media} for name in self.gains},  # noqa: E501
             "microphone": self.microphone.currentData(),
             "applications": {k: v.currentData() for k, v in self.applications.items()},
             "routing_confirmed": self.route_confirmation.isChecked(),

@@ -25,6 +25,7 @@ from meeting_assistant.services.media_automation_service import (
     MediaAutomationConfig,
     MediaAutomationService,
 )
+from meeting_assistant.services.media_ducking import JWLMediaDuckingService
 from meeting_assistant.services.meeting_launcher import MeetingLauncherService
 from meeting_assistant.services.obs_controller import ObsConnectionConfig, ObsController
 from meeting_assistant.services.settings import SettingsService
@@ -32,7 +33,6 @@ from meeting_assistant.services.telemetry_service import TelemetryService
 from meeting_assistant.services.update_service import UpdateService
 from meeting_assistant.services.virtual_camera import camera_support
 from meeting_assistant.services.windows_audio import WhatsAppAudioGuard
-from meeting_assistant.services.media_ducking import JWLMediaDuckingService
 from meeting_assistant.services.zoom_hall_service import ZoomHallService, hall_runtime_flags
 from meeting_assistant.ui.main_window import MainWindow
 
