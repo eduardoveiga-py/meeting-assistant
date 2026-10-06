@@ -69,7 +69,7 @@ def make_service(monkeypatch, tmp_path, checksum_text=None, active=lambda: False
         assert timeout == 10
         return io.BytesIO(sums.encode() if request.full_url.endswith("SHA256SUMS.txt") else binary)
 
-    service = UpdateService(frozen=True, opener=opened, activity_provider=active)
+    service = UpdateService(frozen=True, opener=opened, activity_provider=active, installed_version="0.8.0")
     offer = service._offer(release())
     return service, offer, digest
 
