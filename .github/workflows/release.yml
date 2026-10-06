@@ -2,7 +2,7 @@ name: Windows Release
 on:
   workflow_dispatch:
   push:
-    branches: ['feature/meeting-launch-zoom-hall', 'main']
+    branches: ['feature/meeting-launch-zoom-hall']
     paths: ['packaging/**', '.github/workflows/release.yml', 'docs/releases/**']
     tags: ['v*.*.*']
 permissions:
@@ -12,7 +12,6 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
-    if: github.ref == 'refs/heads/main'
     runs-on: windows-2022
     timeout-minutes: 45
     env:
