@@ -61,8 +61,8 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "Abrir {#MyAppName}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [UninstallRun]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command \"Start-Process -FilePath '{sys}\WindowsPowerShell\v1.0\powershell.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ''{app}\native\install-video-native.ps1'' -Component RemoveCamera' -Verb RunAs -WindowStyle Hidden -Wait\""; Flags: runhidden
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command \"Start-Process -FilePath '{sys}\WindowsPowerShell\v1.0\powershell.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ''{app}\native\install-video-native.ps1'' -Component RemoveBridge' -Verb RunAs -WindowStyle Hidden -Wait\""; Flags: runhidden
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Start-Process -FilePath '{sys}\WindowsPowerShell\v1.0\powershell.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ''{app}\native\install-video-native.ps1'' -Component RemoveCamera' -Verb RunAs -WindowStyle Hidden -Wait"""; Flags: runhidden
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Start-Process -FilePath '{sys}\WindowsPowerShell\v1.0\powershell.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ''{app}\native\install-video-native.ps1'' -Component RemoveBridge' -Verb RunAs -WindowStyle Hidden -Wait"""; Flags: runhidden
 
 [Code]
 var
