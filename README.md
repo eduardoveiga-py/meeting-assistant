@@ -25,6 +25,10 @@ O **Meeting Assistant** é um orquestrador open-source criado para simplificar e
 * **🤖 Automação do JW Library e OBS:**
   O sensor de imagem identifica repouso e mídia, com calibração do Texto do Ano.
   O guardião atua somente com a automação ligada; respeita Zoom, mídia externa e transições.
+* **🔄 Atualizador Automático (Versão Estável):**
+  A partir da versão v0.9.1, o aplicativo verifica, baixa e instala atualizações de forma automática através do GitHub Releases, sem interromper reuniões em andamento.
+* **🎛️ Gestão Avançada de Áudio e Sincronia:**
+  Configuração de Ganho, Filtros (Limiter, Redução de Ruído) e **Atraso de Sincronização (Sync Offset)** direto pelo aplicativo. Perfeito para alinhar o áudio de mesas de som físicas com o atraso de Câmeras IP.
 * **🎥 Câmera virtual Windows 11:**
   A ponte nativa recebe o Program do OBS e entrega vídeo ao WhatsApp. A câmera virtual
   do OBS atende o Zoom. O áudio usa dispositivos virtuais separados do vídeo.
