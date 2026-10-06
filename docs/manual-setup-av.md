@@ -10,28 +10,28 @@ flowchart TD
     B --> C[3. Configuração do OBS Studio]
     C --> D[4. Aplicativos de Chamada]
     
-    subgraph A [1. Camada do Sistema Operacional]
+    subgraph A ["1. Camada do Sistema Operacional"]
         A1("Desativar 'Controle Exclusivo'")
         A2("Definir Ação de Comunicação: 'Nada'")
         A3("Desativar Sons do Sistema")
         A4("Configurar Energia e Telas (100%)")
     end
     
-    subgraph B [2. Dispositivos Virtuais]
+    subgraph B ["2. Dispositivos Virtuais"]
         B1("Instalar VB-CABLE A")
         B2("Instalar VB-CABLE B (WhatsApp)")
         B3("Renomear Cabos no Windows")
         B4("Cravar Sample Rate em 48 kHz")
     end
     
-    subgraph C [3. Camada do OBS Studio]
+    subgraph C ["3. Camada do OBS Studio"]
         C1("Ativar OBS WebSocket")
         C2("Configurar Dispositivos de Áudio Globais (Desativados)")
         C3("Configurar 'Monitoramento de Áudio' para o Cabo A")
         C4("Criar Cenas e Fontes Isoladas")
     end
     
-    subgraph D [4. Camada de Transmissão (Zoom / WhatsApp)]
+    subgraph D ["4. Camada de Transmissão (Zoom / WhatsApp)"]
         D1("Zoom: Mic = Cabo A / Falante = Mesa (Salão)")
         D2("Desativar Filtros Nativos do Zoom (Original Sound)")
         D3("WhatsApp: Mic = Cabo B / Falante = Mesa")
