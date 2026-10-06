@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   repair-v093-tag:
-    if: github.ref == 'refs/heads/main' && github.sha == '61831bb6859379089e4461ea433d1c13fdc7d372'
+    if: github.ref == 'refs/heads/main' && github.sha == '6189ecfe7c45262bc0bfbe5d026a27a726e68aec'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -23,7 +23,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh api --method DELETE repos/${GH_REPO}/git/refs/tags/v0.9.3
-          gh api --method POST repos/${GH_REPO}/git/refs -f ref='refs/tags/v0.9.3' -f sha='${GITHUB_SHA}'
+          gh api --method POST repos/${GH_REPO}/git/refs -f ref='refs/tags/v0.9.3' -f sha='61831bb6859379089e4461ea433d1c13fdc7d372'
 
   build:
     if: startsWith(github.ref, 'refs/tags/v')
