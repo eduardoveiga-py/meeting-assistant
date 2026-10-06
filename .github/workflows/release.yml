@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   repair-v093-tag:
-    if: github.ref == 'refs/heads/main' && github.sha == '6189ecfe7c45262bc0bfbe5d026a27a726e68aec'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
