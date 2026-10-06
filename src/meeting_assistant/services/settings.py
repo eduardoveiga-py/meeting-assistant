@@ -46,6 +46,7 @@ class AppSettings:
     audio_profile: str = "shared"
     whatsapp_audio_device: str = ""
     audio_gains_db: dict = field(default_factory=dict)
+    audio_sync_offsets_ms: dict = field(default_factory=dict)
 
 
 class SettingsService:

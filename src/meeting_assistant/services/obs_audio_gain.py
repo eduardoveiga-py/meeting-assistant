@@ -11,6 +11,12 @@ def call(client, request, **data):
 
 def gain_state(client, source):
     filters = call(client, "GetSourceFilterList", sourceName=source)["filters"]
+    try:
+        sync_res = call(client, "GetInputAudioSyncOffset", inputName=source)
+        sync_offset = sync_res.get("inputAudioSyncOffset", 0)
+    except Exception:
+        sync_offset = 0
+
     gain = next((f for f in filters if f["filterName"] == GAIN), None)
     limiter = next((f for f in filters if f["filterName"] == LIMITER), None)
     value = gain.get("filterSettings", {}).get("db") if gain else None
@@ -23,10 +29,11 @@ def gain_state(client, source):
         and names.index(GAIN) < names.index(LIMITER)
         and (WHATSAPP_MONITOR not in names or names.index(LIMITER) < names.index(WHATSAPP_MONITOR))
     )
-    return {"gain_db": float(value) if valid_value else None, "gain_ready": ready}
+    return {"gain_db": float(value) if valid_value else None, "gain_ready": ready, "sync_offset_ms": sync_offset}
 
 
-def apply_gains(client, gains, source_kinds):
+def apply_gains(client, gains, source_kinds, sync_offsets=None):
+    sync_offsets = sync_offsets or {}
     if not isinstance(gains, dict) or not gains:
         raise ValueError("Altere o ganho de uma fonte antes de salvar os volumes.")
     for source, value in gains.items():
@@ -36,6 +43,7 @@ def apply_gains(client, gains, source_kinds):
             raise ValueError("Use ganho entre 0 e 18 dB.")
     rows = {r["inputName"]: r for r in call(client, "GetInputList")["inputs"]}
     previous = {}
+    previous_syncs = {}
     # Validate the complete request before any change; never create/enable a route here.
     for source in gains:
         if source not in rows or rows[source]["inputKind"] != source_kinds[source]:
@@ -44,16 +52,21 @@ def apply_gains(client, gains, source_kinds):
         if not state["gain_ready"]:
             raise ValueError(f"Configure o envio de {source} antes de ajustar seu volume.")
         previous[source] = state["gain_db"]
+        previous_syncs[source] = state.get("sync_offset_ms", 0)
     attempted = []
     try:
         for source, value in gains.items():
             attempted.append(source)
             _set_verified(client, source, value)
+            if source in sync_offsets:
+                call(client, "SetInputAudioSyncOffset", inputName=source, inputAudioSyncOffset=int(sync_offsets[source]))
     except Exception as exc:
         failed = []
         for source in reversed(attempted):
             try:
                 _set_verified(client, source, previous[source])
+                if source in sync_offsets:
+                    call(client, "SetInputAudioSyncOffset", inputName=source, inputAudioSyncOffset=int(previous_syncs.get(source, 0)))
             except Exception:
                 failed.append(source)
         if failed:
@@ -67,6 +80,7 @@ def apply_gains(client, gains, source_kinds):
     return {
         "message": "OBS confirmou os volumes. O envio e os dispositivos foram preservados.",
         "gains_db": {source: float(value) for source, value in gains.items()},
+        "sync_offsets_ms": sync_offsets,
     }
 
 

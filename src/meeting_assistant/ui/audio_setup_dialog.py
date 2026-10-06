@@ -117,6 +117,7 @@ class AudioSetupDialog(QDialog):
         self.noise_gates = {}
         self.compressors = {}
         self.suppressions = {}
+        self.sync_offsets = {}
 
         slider_style = '''
         QSlider::groove:horizontal {
@@ -182,10 +183,38 @@ class AudioSetupDialog(QDialog):
             filters_layout = QHBoxLayout()
             
             supp = None
+
             if name == MIC:
                 supp = _qtw.QCheckBox("Redução de Ruído", group)
                 supp.setToolTip("ATENÇÃO: Remove barulho de ar condicionado usando IA. Use apenas se necessário, pois pode engolir o som dos cânticos se vazar nos microfones.")
                 supp.stateChanged.connect(self.refresh_enabled)
+                
+                sync_layout = QHBoxLayout()
+                sync_label = QLabel("Atraso Mesa (Câmera lenta):")
+                sync_slider = _qtw.QSlider(_qtc.Qt.Orientation.Horizontal, group)
+                sync_slider.setRange(-5000, 5000)
+                sync_slider.setValue(int(self.settings.audio_sync_offsets_ms.get(name, 0)))
+                sync_slider.setStyleSheet(slider_style)
+                sync_slider.setCursor(_qtc.Qt.CursorShape.PointingHandCursor)
+                
+                sync_val_label = QLabel("", group)
+                sync_val_label.setFixedWidth(65)
+                sync_val_label.setAlignment(_qtc.Qt.AlignmentFlag.AlignCenter)
+                
+                def _update_sync(lbl, val):
+                    lbl.setText(f"{val} ms")
+                    
+                sync_updater = partial(_update_sync, sync_val_label)
+                sync_slider.valueChanged.connect(sync_updater)
+                sync_updater(sync_slider.value())
+                sync_slider.valueChanged.connect(self.refresh_enabled)
+                
+                sync_layout.addWidget(sync_label)
+                sync_layout.addWidget(sync_slider)
+                sync_layout.addWidget(sync_val_label)
+                layout.addLayout(sync_layout)
+                
+                self.sync_offsets[name] = sync_slider
                 filters_layout.addWidget(supp)
 
             ng = _qtw.QCheckBox("Corte de Ruído", group)
@@ -375,6 +404,12 @@ class AudioSetupDialog(QDialog):
             blockers.append(("marque a confirmação do roteamento", self.route_confirmation))
         return blockers
 
+    def _sync_changes(self):
+        return {
+            name: sync.value() for name, sync in self.sync_offsets.items()
+            if sync.value() != self._source_states.get(name, {}).get("sync_offset_ms", 0)
+        }
+
     def _gain_changes(self):
         return {
             name: gain.value() for name, gain in self.gains.items()
@@ -392,7 +427,7 @@ class AudioSetupDialog(QDialog):
         for button in (self.refresh_button, self.prepare_button, self.mute_button,
                        self.close_button, self.activate_button):
             button.setEnabled(not self.busy)
-        self.gain_button.setEnabled(not self.busy and bool(self._gain_changes()))
+        self.gain_button.setEnabled(not self.busy and (bool(self._gain_changes()) or bool(self._sync_changes())))
         for widget in (self.profile, self.microphone, self.whatsapp_device,
                        self.route_confirmation, self.other_sources, *self.applications.values()):
             widget.setEnabled(not self.busy)
@@ -433,6 +468,7 @@ class AudioSetupDialog(QDialog):
             "profile": self.profile.currentData(),
             "whatsapp_device": self.whatsapp_device.currentData(),
             "gains_db": {name: gain.value() for name, gain in self.gains.items()},
+            "sync_offsets_ms": {name: sync.value() for name, sync in self.sync_offsets.items()},
             "extra_filters": {name: {"noise_gate": self.noise_gates[name].isChecked(), "compressor": self.compressors[name].isChecked(), "noise_suppression": self.suppressions[name].isChecked() if name in self.suppressions else False, "auto_ducking": self.settings.auto_mute_mic_for_jwl_media} for name in self.gains},
             "microphone": self.microphone.currentData(),
             "applications": {k: v.currentData() for k, v in self.applications.items()},
@@ -453,9 +489,9 @@ class AudioSetupDialog(QDialog):
             widget.setFocus()
             return
         if action == "gains":
-            data = {"gains_db": self._gain_changes()}
-            if not data["gains_db"]:
-                self.status.setText("Altere o ganho de uma fonte configurada antes de salvar.")
+            data = {"gains_db": self._gain_changes(), "sync_offsets_ms": self._sync_changes()}
+            if not self._gain_changes() and not self._sync_changes():
+                self.status.setText("Altere um volume ou atraso antes de salvar.")
                 return
         else:
             data = self._data()
@@ -477,6 +513,8 @@ class AudioSetupDialog(QDialog):
         if ok and action in {"activate", "gains"}:
             gains = result.get("gains_db", {})
             self.settings.audio_gains_db.update(gains)
+            if "sync_offsets_ms" in result:
+                self.settings.audio_sync_offsets_ms.update(result["sync_offsets_ms"])
             self._saved_gains.update(gains)
             if action == "activate":
                 self.settings.audio_profile = result["profile"]
@@ -529,6 +567,9 @@ class AudioSetupDialog(QDialog):
                 continue
             edited = prior is not None and prior["gains_db"][name] != self._saved_gains.get(name, 0.0)
             self._saved_gains[name] = actual
+            sync_actual = state.get("sync_offset_ms", 0)
+            if name in self.sync_offsets and not edited:
+                self.sync_offsets[name].setValue(sync_actual)
             if not edited:
                 self.gains[name].setValue(actual)
                 # Display rounding must not mark another source as edited.

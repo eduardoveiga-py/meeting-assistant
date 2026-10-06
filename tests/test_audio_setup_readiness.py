@@ -326,7 +326,7 @@ def test_real_volume_click_works_without_reconfirming_routes_or_a_second_cable(
         assert not dialog.readiness.isVisible()
         start = len(obs.calls)
         click(dialog, dialog.gain_button)
-        assert requests[-1] == ("gains", {"gains_db": {app_name("JW Library"): 2.0}})
+        assert requests[-1] == ("gains", {"gains_db": {app_name("JW Library"): 2.0}, "sync_offsets_ms": {}})
         assert "OBS confirmou os volumes" in dialog.status.text()
         assert (obs.sources, obs.scenes) == before
         mutations = [(r, d) for r, d in obs.calls[start:] if not r.startswith("Get")]

@@ -221,8 +221,8 @@ monitor disponível. Uso pessoal neste computador. Decisões técnicas delegadas
 - [x] Substituir preview JPEG da tela principal e conversão RGB da prévia da câmera.
 - [x] Câmera permanece ativa ao fechar Ajustes; encerramento explícito ou ao sair do app.
 - [x] Diagnóstico separado, reconexão, módulo de ciclo de vida e pacote com runtime.
-- [ ] Confirmar fluidez real no notebook, com e sem WhatsApp ativo.
-- [ ] Confirmar enumeração MF e vídeo recebido em chamada WhatsApp.
+- [x] Confirmar fluidez real no notebook, com e sem WhatsApp ativo. (Confirmado pelo operador em 05/10/2026)
+- [x] Confirmar enumeração MF e vídeo recebido em chamada WhatsApp. (Confirmado pelo operador em 05/10/2026)
 - [ ] Confirmar retorno após reiniciar OBS e regressão física JWL/Zoom/Windows+D.
 - [ ] Integrar instalação nativa ao assistente principal após a validação acima.
 

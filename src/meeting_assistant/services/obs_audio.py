@@ -329,7 +329,7 @@ def run_audio_task(client, action, data):
     if action == "inspect":
         return discover(client)
     if action == "gains":
-        return apply_gains(client, data.get("gains_db"), SOURCES)
+        return apply_gains(client, data.get("gains_db"), SOURCES, sync_offsets=data.get("sync_offsets_ms"))
     if action == "prepare":
         try:
             return prepare(client)

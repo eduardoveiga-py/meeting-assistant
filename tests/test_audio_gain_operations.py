@@ -37,7 +37,7 @@ def test_read_only_discovery_preserves_all_live_sources_filters_and_scenes(monke
     assert (obs.sources, obs.scenes, obs.filters) == before
     assert all(r.startswith("Get") for r, _ in obs.calls[start:])
     assert not snapshot["needs_prepare"]
-    assert snapshot["source_states"][MIC] == {"gain_ready": True, "gain_db": 2.0}
+    assert snapshot["source_states"][MIC] == {"gain_ready": True, "gain_db": 2.0, "sync_offset_ms": 0}
     assert snapshot["selected"][MIC]["device_id"] == "physical"
     assert snapshot["selected"][app_name("JW Library")]["window"] == "Playing:class:jwlibrary.exe"
     assert snapshot["selected"][app_name("Edge")]["window"] == ""
