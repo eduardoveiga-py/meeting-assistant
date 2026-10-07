@@ -99,7 +99,7 @@ def test_gain_is_adjustable_verified_and_before_limiter():
     assert all(obs.sources[n]["mute"] for n in SOURCES)
 
 
-@pytest.mark.parametrize("gain", [-1, 19, True, float("nan"), "8"])
+@pytest.mark.parametrize("gain", [-31, 19, True, float("nan"), "8"])
 def test_invalid_gain_does_not_reactivate_route(gain):
     obs = FakeObs()
     prepare(obs)

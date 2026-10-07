@@ -18,7 +18,9 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -53,6 +55,8 @@ class SettingsDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.prepare_obs_requested = False
+        # One copy of every field. The workspace mounts these sections directly;
+        # apply_to only writes editor fields, never confirmed live audio settings.
         self.setWindowTitle("Ajustes do Meeting Assistant")
         self.setModal(not embedded)
         self.setMinimumSize(360, 240)
@@ -105,7 +109,7 @@ class SettingsDialog(QDialog):
         output_group = QGroupBox("Saída do Salão")
         output_form = QFormLayout(output_group)
 
-        self.whatsapp_check = QCheckBox("Usar WhatsApp e câmera virtual")
+        self.whatsapp_check = QCheckBox("WhatsApp e câmera virtual")
         self.whatsapp_check.setChecked(settings.whatsapp_enabled)
         output_form.addRow("WhatsApp", self.whatsapp_check)
 
@@ -132,7 +136,7 @@ class SettingsDialog(QDialog):
             selected_index = self.hall_display_combo.count() - 1
         self.hall_display_combo.setCurrentIndex(max(0, selected_index))
 
-        self.global_hotkeys_check = QCheckBox("Atalhos globais Ctrl+Alt+F2/F3/F4/F5/F7")
+        self.global_hotkeys_check = QCheckBox("Atalhos globais Ctrl+Alt+F2–F7")
         self.global_hotkeys_check.setChecked(settings.global_shortcuts)
         output_form.addRow(self.global_hotkeys_check)
         output_form.addRow("Modo", self.simulation_check)
@@ -180,7 +184,7 @@ class SettingsDialog(QDialog):
         )
         startup_hint.setWordWrap(True)
         startup_form.addRow("", startup_hint)
-        self.obs_logon_check = QCheckBox("Iniciar OBS ao entrar no Windows, na bandeja")
+        self.obs_logon_check = QCheckBox("Iniciar OBS com o Windows")
         self.obs_logon_check.setChecked(settings.obs_start_at_logon)
         startup_form.addRow("", self.obs_logon_check)
         root.addWidget(startup_group)
@@ -215,11 +219,11 @@ class SettingsDialog(QDialog):
         telemetry_group = QGroupBox("Diagnóstico automático")
         telemetry_form = QFormLayout(telemetry_group)
 
-        self.telemetry_check = QCheckBox("Gravar diagnóstico técnico localmente")
+        self.telemetry_check = QCheckBox("Gravar diagnóstico local")
         self.telemetry_check.setChecked(settings.telemetry_enabled)
-        self.telemetry_sync_check = QCheckBox("Sincronizar com repositório (opcional)")
+        self.telemetry_sync_check = QCheckBox("Sincronizar com repositório")
         self.telemetry_sync_check.setChecked(settings.telemetry_sync_enabled)
-        self.telemetry_screenshots_check = QCheckBox("Incluir screenshots em eventos importantes")
+        self.telemetry_screenshots_check = QCheckBox("Incluir capturas de tela")
         self.telemetry_screenshots_check.setChecked(settings.telemetry_screenshots)
         self.telemetry_repo_edit = QLineEdit(settings.telemetry_repo_url)
         self.telemetry_repo_edit.setPlaceholderText(
@@ -230,7 +234,7 @@ class SettingsDialog(QDialog):
         telemetry_form.addRow("", self.telemetry_sync_check)
         telemetry_form.addRow("", self.telemetry_screenshots_check)
         telemetry_form.addRow("Repositório de destino", self.telemetry_repo_edit)
-        export_button = QPushButton("Exportar última sessão para revisão…")
+        export_button = QPushButton("Exportar diagnóstico…")
         export_button.clicked.connect(self._export_diagnostics)
         telemetry_form.addRow(export_button)
 
@@ -245,21 +249,23 @@ class SettingsDialog(QDialog):
         telemetry_form.addRow("", telemetry_hint)
         root.addWidget(telemetry_group)
 
-        # Media Download Structure
-        media_group = QGroupBox("Mídias da Reunião")
+        media_group = QGroupBox("Mídias e idioma")
         media_layout = QVBoxLayout(media_group)
         media_form = QFormLayout()
         self.media_language_edit = QLineEdit(settings.congregation_language)
         self.media_language_edit.setToolTip("Idioma da Congregacao (T = Portugues, E = Ingles, S = Espanhol)")
         media_form.addRow("Codigo do Idioma:", self.media_language_edit)
 
-        self.auto_mute_mic_for_jwl_media = QCheckBox("Silenciar a mesa automaticamente (Auto-Ducking)")
+        self.auto_mute_mic_for_jwl_media = QCheckBox("Silenciar mesa durante mídias")
         self.auto_mute_mic_for_jwl_media.setChecked(settings.auto_mute_mic_for_jwl_media)
         media_form.addRow("", self.auto_mute_mic_for_jwl_media)
         
         media_layout.addLayout(media_form)
         self.download_media_button = QPushButton("📥 Baixar e Preparar Mídias da Semana")
-        self.download_media_button.setToolTip("Baixa as mídias da reunião atual e gera estrutura para o JW Library")  # noqa: E501
+        self.download_media_button.setText("Download de mídias — em desenvolvimento")
+        self.download_media_button.setEnabled(False)
+        self.download_media_button.hide()
+        self.download_media_button.setToolTip("Esta função ainda não baixa arquivos.")
         self.download_media_button.clicked.connect(self._on_download_media_clicked)
         media_layout.addWidget(self.download_media_button)
         root.addWidget(media_group)
@@ -303,6 +309,51 @@ class SettingsDialog(QDialog):
         root.addWidget(assistant)
         assistant.setVisible(not embedded)
 
+        # Related fields stay in the same category instead of one long form.
+        self.sections = {}
+        self.section_picker = QComboBox(self)
+        self.section_stack = QStackedWidget(self)
+        for key, title, groups in (
+            ("meeting", "Reunião e janelas", (output_group, startup_group, media_group)),
+            ("video", "OBS e vídeo", (connection_group, scenes_group, camera_group)),
+            ("diagnostics", "Diagnóstico", (telemetry_group,)),
+        ):
+            page = QScrollArea()
+            page.setWidgetResizable(True)
+            page.setFrameShape(QFrame.NoFrame)
+            page.setObjectName(f"SettingsSection_{key}")
+            container = QWidget()
+            layout = QVBoxLayout(container)
+            for group in groups:
+                root.removeWidget(group)
+                layout.addWidget(group)
+                form = group.layout()
+                if isinstance(form, QFormLayout):
+                    form.setRowWrapPolicy(QFormLayout.WrapAllRows)
+                    form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+            layout.addStretch()
+            page.setWidget(container)
+            for combo in container.findChildren(QComboBox):
+                combo.setMinimumContentsLength(8)
+                combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+                combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+                combo.setToolTip(combo.currentText())
+                combo.currentTextChanged.connect(combo.setToolTip)
+            self.sections[key] = page
+            self.section_picker.addItem(title, key)
+            self.section_stack.addWidget(page)
+        if not embedded:
+            root.removeWidget(tools_group)
+            self.sections["diagnostics"].widget().layout().insertWidget(0, tools_group)
+        hall_setup.hide()
+        assistant.hide()
+        outer.removeWidget(scroll)
+        scroll.setParent(None)
+        scroll.deleteLater()
+        outer.addWidget(self.section_picker)
+        outer.addWidget(self.section_stack, 1)
+        self.section_picker.currentIndexChanged.connect(self.section_stack.setCurrentIndex)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
@@ -310,6 +361,7 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
         outer.addWidget(buttons)
         if embedded:
+            media_group.hide()
             self.setWindowFlags(Qt.Widget)
             buttons.hide()
             self.setMinimumSize(0, 0)

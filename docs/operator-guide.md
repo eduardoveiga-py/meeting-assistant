@@ -12,22 +12,26 @@ quais testes foram confirmados e o que permanece pendente.
    do JWL e selecione a **Tela do Salão** nos ajustes do app.
 3. Confira host, porta e senha do WebSocket do OBS. Aguarde a conexão indicada pelo
    app antes de preparar fontes.
-4. Em **Ajustes → Texto do Ano e fontes do OBS**, prepare a captura JWL em Mídias.
+4. Em **Ajustes → OBS e vídeo → Fontes**, verifique e complete as fontes; use
+   **Preparar captura JWL** para vincular novamente a janela em Mídias.
    Requer OBS 31.0.3+ e Direct3D 11. A fonte
    **Meeting Assistant - JWL (HWND)** deve mostrar a saída do Salão, mesmo com
    nomes iguais no OBS. [Instalação e diagnóstico](jwl-hwnd-capture.md).
-5. Na mesma ferramenta, capture/confirme a foto do Texto do Ano e seu ano quando
+5. Em **OBS e vídeo → Texto do Ano**, capture/confirme a foto e seu ano quando
    faltar ou precisar atualizar. Salvar a foto **não recalibra o sensor**.
-6. Em **Ajustes → Áudio da mesa e das mídias**, confira o perfil e os dispositivos.
+6. Em **Ajustes → Áudio → Envio**, confira o perfil e os dispositivos.
    Se a estrutura já estiver funcionando, consultar a tela não exige recriá-la.
-   **Criar fontes** prepara/repara fontes silenciadas; use **Ativar envio** somente
-   após conferir o roteamento.
+   **Completar fontes de áudio** preserva fontes existentes e cria somente
+   o que falta, com fontes novas silenciadas. Use **Ativar envio** para aplicar
+   uma seleção de dispositivos, após conferir o roteamento.
 7. No Zoom, selecione **OBS Virtual Camera** e o microfone virtual correspondente.
    No WhatsApp, selecione **Meeting Assistant** e o microfone virtual do seu perfil.
    Faça uma chamada curta: a prévia do app não comprova recepção remota.
 
 Configure links/dispositivos antes da reunião. Dados de conexão e fotos ficam
 na pasta privada do usuário; não os publique junto do projeto.
+
+[Mapa completo de Ajustes e manutenção do OBS](settings-workspace.md).
 
 ## Áudio: escolher o perfil
 
@@ -78,7 +82,8 @@ ou retorno, eles respeitam a escolha do operador e aguardam a troca finalizar.
 | Mic Zoom | Alternar seu próprio microfone; não controla microfones dos participantes |
 | WhatsApp | Silenciar/liberar somente o áudio recebido do WhatsApp nas caixas |
 | Mídia Externa | Escolher uma janela permitida e retornar explicitamente ao JWL após a apresentação |
-| Ajustes | Dispositivos, cenas, fotos, áudio, diagnósticos e disposição |
+| Volumes | Abrir diretamente os ganhos por fonte na categoria Áudio |
+| Ajustes | Reunião/janelas, OBS/vídeo, áudio, instalação/plugins e diagnóstico |
 
 O rótulo de Emergência não garante imagem preta: o resultado depende da cena
 segura configurada e da conexão OBS. Sem OBS conectado, confira e opere a saída
@@ -89,7 +94,7 @@ reunião. A apresentação local não envia a imagem dos participantes de volta 
 Program. Ambas as janelas devem permanecer abertas. Aguarde confirmação do
 JWL no retorno, mesmo com automação pausada.
 
-Para volume, use **Ajustes → Áudio → Volumes → Salvar volumes**. A ação salva
+Para volume, use **Volumes** no painel principal e **Aplicar volumes**. A ação salva
 somente os ganhos editados. Comece em 0 dB e aumente em passos pequenos, ouvindo
 no receptor. O limitador não corrige entrada já distorcida nem remove ruído.
 

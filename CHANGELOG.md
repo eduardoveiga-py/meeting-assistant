@@ -1,5 +1,28 @@
 # Histórico de alterações
 
+## Não lançado — Ajustes unificados e manutenção do OBS — 07/10/2026
+
+- Uma janela por categorias: Reunião e janelas, OBS e vídeo, Áudio,
+  Instalação e plugins e Diagnóstico. Foto, fontes e câmera ficam na categoria
+  de vídeo; filtros/atraso ficam recolhidos na configuração de envio de áudio.
+- Botão Volumes no painel abre diretamente os ganhos, sem acrescentar linha
+  ao painel. Ganho de −30 a +18 dB; aplicação confirmada, independente da rota.
+- Verificação OBS somente de leitura e conclusão incremental de cenas,
+  fontes e vínculos ausentes. Preserva mapeamentos, fontes pessoais, fontes
+  desativadas e envio existente; conflitos/pendências não são sobrescritos.
+- Reparar estrutura de áudio não silencia mais fontes existentes. Novas fontes
+  começam silenciadas, com seleção e ativação explícitas.
+- Instalação explícita dos plugins na mesma janela. Audio Monitor usa ZIP
+  oficial 0.10.1, SHA-256, backup e verificação posterior; JWL/câmera usam os
+  componentes prontos do fluxo Python, sem compilação.
+- Salvamento geral parte dos ajustes atuais, preservando ganhos já confirmados.
+  OBS só é reconfigurado quando sua conexão muda. Avisos para edições/foto pendentes.
+- Regressões Qt/OBS simulado incluem repetição, falhas parciais, preservação de
+  envio, cliques dos botões e layouts em 100%, 125%, 150% e 200%.
+
+Nenhuma mudança em DLLs, versão ou instalador. O ensaio físico desta organização
+é separado do aceite histórico da captura JWL. [Mapa e testes](docs/settings-workspace.md).
+
 ## Não lançado — captura JWL por HWND e registro de aceite — 07/10/2026
 
 - Fonte independente **Meeting Assistant - JWL (HWND)** distingue a saída

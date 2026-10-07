@@ -6,6 +6,9 @@ dos registros existentes e do código entregue até
 Este arquivo complementa o [registro de decisões](decision-log.md);
 os documentos técnicos vinculados continuam descrevendo cada implementação.
 
+A organização de Ajustes de 07/10/2026 acrescenta o INC-032 como candidata,
+sem estender o aceite físico dos incidentes anteriores.
+
 ## Como interpretar o registro
 
 - **Confirmado pelo operador**: houve retorno explícito no equipamento real,
@@ -27,6 +30,7 @@ operador foi coletada novamente nesta tarefa.
 
 | ID | Problema | Situação |
 | --- | --- | --- |
+| INC-032 | Ajustes fragmentados e manutenção de fontes frágil | Organização/serviços implementados; ensaio pendente |
 | INC-030 | OBS escolhia o JWL do operador entre títulos iguais | Captura por HWND confirmada em 07/10 |
 | INC-031 | Git bloqueava atualização por alterações locais | Atualização e execução confirmadas em 07/10 |
 | INC-001 | JWL carregava e fechava na primeira abertura | Contorno relatado; causa externa não confirmada |
@@ -58,6 +62,40 @@ operador foi coletada novamente nesta tarefa.
 | INC-027 | Botão Mic Zoom sem ação | Funcionamento confirmado após correção de identidade |
 | INC-028 | Mic Zoom levava cerca de cinco segundos | Otimização implementada; latência real pendente |
 | INC-029 | Windows bloqueava executável sem fornecedor verificado | Distribuição/assinatura pendentes |
+
+## INC-032 — Ajustes fragmentados e manutenção de fontes
+
+**Sintoma.** O operador considera Ajustes/subjanelas complexos e a preparação
+das fontes/plugins trabalhosa. Volume precisa ficar acessível sem ampliar
+o painel principal ou perder configurações.
+
+**Constatações de código.** A configuração estava distribuída entre diálogos.
+Salvar ajustes gerais reconfigurava OBS mesmo sem mudar host/porta/senha.
+Preparar áudio silenciava fontes já existentes; salvar um editor baseado em
+estado antigo podia sobrescrever valores confirmados em outra ferramenta.
+Essas constatações não provam a causa de todos os problemas físicos anteriores.
+
+**Tratamento.** Categorias dentro da mesma janela, Volumes com acesso direto,
+salvamento dos campos gerais sobre o estado atual e reconexão apenas quando
+a conexão muda. Manutenção OBS verifica/completa itens ausentes, sem apagar
+fontes, renomear cenas ou trocar Program. Estrutura de áudio existente não
+é silenciada na preparação; só fontes novas começam silenciadas/desativadas.
+Instalação explícita de plugins usa componentes prontos e verifica integridade.
+Filtros/atraso ficam recolhidos na configuração de envio.
+
+**Evidência/limite.** Testes Qt percorrem ações reais do controlador com OBS
+simulado; cobrem dados persistidos, ganhos, preparação repetida e falha parcial.
+Layout é renderizado em quatro escalas. Instalação real, disposição com dois
+monitores e escuta das chamadas precisam de aceite desta revisão.
+
+**Aprendizado.** Navegar, consultar, reparar estrutura e mudar o roteamento são
+ações diferentes. Uma consulta não deve interferir na reunião; completar o
+que falta não implica reconfigurar fontes que já funcionam. Salvar só o estado
+confirmado e explicar pendências reduz retrabalho sem remover verificações.
+
+[Mapa/testes](settings-workspace.md), `tests/test_settings_workspace.py`,
+`tests/test_settings_workspace_scale.py`, `tests/test_obs_maintenance.py` e
+`tests/test_obs_plugins.py`.
 
 ## INC-030 — captura correta da segunda janela JWL
 

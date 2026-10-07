@@ -71,8 +71,8 @@ não substitua dados pessoais nem copie um pacote nativo de outra revisão.
 ## Conferência após atualização
 
 1. Abra OBS/JWL e espere a conexão. Confira cenas e **Texto do Ano** no painel.
-2. Na primeira preparação HWND, use **Ajustes → Texto do Ano e fontes do OBS →
-   Preparar janela JWL em Mídias**. Confira saída do Salão na fonte
+2. Na primeira preparação HWND, use **Ajustes → OBS e vídeo → Fontes →
+   Preparar captura JWL**. Confira saída do Salão na fonte
    **Meeting Assistant - JWL (HWND)**, não a janela do operador.
 3. Confira câmera WhatsApp, imagem local e uma chamada de ensaio. A ponte precisa
    estar carregada no OBS; registro da câmera não substitui transporte de vídeo.

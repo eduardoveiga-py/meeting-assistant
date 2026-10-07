@@ -1,5 +1,13 @@
 # Roteiro de conclusão — 21/09/2026
 
+Atualização de 07/10/2026 — organização de Ajustes: categorias unificadas, acesso
+direto a Volumes e verificação/conclusão incremental OBS implementados. Plugins
+ficam na mesma janela, com instalação explícita, OBS fechado e componentes
+prontos. Próximo aceite: preservação de dados, volume/escuta, preparação repetida
+e layout no computador real. Backup completo da coleção, seleção automática de
+dispositivos novos e instalador atualizado ainda não são entregues por este lote.
+[Mapa e testes](settings-workspace.md).
+
 Atualização de 07/10/2026: captura JWL por HWND em módulo OBS independente para
 resolver títulos duplicados. DLL compilada no CI Windows e distribuição automática
 no fluxo Python, com integridade fixada. [Implementação e roteiro](jwl-hwnd-capture.md).
@@ -56,7 +64,12 @@ Entrega parcial em 21/09/2026: campos da câmera IP, criação/padronização de
 
 ## Assistente OBS
 
-O diagnóstico atual confere nomes das cenas; falta verificar fontes, dispositivos, conteúdo e câmera virtual.
+A manutenção atual confere cenas, tipos/vínculos de fontes gerenciadas, foto,
+captura HWND, estrutura de áudio e plugins. Dispositivos/rotas ficam na categoria
+Áudio; conteúdo visual e som remoto exigem conferência física. O botão da câmera
+virtual OBS consulta/inicia/confirma separadamente. Repetição, nomes em conflito
+e falhas parciais têm testes; falta o aceite físico desta organização e backup
+completo da coleção.
 
 - Usar mapeamentos existentes de Fundo/Texto do Ano, Palco e Mídias. Zoom → Salão é saída local e não exige cena que reenvie o Zoom.
 - Mostrar o plano antes de criar. Repetir sem duplicar cenas/fontes. Conflitos de nome/tipo exigem escolha; preservar cenas pessoais e oferecer backup da coleção.

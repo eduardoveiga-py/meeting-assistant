@@ -22,10 +22,11 @@ siga [test-python-update.md](test-python-update.md). Não é preciso compilar.
 ## Capturar e salvar a foto
 
 1. Deixe somente o Texto do Ano na janela secundária JWL. Pare a mídia e Zoom → Salão; aguarde a restauração.
-2. Em **Ajustes**, abra **Texto do Ano, captura JWL e câmera virtual…**. A tela usa os ajustes já salvos: salve mudanças de monitor/OBS antes de abri-la.
-3. Clique em **Criar foto — capturar JWL**, ou **Atualizar foto** quando já existir.
+2. Em **Ajustes → OBS e vídeo → Texto do Ano**, confira monitor e conexão.
+   Salve mudanças de monitor/OBS antes da captura.
+3. Clique em **Criar foto do JWL**, ou **Atualizar foto do JWL** quando já existir.
 4. Confira a prévia, informe o ano que o texto realmente representa e marque a confirmação.
-5. Clique em **Salvar foto e aplicar no OBS**.
+5. Clique em **Salvar e aplicar foto**.
 
 A captura só aceita a janela JWL já identificada no monitor selecionado, visível, não minimizada/cloaked e sem outra janela cobrindo os pontos verificados. Posição e identidade são verificadas antes/depois da captura. A prévia e confirmação humana continuam necessárias para conteúdo, pequenas sobreposições e ano.
 
@@ -39,7 +40,7 @@ O app cria/atualiza a fonte própria **Meeting Assistant - Texto do Ano**, tipo 
 
 Se OBS estiver desconectado, a foto permanece salva e pendente. Na próxima conexão
 local, tenta aplicar e confirma o caminho da fonte. Também é possível clicar
-**Aplicar foto já salva no OBS**. Aplicação automática é suportada para OBS no mesmo
+**Aplicar foto salva no OBS**. Aplicação automática é suportada para OBS no mesmo
 computador, inclusive por IP/nome que corresponda às interfaces locais; não apenas
 localhost. OBS remoto exige acesso explícito ao arquivo, não ao caminho local do app.
 
@@ -48,7 +49,7 @@ A confirmação significa configuração aplicada; observar o conteúdo continua
 ## Preparar a cena Mídias
 
 1. Abra OBS e JWL, habilite a segunda saída e selecione a Tela do Salão nos ajustes.
-2. Clique **Preparar janela JWL em Mídias**. O app cria/reutiliza
+2. Em **Ajustes → OBS e vídeo → Fontes**, clique **Preparar captura JWL**. O app cria/reutiliza
    **Meeting Assistant - JWL (HWND)**, tipo `meeting_assistant_jwl_capture`.
 3. O vínculo usa o HWND identificado pelo app; títulos duplicados/vazios não
    selecionam a janela do operador. Identidade e imagem nativa precisam ser confirmadas.
@@ -65,14 +66,20 @@ regressão. [Instalação e diagnóstico](jwl-hwnd-capture.md).
 
 ## Câmera virtual
 
-**Iniciar reunião** solicita a câmera virtual depois de verificar os aplicativos, mesmo com OBS já aberto. A ferramenta também oferece **Ligar e verificar câmera virtual**. Consulta estado, inicia somente se parada e exige confirmação ativa, com espera limitada para OBS desconectado/iniciando. Não usa alternância que desligaria uma câmera ativa.
+**Iniciar reunião** solicita a câmera virtual depois de verificar os aplicativos,
+mesmo com OBS já aberto. **OBS e vídeo → Fontes** também oferece **Ligar câmera
+virtual do OBS**. Consulta estado, inicia somente se parada e exige confirmação ativa,
+com espera limitada para OBS desconectado/iniciando. Não usa alternância que
+desligaria uma câmera ativa. A câmera nativa do WhatsApp fica na aba **WhatsApp**
+da mesma categoria e continua acessível no painel principal.
 
 Selecionar OBS Virtual Camera no Zoom continua sendo necessário. A câmera virtual não leva áudio; roteamento de áudio é outra etapa.
 
 ## Verificação final hoje
 
 - Capturar, cancelar uma prévia e atualizar foto; conferir arquivo e fonte OBS.
-- Usar **Verificar fontes e câmera virtual**: distinguir estrutura válida de conteúdo visual correto.
+- Usar **OBS e vídeo → Fontes → Verificar fontes e plugins**: distinguir estrutura válida
+  de conteúdo visual correto; verificar separadamente a câmera virtual.
 - Reproduzir/parar mídia, verificar Mídias → Palco.
 - Alternar JWL ↔ Zoom, inclusive com automação pausada, e conferir o retorno JWL.
 - No outro participante, verificar que Zoom → Salão não retorna o vídeo dos próprios participantes.

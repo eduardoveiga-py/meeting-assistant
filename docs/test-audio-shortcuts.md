@@ -69,7 +69,8 @@ estar conectada. Anote antes qual microfone o Zoom está usando, para restaurá-
    CABLE Input como saída padrão geral do Windows: o cabo é o destino da mistura do OBS.
 6. Abra Ajustes → Áudio → Envio. A leitura automática preserva o envio atual.
    Abra JWL/VLC/navegadores que pretende usar e clique **Atualizar lista**.
-   Se faltar a estrutura no OBS, clique **Criar fontes**; isso silencia o mix até ativar.
+   Se faltar estrutura, clique **Completar fontes de áudio**. Fontes existentes
+   e envio são preservados; fontes novas começam silenciadas até a ativação.
 7. Escolha a entrada física da mesa. Não usamos “Padrão” para evitar mudança silenciosa
    de dispositivo. Escolha a janela de cada aplicativo desejado; deixe os outros sem seleção.
    Se faltar um app, abra sua janela e atualize a lista. Captura por aplicativo requer
@@ -96,7 +97,7 @@ OBS. Se não estiver instalado, a tela deve orientar a instalação em Ajuda.
 Cabos ativos com estado Enum devem aparecer após atualizar.
 
 Com envio já configurado, entre em **Volumes**, aumente apenas JWL em +3 dB e clique
-**Salvar volumes**. Confira o filtro da fonte no OBS e escute o aparelho remoto.
+**Aplicar volumes**. Confira o filtro da fonte no OBS e escute o aparelho remoto.
 Microfones, destinos, mute e fontes não editadas devem continuar iguais. Abra e feche
 a tela e use Atualizar lista: isso não deve cortar o áudio nem exigir preparar de novo.
 

@@ -29,6 +29,21 @@ def camera_url(host: str, username: str, password: str, port: int = 554) -> str:
     )
 
 
+def camera_source_settings(settings) -> dict:
+    """Single RTSP template for explicit updates and first-time provisioning."""
+    return {
+        "is_local_file": False,
+        "input": camera_url(
+            settings.camera_ip, settings.camera_username,
+            settings.camera_password, settings.camera_rtsp_port,
+        ),
+        "input_format": "rtsp",
+        "ffmpeg_options": "rtsp_transport=tcp",
+        "restart_on_activate": False,
+        "close_when_inactive": False,
+    }
+
+
 def prepare_obs(client, settings) -> None:
     renamed = []
     try:
@@ -45,9 +60,7 @@ def prepare_obs(client, settings) -> None:
 
 def _prepare_obs(client, settings, renamed) -> None:
     # Validate everything that can be checked before changing OBS.
-    url = camera_url(
-        settings.camera_ip, settings.camera_username, settings.camera_password, settings.camera_rtsp_port
-    )
+    source_settings = camera_source_settings(settings)
     scenes = {s["sceneName"] for s in client.send("GetSceneList", raw=True)["scenes"]}
     old_names = (settings.scene_background, settings.scene_speaker, settings.scene_media)
     if len(set(old_names)) != 3:
@@ -74,14 +87,6 @@ def _prepare_obs(client, settings, renamed) -> None:
     from meeting_assistant.services.obs_capture_safety import disable_managed_display_captures
 
     disable_managed_display_captures(client, STANDARD_SCENES)
-    source_settings = {
-        "is_local_file": False,
-        "input": url,
-        "input_format": "rtsp",
-        "ffmpeg_options": "rtsp_transport=tcp",
-        "restart_on_activate": False,
-        "close_when_inactive": False,
-    }
     if camera:
         client.send(
             "SetInputSettings",

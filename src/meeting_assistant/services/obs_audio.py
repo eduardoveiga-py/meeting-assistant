@@ -109,11 +109,15 @@ def prepare(client):
     if BUS in rows:
         raise ValueError("O nome da cena de áudio já está em uso por uma fonte.")
     if BUS in scenes:
-        if any(x["sourceName"] not in SOURCES for x in items(client, BUS)):
+        bus_items = items(client, BUS)
+        if any(x["sourceName"] not in SOURCES for x in bus_items):
             raise ValueError("A cena de áudio contém fontes externas. Revise antes de preparar.")
+        if any(sum(row["sourceName"] == name for row in bus_items) > 1 for name in SOURCES):
+            raise ValueError("A cena de áudio contém fontes duplicadas. Revise antes de preparar.")
     else:
         call(client, "CreateScene", sceneName=BUS)
-    mute_managed(client)
+    # Structure repair is additive. Existing live inputs/filters/routes are
+    # untouched; only newly created inputs start muted and unmonitored.
     for name, kind in SOURCES.items():
         if name not in rows:
             try:
@@ -137,7 +141,10 @@ def prepare(client):
         if not any(x["sourceName"] == name for x in items(client, BUS)):
             call(client, "CreateSceneItem", sceneName=BUS, sourceName=name, sceneItemEnabled=False)
     result = discover(client)
-    result["message"] = "Fontes preparadas. Envio silenciado até clicar em Ativar envio."
+    result["message"] = (
+        "Estrutura de áudio conferida. Fontes existentes e envio preservados. "
+        "Fontes novas começam silenciadas; selecione-as e ative o envio."
+    )
     return result
 
 
@@ -184,6 +191,20 @@ def discover(client):
             if name not in enabled:
                 selected[name] = selected[name] | {"window": ""}
     states = {name: gain_state(client, name) for name in present}
+    from meeting_assistant.services.audio_routes import COMPRESSOR, NOISE_GATE, NOISE_SUPPRESSION
+
+    extra_filters = {}
+    for name in present:
+        filters = {
+            f["filterName"]: f for f in call(client, "GetSourceFilterList", sourceName=name)["filters"]
+        }
+        extra_filters[name] = {
+            key: bool(filters.get(filter_name, {}).get("filterEnabled"))
+            for key, filter_name in (
+                ("noise_gate", NOISE_GATE), ("compressor", COMPRESSOR),
+                ("noise_suppression", NOISE_SUPPRESSION),
+            )
+        }
     destinations = {
         f["filterSettings"].get("device", "")
         for name in present
@@ -206,8 +227,10 @@ def discover(client):
         "outputs": virtual_outputs(),
         "selected": selected,
         "source_states": states,
+        "extra_filters": extra_filters,
         "missing_sources": [name for name in SOURCES if name not in present],
-        "needs_prepare": len(present) != len(SOURCES) or BUS not in scenes,
+        "needs_prepare": len(present) != len(SOURCES) or BUS not in scenes
+        or not set(SOURCES).issubset({r["sourceName"] for r in items(client, BUS)}),
         "monitor": monitor,
         "monitor_error": monitor_error,
         "whatsapp_device": next(iter(destinations)) if len(destinations) == 1 else "",
@@ -234,12 +257,16 @@ def validate_selection(client, data):
 
 
 def activate(client, data):
+    from meeting_assistant.services.obs_audio_gain import set_sync_verified, validate_sync_offsets
+
     rows = inputs(client)
     check_kinds(rows)
     if not all(name in rows for name in SOURCES):
         raise ValueError("Prepare as fontes antes de ativar o envio.")
     mute_managed(client)
     selected = validate_selection(client, data)
+    syncs = data.get("sync_offsets_ms", {})
+    validate_sync_offsets(syncs, selected)
     profile, whatsapp_device = validate_route(client, data)
     scenes = tuple(dict.fromkeys(data.get("scenes", [])))
     existing = {s["sceneName"] for s in call(client, "GetSceneList")["scenes"]}
@@ -284,6 +311,8 @@ def activate(client, data):
             configure_filters(
                 client, name, gains.get(name, 0), whatsapp_device if profile == "whatsapp_zoom" else "", extra.get(name, {})  # noqa: E501
             )
+            if name in syncs:
+                set_sync_verified(client, name, syncs[name])
         for name in selected:
             tracks = {str(i): False for i in range(1, 7)}
             tracks["6"] = True  # OBS 30+ warns if no tracks are selected; assign to unused track 6.
@@ -322,6 +351,7 @@ def activate(client, data):
         "profile": profile,
         "whatsapp_device": whatsapp_device,
         "gains_db": gains,
+        "sync_offsets_ms": syncs,
     }
 
 
@@ -331,11 +361,7 @@ def run_audio_task(client, action, data):
     if action == "gains":
         return apply_gains(client, data.get("gains_db"), SOURCES, sync_offsets=data.get("sync_offsets_ms"))
     if action == "prepare":
-        try:
-            return prepare(client)
-        except Exception:
-            mute_managed(client)
-            raise
+        return prepare(client)
     if action == "activate":
         return activate(client, data)
     if action == "ducking_start":

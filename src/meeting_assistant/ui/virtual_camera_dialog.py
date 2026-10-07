@@ -3,8 +3,8 @@
 import json
 import platform
 
-from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QSizePolicy, QVBoxLayout
 
 from meeting_assistant import __version__
 from meeting_assistant.services.camera_session import camera_session
@@ -14,7 +14,7 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
 class VirtualCameraDialog(QDialog):
-    def __init__(self, parent=None, session=None, monitor=None):
+    def __init__(self, parent=None, session=None, monitor=None, *, embedded=False):
         super().__init__(parent)
         self.setWindowTitle("Câmera Meeting Assistant — Windows 11")
         self.resize(560, 530)
@@ -36,11 +36,13 @@ class VirtualCameraDialog(QDialog):
         self.monitor.status_changed.connect(self.status.setText)
         self.camera_state = QLabel()
         self.camera_state.setWordWrap(True)
+        for label in (title, self.status, self.camera_state):
+            label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         root.addWidget(self.camera_state)
         self.camera_button = QPushButton()
         self.camera_button.clicked.connect(self.toggle_camera)
         root.addWidget(self.camera_button)
-        copy_button = QPushButton("Copiar diagnóstico técnico")
+        copy_button = QPushButton("Copiar diagnóstico")
         copy_button.clicked.connect(self.copy_diagnostic)
         root.addWidget(copy_button)
         close = QPushButton("Fechar")
@@ -48,17 +50,29 @@ class VirtualCameraDialog(QDialog):
         root.addWidget(close)
         self.session.changed.connect(self.refresh)
         self.refresh()
-        self._screen_fit = ScreenFitController(self)
+        if embedded:
+            self.setWindowFlags(Qt.Widget)
+            self.setMinimumSize(0, 0)
+            close.hide()
+        else:
+            self._screen_fit = ScreenFitController(self)
         self.timer = QTimer(self)
         self.timer.setInterval(500)
         self.timer.timeout.connect(self.update_diagnostic)
         self.timer.start()
         self.update_diagnostic()
 
+    def disconnect_results(self):
+        self.timer.stop()
+        self.session.changed.disconnect(self.refresh)
+        self.monitor.status_changed.disconnect(self.status.setText)
+        self.monitor.frame_ready.disconnect(self.preview.present)
+        self.monitor.status_changed.disconnect(self.preview.status)
+
     def refresh(self):
         running = self.session.state == "running"
         self.camera_state.setText(self.session.message)
-        self.camera_button.setText("Parar câmera" if running else "Iniciar câmera para WhatsApp")
+        self.camera_button.setText("Parar câmera" if running else "Iniciar câmera")
         self.camera_button.setEnabled(
             self.session.supported and self.session.state not in {"starting", "stopping"}
         )

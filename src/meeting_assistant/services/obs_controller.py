@@ -141,6 +141,7 @@ class ObsController(QObject):
     external_task_finished = Signal(str, bool, object)
     operator_finished = Signal(str, bool, object)
     audio_task_finished = Signal(str, str, bool, object)
+    maintenance_task_finished = Signal(str, str, bool, object)
     audio_levels_changed = Signal(object)
     jwl_capture_status = Signal(object)
 
@@ -245,6 +246,43 @@ class ObsController(QObject):
 
     def hall_task(self, action: str, data: dict | None = None) -> None:
         self._commands.put(("hall_task", (action, dict(data or {}))))
+
+    def maintenance_task(self, token, action, settings, directory):
+        from dataclasses import replace
+
+        self._commands.put(("maintenance_task", (token, action, replace(settings), str(directory))))
+
+    def _handle_maintenance_task(self, token, action, settings, directory):
+        from meeting_assistant.services import obs_maintenance
+
+        if self._client is None:
+            self.maintenance_task_finished.emit(
+                token, action, False, {"message": "OBS desconectado. Confira a aba Conexão."}
+            )
+            return
+        try:
+            if action == "inspect":
+                result = obs_maintenance.inspect(self._client, settings, directory)
+            elif action == "camera":
+                result = obs_maintenance.apply_camera(self._client, settings)
+                self._refresh_scene_list()
+            elif action == "complete":
+                result = obs_maintenance.complete(
+                    self._client, settings, directory, self.jwl_capture.target,
+                    self._stop_event, self.local_connection,
+                )
+                self.jwl_capture.reset_connection()
+                self._refresh_scene_list()
+            else:
+                raise ValueError("Operação de manutenção desconhecida.")
+            self.maintenance_task_finished.emit(token, action, not result.get("failures"), result)
+        except ValueError as exc:
+            self.maintenance_task_finished.emit(token, action, False, {"message": str(exc)})
+        except Exception:
+            self.maintenance_task_finished.emit(
+                token, action, False,
+                {"message": "OBS não confirmou a manutenção. Verifique a conexão e tente novamente."},
+            )
 
     def update_jwl_capture_snapshot(self, candidate, display) -> None:
         self.jwl_capture.update_snapshot(candidate, display)
@@ -376,6 +414,8 @@ class ObsController(QObject):
                     self._handle_external_task(*payload)
                 elif command == "hall_task":
                     self._handle_hall_task(*payload)
+                elif command == "maintenance_task":
+                    self._handle_maintenance_task(*payload)
                 elif command == "operator":
                     self._handle_operator(*payload)
                 elif command == "audio_task":

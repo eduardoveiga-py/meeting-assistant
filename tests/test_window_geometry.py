@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from PySide6.QtCore import QObject, QRect, Signal
-from PySide6.QtWidgets import QApplication, QDialogButtonBox, QScrollArea
+from PySide6.QtWidgets import QApplication, QDialogButtonBox
 
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.meeting_launcher import LaunchSummary
@@ -52,14 +52,19 @@ def test_settings_buttons_stay_visible_and_content_scrolls(app, area):
         assert area.contains(dialog.frameGeometry())
         buttons = dialog.findChild(QDialogButtonBox)
         assert dialog.rect().contains(buttons.geometry())
-        scroll = dialog.findChild(QScrollArea)
-        assert scroll.verticalScrollBar().maximum() > 0
-        scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
+        for index, key in enumerate(("meeting", "video", "diagnostics")):
+            dialog.section_picker.setCurrentIndex(index)
+            app.processEvents()
+            scroll = dialog.sections[key]
+            assert scroll.horizontalScrollBar().maximum() == 0
+            assert dialog.rect().contains(buttons.geometry())
+        dialog.section_picker.setCurrentIndex(1)
         app.processEvents()
-        assert (
-            scroll.viewport()
-            .rect()
-            .contains(dialog.zoom_combo.mapTo(scroll.viewport(), dialog.zoom_combo.rect().center()))
+        scroll = dialog.sections["video"]
+        scroll.ensureWidgetVisible(dialog.zoom_combo)
+        app.processEvents()
+        assert scroll.viewport().rect().contains(
+            dialog.zoom_combo.mapTo(scroll.viewport(), dialog.zoom_combo.rect().center())
         )
     finally:
         dialog.close()

@@ -20,7 +20,7 @@ def gain_state(client, source):
     gain = next((f for f in filters if f["filterName"] == GAIN), None)
     limiter = next((f for f in filters if f["filterName"] == LIMITER), None)
     value = gain.get("filterSettings", {}).get("db") if gain else None
-    valid_value = type(value) in (int, float) and math.isfinite(value) and 0 <= value <= 18
+    valid_value = type(value) in (int, float) and math.isfinite(value) and -30 <= value <= 18
     names = [f["filterName"] for f in filters]
     ready = bool(
         gain and limiter and valid_value
@@ -33,14 +33,15 @@ def gain_state(client, source):
 
 
 def apply_gains(client, gains, source_kinds, sync_offsets=None):
-    sync_offsets = sync_offsets or {}
+    sync_offsets = {} if sync_offsets is None else sync_offsets
     if not isinstance(gains, dict) or not gains:
         raise ValueError("Altere o ganho de uma fonte antes de salvar os volumes.")
     for source, value in gains.items():
         if source not in source_kinds:
             raise ValueError("Fonte não gerenciada pelo app. O ganho não foi alterado.")
-        if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 18:
-            raise ValueError("Use ganho entre 0 e 18 dB.")
+        if type(value) not in (int, float) or not math.isfinite(value) or not -30 <= value <= 18:
+            raise ValueError("Use ganho entre -30 e 18 dB.")
+    validate_sync_offsets(sync_offsets, set(gains))
     rows = {r["inputName"]: r for r in call(client, "GetInputList")["inputs"]}
     previous = {}
     previous_syncs = {}
@@ -52,21 +53,26 @@ def apply_gains(client, gains, source_kinds, sync_offsets=None):
         if not state["gain_ready"]:
             raise ValueError(f"Configure o envio de {source} antes de ajustar seu volume.")
         previous[source] = state["gain_db"]
-        previous_syncs[source] = state.get("sync_offset_ms", 0)
+        if source in sync_offsets:
+            previous_syncs[source] = call(
+                client, "GetInputAudioSyncOffset", inputName=source
+            )["inputAudioSyncOffset"]
     attempted = []
     try:
         for source, value in gains.items():
             attempted.append(source)
-            _set_verified(client, source, value)
+            if value != previous[source]:
+                _set_verified(client, source, value)
             if source in sync_offsets:
-                call(client, "SetInputAudioSyncOffset", inputName=source, inputAudioSyncOffset=int(sync_offsets[source]))  # noqa: E501
+                set_sync_verified(client, source, sync_offsets[source])
     except Exception as exc:
         failed = []
         for source in reversed(attempted):
             try:
-                _set_verified(client, source, previous[source])
+                if gains[source] != previous[source]:
+                    _set_verified(client, source, previous[source])
                 if source in sync_offsets:
-                    call(client, "SetInputAudioSyncOffset", inputName=source, inputAudioSyncOffset=int(previous_syncs.get(source, 0)))  # noqa: E501
+                    set_sync_verified(client, source, previous_syncs[source])
             except Exception:
                 failed.append(source)
         if failed:
@@ -95,3 +101,20 @@ def _set_verified(client, source, value):
         or actual.get("filterSettings", {}).get("db") != float(value)
     ):
         raise ValueError("OBS não confirmou o ganho.")
+
+
+def validate_sync_offsets(offsets, sources):
+    if not isinstance(offsets, dict) or any(
+        name not in sources or type(value) is not int or not -950 <= value <= 20000
+        for name, value in offsets.items()
+    ):
+        raise ValueError("Use atraso entre -950 e 20000 ms, nas fontes selecionadas.")
+
+
+def set_sync_verified(client, source, value):
+    current = call(client, "GetInputAudioSyncOffset", inputName=source)["inputAudioSyncOffset"]
+    if current != value:
+        call(client, "SetInputAudioSyncOffset", inputName=source, inputAudioSyncOffset=value)
+    actual = call(client, "GetInputAudioSyncOffset", inputName=source)["inputAudioSyncOffset"]
+    if actual != value:
+        raise ValueError("OBS não confirmou o atraso de áudio.")

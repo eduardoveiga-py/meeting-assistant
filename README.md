@@ -18,6 +18,10 @@ O **Meeting Assistant** é um orquestrador open-source criado para simplificar e
   <img src="docs/screenshots/assistente.png" width="32%" alt="Assistente de Instalação">
 </p>
 
+As imagens acima registram versões anteriores. A configuração atual usa uma
+[janela Ajustes por categorias](docs/settings-workspace.md), com acesso direto
+a Volumes e verificação das fontes/plugins do OBS.
+
 ---
 
 ## ✨ Principais Funcionalidades
@@ -27,6 +31,10 @@ O **Meeting Assistant** é um orquestrador open-source criado para simplificar e
   O guardião atua somente com a automação ligada; respeita Zoom, mídia externa e transições.
 * **🎛️ Gestão Avançada de Áudio e Sincronia:**
   Configuração de Ganho, Filtros (Limiter, Redução de Ruído) e **Atraso de Sincronização (Sync Offset)** direto pelo aplicativo. Perfeito para alinhar o áudio de mesas de som físicas com o atraso de Câmeras IP.
+* **⚙️ Configuração e manutenção unificadas:**
+  Cenas, vídeo, áudio, instalação e diagnóstico organizados por assunto. O app
+  verifica a estrutura do OBS e completa somente o que falta, preservando
+  fontes pessoais e envio existente. O painel oferece acesso direto a Volumes.
 * **🎥 Câmera virtual Windows 11:**
   A ponte nativa recebe o Program do OBS e entrega vídeo ao WhatsApp. A câmera virtual
   do OBS atende o Zoom. O áudio usa dispositivos virtuais separados do vídeo.
@@ -90,7 +98,8 @@ O painel principal foi desenhado para uso em monitores de toque ou mouse, de for
 |---|---|
 | **▶ Iniciar Reunião** | Solicita OBS, Zoom, JWL e WhatsApp; verifica abertura e inicia câmera virtual. |
 | **🔴 Encerrar** | Pausa automação/câmeras, solicita fechamento normal e informa confirmações pendentes. |
-| **⚙️ Ajustes** | Configurações de Telas, Cenas do OBS, Atualizações, Diagnósticos e Rollback. |
+| **Volumes** | Ganhos por fonte, com aplicação independente do roteamento. |
+| **⚙️ Ajustes** | Reunião/janelas, OBS/vídeo, áudio, instalação/plugins e diagnóstico. |
 | **🎬 Mídia Externa** | Seleciona janela, prepara captura própria no OBS e apresenta na tela do salão. |
 | **📷 Câmera WhatsApp** | Inicia/Para o envio de vídeo do OBS para o aplicativo do WhatsApp. |
 | **🎤 Mic Zoom** | Alterna entre "Mudo/Aberto" no Zoom em segundo plano. |
@@ -101,8 +110,8 @@ F1 mostra os atalhos disponíveis. Atalhos globais são opcionais e não substit
 
 ## Correções em desenvolvimento
 
-O código de `main` inclui as correções da revisão de 03/10/2026 e a captura JWL
-por HWND entregue em 07/10/2026. Cada correção tem seu próprio estado de validação;
+O código de `main` inclui as correções da revisão de 03/10/2026, a captura JWL
+por HWND e a reorganização de Ajustes de 07/10/2026. Cada correção tem seu próprio estado de validação;
 o instalador v0.8.1 já publicado não contém este lote.
 [Confira as alterações e o roteiro de testes](docs/review-fixes-2026-10-03.md).
 
@@ -123,7 +132,7 @@ Os componentes da câmera e da ponte OBS não foram alterados neste lote.
 **Captura da segunda janela JWL:** o módulo independente usa diretamente seu HWND,
 resolvendo títulos iguais no OBS. Na primeira execução, feche OBS para o script
 instalar automaticamente a nova DLL pronta. Requer Windows 11 x64 e OBS 31.0.3+.
-Depois use **Ajustes → Texto do Ano e fontes do OBS → Preparar janela JWL em Mídias**.
+Depois use **Ajustes → OBS e vídeo → Fontes → Preparar captura JWL**.
 [Instalação, diagnóstico e testes com dois monitores](docs/jwl-hwnd-capture.md).
 O instalador do app já publicado não inclui esta atualização; use o fluxo Python acima.
 

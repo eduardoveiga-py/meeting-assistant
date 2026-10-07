@@ -79,11 +79,22 @@ def test_single_gain_write_preserves_routes_tracks_other_filters_and_mutes(monke
     assert writes[0][1]["sourceName"] == MIC
 
 
-@pytest.mark.parametrize("change", [
-    {"gain": -1}, {"gain": 19}, {"gain": True}, {"gain": float("nan")},
-    {"gain": "8"}, {"source": "Personal mic"}, {"source": "missing"},
-    {"missing": True}, {"limiter_disabled": True}, {"gain_disabled": True}, {"wrong_order": True},
-])
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"gain": -31},
+        {"gain": 19},
+        {"gain": True},
+        {"gain": float("nan")},
+        {"gain": "8"},
+        {"source": "Personal mic"},
+        {"source": "missing"},
+        {"missing": True},
+        {"limiter_disabled": True},
+        {"gain_disabled": True},
+        {"wrong_order": True},
+    ],
+)
 def test_invalid_volume_request_has_no_side_effects(monkeypatch, change):
     obs = configured(monkeypatch)
     if change.get("missing"):
@@ -155,5 +166,50 @@ def test_whatsapp_filter_remains_after_limiter_when_adjusting_zoom_volume(monkey
     filters = deepcopy(obs.filters[zoom])
     run_audio_task(obs, "gains", {"gains_db": {zoom: 3.0}})
     actual = obs.filters[zoom]
-    assert [f["filterName"] for f in actual] == [NOISE_SUPPRESSION, NOISE_GATE, COMPRESSOR, GAIN, LIMITER, WHATSAPP_MONITOR]  # noqa: E501
+    assert [f["filterName"] for f in actual] == [
+        NOISE_SUPPRESSION,
+        NOISE_GATE,
+        COMPRESSOR,
+        GAIN,
+        LIMITER,
+        WHATSAPP_MONITOR,
+    ]  # noqa: E501
     assert actual[-1] == filters[-1] and actual[1] == filters[1]
+
+
+def test_attenuation_and_sync_only_change_preserve_routes_and_other_filters(monkeypatch):
+    obs = configured(monkeypatch)
+    run_audio_task(obs, "gains", {"gains_db": {MIC: -6.0}})
+    filters, scenes = deepcopy(obs.filters), deepcopy(obs.scenes)
+    start = len(obs.calls)
+    result = run_audio_task(obs, "gains", {"gains_db": {MIC: -6.0}, "sync_offsets_ms": {MIC: 250}})
+    assert result["sync_offsets_ms"] == {MIC: 250}
+    assert obs.filters == filters and obs.scenes == scenes
+    assert [r for r, _ in obs.calls[start:] if not r.startswith("Get")] == ["SetInputAudioSyncOffset"]
+
+
+@pytest.mark.parametrize(
+    "offsets", [{MIC: -951}, {MIC: 20001}, {MIC: True}, {MIC: "100"}, {"foreign": 0}, []]
+)
+def test_invalid_sync_is_rejected_before_volume_writes(monkeypatch, offsets):
+    obs = configured(monkeypatch)
+    start = len(obs.calls)
+    with pytest.raises(ValueError, match="atraso"):
+        run_audio_task(obs, "gains", {"gains_db": {MIC: 3}, "sync_offsets_ms": offsets})
+    assert all(r.startswith("Get") for r, _ in obs.calls[start:])
+
+
+def test_unconfirmed_sync_restores_gain_without_changing_routing(monkeypatch):
+    obs = configured(monkeypatch)
+    before = deepcopy(obs.sources), deepcopy(obs.scenes), deepcopy(obs.filters)
+    send = obs.send
+
+    def ignore_sync(request, data=None, **kwargs):
+        if request == "SetInputAudioSyncOffset":
+            return {}
+        return send(request, data, **kwargs)
+
+    obs.send = ignore_sync
+    with pytest.raises(ValueError, match="anteriores restaurados"):
+        run_audio_task(obs, "gains", {"gains_db": {MIC: 3}, "sync_offsets_ms": {MIC: 400}})
+    assert (obs.sources, obs.scenes, obs.filters) == before

@@ -26,7 +26,7 @@ cenários abaixo não foram enviados. [Registro de validação](jwl-capture-cand
    O script verifica e baixa a DLL pronta, valida o SHA-256 fixado no código e pede
    elevação do Windows somente para copiar o plugin para a instalação do OBS.
 4. Abra OBS e JWL, habilite a segunda tela no JWL, escolha a Tela do Salão nos ajustes.
-5. No app, **Ajustes → Texto do Ano e fontes do OBS → Preparar janela JWL em Mídias**.
+5. No app, **Ajustes → OBS e vídeo → Fontes → Preparar captura JWL**.
    Confirme a imagem no OBS antes de ativar a automação.
 
 OBS instalado em outra pasta: acrescente `-ObsDirectory 'D:\OBS Studio'` ao comando.

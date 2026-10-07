@@ -62,8 +62,8 @@ def validate_route(client, data):
     if not isinstance(gains, dict):
         raise ValueError("Ganho de áudio inválido.")
     for gain in gains.values():
-        if type(gain) not in (int, float) or not math.isfinite(gain) or not 0 <= gain <= 18:
-            raise ValueError("Use ganho entre 0 e 18 dB e confira os medidores.")
+        if type(gain) not in (int, float) or not math.isfinite(gain) or not -30 <= gain <= 18:
+            raise ValueError("Use ganho entre -30 e 18 dB e confira os medidores.")
     return profile, destination
 
 

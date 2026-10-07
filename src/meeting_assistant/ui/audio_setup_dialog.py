@@ -2,7 +2,7 @@
 
 from uuid import uuid4
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSlider,
+    QSpinBox,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -23,10 +25,15 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
 class AudioSetupDialog(QDialog):
-    def __init__(self, controller, settings, parent=None, *, settings_service=None):
+    def __init__(
+        self, controller, settings, parent=None, *, settings_service=None,
+        embedded=False, before_route=None,
+    ):
         super().__init__(parent)
         self.controller, self.settings = controller, settings
         self.settings_service = settings_service
+        self.before_route = before_route
+        self._confirmed_selection = None
         self.token = uuid4().hex
         self.busy = False
         self._lists_loaded = False
@@ -34,11 +41,13 @@ class AudioSetupDialog(QDialog):
         self._request_data = {}
         self._pending_action = ""
         self._source_states = {}
+        self._saved_filters = {}
         self._missing_sources = list(SOURCES)
         self._needs_prepare = True
         self._monitor_id = ""
         self._monitor_name = ""
         self._monitor_error = ""
+        self._saved_syncs = dict(settings.audio_sync_offsets_ms)
         self._saved_gains = {name: settings.audio_gains_db.get(name, 0.0) for name in SOURCES}
         self.setWindowTitle("Áudio → Zoom e WhatsApp")
         self.resize(590, 650)
@@ -52,8 +61,9 @@ class AudioSetupDialog(QDialog):
         self.refresh_button = QPushButton("Atualizar lista")
         self.refresh_button.setToolTip("Consulta o OBS sem silenciar nem alterar o envio.")
         self.refresh_button.clicked.connect(lambda: self.request("inspect"))
-        self.prepare_button = QPushButton("Criar fontes")
-        self.prepare_button.setToolTip("Cria ou repara fontes do app no OBS e silencia o envio até ativar.")
+        self.prepare_button = QPushButton("Completar fontes de áudio")
+        self.prepare_button.setToolTip("Cria somente o que falta. "
+            "Preserva fontes, volumes e envio existentes.")
         self.prepare_button.clicked.connect(lambda: self.request("prepare"))
         row.addWidget(self.refresh_button)
         row.addWidget(self.prepare_button)
@@ -105,142 +115,74 @@ class AudioSetupDialog(QDialog):
         self.route_confirmation.toggled.connect(self.refresh_enabled)
         body.addStretch()
 
-        self.volume_scroll, volume_body = self._page("Volume e Melhorias")
+        self.volume_scroll, volume_body = self._page("Volumes")
         self._label(
-            volume_body, "Aumente somente a fonte desejada e clique em Salvar volumes. "
-            "Os dispositivos e o envio atual serão preservados. Comece com +3 dB."
+            volume_body, "Som enviado ao Zoom e WhatsApp."
         )
         self.volume_hint = self._label(volume_body, "")
         self.gains, self.gain_notes, self.gain_groups = {}, {}, {}
-        self.noise_gates = {}
-        self.compressors = {}
-        self.suppressions = {}
-        self.sync_offsets = {}
-
-        slider_style = '''
-        QSlider::groove:horizontal {
-            border: none;
-            height: 10px;
-            background: #202025;
-            border-radius: 5px;
-        }
-        QSlider::sub-page:horizontal {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1055ff, stop:1 #9020ff);
-            border-radius: 5px;
-        }
-        QSlider::add-page:horizontal {
-            background: #202025;
-            border-radius: 5px;
-        }
-        QSlider::handle:horizontal {
-            background: white;
-            border: none;
-            width: 22px;
-            height: 22px;
-            margin-top: -6px;
-            margin-bottom: -6px;
-            border-radius: 11px;
-        }
-        '''
-
+        self.noise_gates, self.compressors, self.suppressions, self.sync_offsets = {}, {}, {}, {}
+        self.advanced_sources = QGroupBox("Filtros e sincronização")
+        self.advanced_sources.setCheckable(True)
+        self.advanced_sources.setChecked(False)
+        advanced_layout = QVBoxLayout(self.advanced_sources)
+        self.advanced_content = QWidget()
+        advanced_body = QVBoxLayout(self.advanced_content)
+        advanced_layout.addWidget(self.advanced_content)
+        self.advanced_content.hide()
+        self.advanced_sources.toggled.connect(self.advanced_content.setVisible)
+        self._label(
+            advanced_body, "Filtros são aplicados ao ativar o envio. "
+            "Aplicar volumes altera somente os ganhos e o atraso da mesa."
+        )
+        # Put filters with route configuration, not among routine volume controls.
+        body.insertWidget(body.count() - 1, self.advanced_sources)
         for name in SOURCES:
-            label = "Mesa de Som (Física)" if name == MIC else name.replace("Meeting Assistant - udio ", "").replace("Meeting Assistant - ", "")  # noqa: E501
+            label = "Mesa de som" if name == MIC else name.removeprefix("Meeting Assistant - Áudio ")
             group = QGroupBox(label)
-            group.setStyleSheet("QGroupBox { font-weight: bold; margin-top: 10px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }")  # noqa: E501
             layout = QVBoxLayout(group)
-            
-            vol_layout = QHBoxLayout()
-            from functools import partial
-
-            import PySide6.QtCore as _qtc
-            import PySide6.QtWidgets as _qtw
-            
-            gain = _qtw.QSlider(_qtc.Qt.Orientation.Horizontal, group)
+            row = QHBoxLayout()
+            gain = QSlider(Qt.Orientation.Horizontal, group)
             gain.setRange(-30, 18)
-            gain.setValue(int(self._saved_gains[name]))
-            gain.setStyleSheet(slider_style)
-            gain.setCursor(_qtc.Qt.CursorShape.PointingHandCursor)
-            
-            db_label = QLabel("", group)
-            db_label.setFixedWidth(65)
-            db_label.setAlignment(_qtc.Qt.AlignmentFlag.AlignCenter)
-            
-            def _update_db(lbl, val):
-                prefix = "+" if val > 0 else ""
-                lbl.setText(f"{prefix}{val} dB")
-            
-            updater = partial(_update_db, db_label)
-            gain.valueChanged.connect(updater)
-            updater(gain.value())
-            
-            vol_layout.addWidget(QLabel("🔈", group))
-            vol_layout.addWidget(gain)
-            vol_layout.addWidget(QLabel("🔊", group))
-            vol_layout.addWidget(db_label)
-            layout.addLayout(vol_layout)
-            
-            filters_layout = QHBoxLayout()
-            
-            supp = None
-
-            if name == MIC:
-                supp = _qtw.QCheckBox("Redução de Ruído", group)
-                supp.setToolTip("ATENÇÃO: Remove barulho de ar condicionado usando IA. Use apenas se necessário, pois pode engolir o som dos cânticos se vazar nos microfones.")  # noqa: E501
-                supp.stateChanged.connect(self.refresh_enabled)
-                
-                sync_layout = QHBoxLayout()
-                sync_label = QLabel("Atraso Mesa (Câmera lenta):")
-                sync_slider = _qtw.QSlider(_qtc.Qt.Orientation.Horizontal, group)
-                sync_slider.setRange(-5000, 5000)
-                sync_slider.setValue(int(self.settings.audio_sync_offsets_ms.get(name, 0)))
-                sync_slider.setStyleSheet(slider_style)
-                sync_slider.setCursor(_qtc.Qt.CursorShape.PointingHandCursor)
-                
-                sync_val_label = QLabel("", group)
-                sync_val_label.setFixedWidth(65)
-                sync_val_label.setAlignment(_qtc.Qt.AlignmentFlag.AlignCenter)
-                
-                def _update_sync(lbl, val):
-                    lbl.setText(f"{val} ms")
-                    
-                sync_updater = partial(_update_sync, sync_val_label)
-                sync_slider.valueChanged.connect(sync_updater)
-                sync_updater(sync_slider.value())
-                sync_slider.valueChanged.connect(self.refresh_enabled)
-                
-                sync_layout.addWidget(sync_label)
-                sync_layout.addWidget(sync_slider)
-                sync_layout.addWidget(sync_val_label)
-                layout.addLayout(sync_layout)
-                
-                self.sync_offsets[name] = sync_slider
-                filters_layout.addWidget(supp)
-
-            ng = _qtw.QCheckBox("Corte de Ruído", group)
-            ng.setToolTip("Noise Gate: Corta completamente o som quando ninguém está falando (ótimo para matar chiado de estática).")  # noqa: E501
-            comp = _qtw.QCheckBox("Compressor", group)
-            comp.setToolTip("Nivela o áudio: Abaixa quem fala muito perto do microfone e levanta o volume de quem fala baixo.")  # noqa: E501
-            
-            ng.stateChanged.connect(self.refresh_enabled)
-            comp.stateChanged.connect(self.refresh_enabled)
-            
-            filters_layout.addWidget(ng)
-            filters_layout.addWidget(comp)
-            layout.addLayout(filters_layout)
-
+            gain.setValue(round(self._saved_gains[name]))
+            gain.setAccessibleName(f"Volume: {label}")
+            gain.setToolTip("0 dB mantém a entrada. Valores negativos reduzem; positivos aumentam.")
+            db_label = QLabel(f"{gain.value():+d} dB")
+            db_label.setMinimumWidth(db_label.fontMetrics().horizontalAdvance("+18 dB") + 12)
+            gain.valueChanged.connect(lambda value, note=db_label: note.setText(f"{value:+d} dB"))
+            row.addWidget(gain, 1)
+            row.addWidget(db_label)
+            layout.addLayout(row)
             note = self._label(layout, "")
-            
-            self.gains[name], self.gain_notes[name] = gain, note
-            self.noise_gates[name] = ng
-            self.compressors[name] = comp
-            if supp:
-                self.suppressions[name] = supp
-            self.gain_groups[name] = group
+            self.gains[name], self.gain_notes[name], self.gain_groups[name] = gain, note, group
             gain.valueChanged.connect(self.refresh_enabled)
             volume_body.addWidget(group)
+
+            advanced = QGroupBox(label)
+            advanced_form = QVBoxLayout(advanced)
+            if name == MIC:
+                suppression = QCheckBox("Redução de ruído da mesa")
+                suppression.setToolTip("Use somente se necessário; pode afetar música captada pela mesa.")
+                self.suppressions[name] = suppression
+                advanced_form.addWidget(suppression)
+                self._label(advanced_form, "Atraso da mesa (ms)")
+                sync = QSpinBox()
+                sync.setRange(-950, 20000)
+                sync.setSuffix(" ms")
+                sync.setValue(int(self._saved_syncs.get(name, 0)))
+                sync.setAccessibleName("Atraso da mesa em milissegundos")
+                sync.valueChanged.connect(self.refresh_enabled)
+                self.sync_offsets[name] = sync
+                advanced_form.addWidget(sync)
+            gate = QCheckBox("Corte de ruído (Noise Gate)")
+            compressor = QCheckBox("Compressor")
+            self.noise_gates[name], self.compressors[name] = gate, compressor
+            advanced_form.addWidget(gate)
+            advanced_form.addWidget(compressor)
+            advanced_body.addWidget(advanced)
         self._label(
-            volume_body, "0 dB mantém o volume original. O limitador reduz picos, "
-            "mas não corrige ruído ou distorção já presentes na entrada."
+            volume_body, "O limitador protege picos do envio, mas não remove distorção "
+            "já presente na entrada. Os volumes das caixas do Salão não são alterados."
         )
         volume_body.addStretch()
 
@@ -278,8 +220,10 @@ class AudioSetupDialog(QDialog):
         self._label(
             help_body,
             "<b>4. Durante a reunião</b><br>"
-            "Atualizar lista e Salvar volumes preservam o envio. Criar fontes silencia o mix "
-            "até você ativá-lo novamente. O botão Silenciar envio interrompe o mix enviado "
+            "Atualizar lista, Completar fontes e Aplicar volumes "
+            "preservam o envio. "
+            "Fontes novas começam silenciadas até você ativá-las. "
+            "O botão Silenciar envio interrompe o mix enviado "
             "às chamadas. O botão WhatsApp da tela principal controla somente seu alto-falante."
         )
         help_body.addStretch()
@@ -290,7 +234,7 @@ class AudioSetupDialog(QDialog):
         self.activate_button = QPushButton("Ativar envio")
         self.activate_button.clicked.connect(lambda: self.request("activate"))
         outer.addWidget(self.activate_button)
-        self.gain_button = QPushButton("🪄 Salvar Volumes e Filtros")
+        self.gain_button = QPushButton("Aplicar volumes")
         self.gain_button.clicked.connect(lambda: self.request("gains"))
         outer.addWidget(self.gain_button)
         row = QHBoxLayout()
@@ -312,7 +256,12 @@ class AudioSetupDialog(QDialog):
         self._load_timer = QTimer(self)
         self._load_timer.setSingleShot(True)
         self._load_timer.timeout.connect(self._load_existing)
-        self._screen_fit = ScreenFitController(self)
+        if embedded:
+            self.setWindowFlags(Qt.Widget)
+            self.setMinimumSize(0, 0)
+            self.close_button.hide()
+        else:
+            self._screen_fit = ScreenFitController(self)
         confirmation_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         policy = confirmation_label.sizePolicy()
         policy.setHeightForWidth(True)
@@ -406,7 +355,8 @@ class AudioSetupDialog(QDialog):
     def _sync_changes(self):
         return {
             name: sync.value() for name, sync in self.sync_offsets.items()
-            if sync.value() != self._source_states.get(name, {}).get("sync_offset_ms", 0)
+            if self._source_states.get(name, {}).get("gain_ready")
+            and sync.value() != self._saved_syncs.get(name, 0)
         }
 
     def _gain_changes(self):
@@ -440,11 +390,14 @@ class AudioSetupDialog(QDialog):
             any_gain_ready = any_gain_ready or ready
             self.gain_groups[name].setVisible(ready)
             gain.setEnabled(not self.busy and ready)
-            self.gain_notes[name].setText(
-                "Pronta para salvar volume." if ready else "Configure na aba Envio."
-            )
+            self.gain_notes[name].hide()
+        for name, sync in self.sync_offsets.items():
+            sync.setEnabled(not self.busy and self._source_states.get(name, {}).get("gain_ready", False))
+        for widgets in (self.noise_gates, self.compressors, self.suppressions):
+            for widget in widgets.values():
+                widget.setEnabled(not self.busy)
         self.volume_hint.setText(
-            "Altere um ganho para habilitar Salvar volumes."
+            "0 dB mantém o som original."
             if any_gain_ready else "Nenhuma fonte com ganho pronta. Configure e ative na aba Envio primeiro."
         )
         blockers = self._activation_blockers()
@@ -480,6 +433,9 @@ class AudioSetupDialog(QDialog):
     def request(self, action):
         if self.busy:
             return
+        if action == "activate" and self.before_route is not None and not self.before_route():
+            self.status.setText("Envio preservado. Confira os ajustes e pause a automação antes de aplicar.")
+            return
         if action == "activate" and self._activation_blockers():
             message, widget = self._activation_blockers()[0]
             self.tabs.setCurrentIndex(0)
@@ -492,6 +448,9 @@ class AudioSetupDialog(QDialog):
             if not self._gain_changes() and not self._sync_changes():
                 self.status.setText("Altere um volume ou atraso antes de salvar.")
                 return
+            # Sync-only changes still validate the same source/filters, preserving gain.
+            for name in data["sync_offsets_ms"]:
+                data["gains_db"].setdefault(name, self._saved_gains[name])
         else:
             data = self._data()
         if action in {"prepare", "inspect"}:
@@ -514,6 +473,7 @@ class AudioSetupDialog(QDialog):
             self.settings.audio_gains_db.update(gains)
             if "sync_offsets_ms" in result:
                 self.settings.audio_sync_offsets_ms.update(result["sync_offsets_ms"])
+                self._saved_syncs.update(result["sync_offsets_ms"])
             self._saved_gains.update(gains)
             if action == "activate":
                 self.settings.audio_profile = result["profile"]
@@ -521,6 +481,8 @@ class AudioSetupDialog(QDialog):
                 selected = {MIC, *(app_name(k) for k, v in self._request_data["applications"].items() if v)}
                 for name in selected:
                     self._source_states[name] = {"gain_ready": True, "gain_db": gains.get(name, 0.0)}
+                self._confirmed_selection = self._route_selection()
+                self._saved_filters = self._request_data["extra_filters"]
             if self.settings_service:
                 try:
                     self.settings_service.save(self.settings)
@@ -535,6 +497,7 @@ class AudioSetupDialog(QDialog):
         self.refresh_enabled()
 
     def _apply_snapshot(self, result):
+        route_edited = self._route_changed()
         prior = self._pending_selection
         before = self._data()
         self._source_states = result.get("source_states", {})
@@ -567,18 +530,54 @@ class AudioSetupDialog(QDialog):
             edited = prior is not None and prior["gains_db"][name] != self._saved_gains.get(name, 0.0)
             self._saved_gains[name] = actual
             sync_actual = state.get("sync_offset_ms", 0)
-            if name in self.sync_offsets and not edited:
+            sync_edited = (
+                prior is not None
+                and prior["sync_offsets_ms"].get(name, 0) != self._saved_syncs.get(name, 0)
+            )
+            self._saved_syncs[name] = sync_actual
+            if name in self.sync_offsets and not sync_edited:
                 self.sync_offsets[name].setValue(sync_actual)
             if not edited:
                 self.gains[name].setValue(actual)
                 # Display rounding must not mark another source as edited.
                 self._saved_gains[name] = self.gains[name].value()
+        for name, actual in result.get("extra_filters", {}).items():
+            for key, widgets in (
+                ("noise_gate", self.noise_gates), ("compressor", self.compressors),
+                ("noise_suppression", self.suppressions),
+            ):
+                if name not in widgets:
+                    continue
+                edited = (
+                    prior is not None
+                    and prior["extra_filters"][name][key] != self._saved_filters.get(name, {}).get(key, False)
+                )
+                if not edited:
+                    widgets[name].setChecked(bool(actual.get(key)))
+            self._saved_filters[name] = dict(actual)
         self._lists_loaded = True
         after = self._data()
         if any(before[k] != after[k] for k in ("microphone", "whatsapp_device", "applications")):
             self.route_confirmation.setChecked(False)
         if any(self.applications[k].currentData() for k in ("VLC", "Chrome", "Edge")):
             self.other_sources.setChecked(True)
+        if not route_edited:
+            self._confirmed_selection = self._route_selection()
+
+    def _route_selection(self):
+        data = self._data()
+        return {key: data[key] for key in ("profile", "microphone", "whatsapp_device", "applications")}
+
+    def _route_changed(self):
+        return self._confirmed_selection is not None and self._route_selection() != self._confirmed_selection
+
+    def has_pending_changes(self):
+        filters = self._data()["extra_filters"]
+        edited_filters = any(
+            filters[name][key] != self._saved_filters.get(name, {}).get(key, False)
+            for name in self.gains for key in ("noise_gate", "compressor", "noise_suppression")
+        )
+        return bool(self._gain_changes() or self._sync_changes() or self._route_changed() or edited_filters)
 
     @staticmethod
     def populate(combo, choices, selected, allow_offline=False):

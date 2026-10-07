@@ -16,7 +16,6 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
-    QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -41,9 +40,7 @@ from meeting_assistant.services.obs_setup import STANDARD_SCENES, configure_obs_
 from meeting_assistant.services.settings import AppSettings, SettingsService
 from meeting_assistant.services.yeartext_store import YeartextStore
 from meeting_assistant.services.zoom_hall_service import ZoomHallService
-from meeting_assistant.ui.hall_setup_dialog import HallSetupDialog
 from meeting_assistant.ui.program_preview import ProgramPreview
-from meeting_assistant.ui.settings_dialog import SettingsDialog
 from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
@@ -392,9 +389,18 @@ class MainWindow(QMainWindow):
         )
         self.force_jwl_button.clicked.connect(self._force_jwl)
         system_grid.addWidget(self.force_jwl_button, 0, 1)
-        settings_button = QPushButton("⚙️ Ajustes")
+        self.volume_button = QPushButton("Volumes")
+        self.volume_button.setToolTip("Ajusta o áudio enviado às chamadas sem refazer as fontes.")
+        self.volume_button.clicked.connect(self._open_audio_setup)
+        settings_button = QPushButton("Ajustes")
         settings_button.clicked.connect(self._show_settings)
-        system_grid.addWidget(settings_button, 1, 1)
+        settings_cell = QWidget()
+        settings_row = QHBoxLayout(settings_cell)
+        settings_row.setContentsMargins(0, 0, 0, 0)
+        settings_row.setSpacing(4)
+        settings_row.addWidget(self.volume_button, 1)
+        settings_row.addWidget(settings_button, 1)
+        system_grid.addWidget(settings_cell, 1, 1)
 
         # Row 1
         self.ext_media_button = QPushButton("🎬 Mídia Externa")
@@ -426,6 +432,7 @@ class MainWindow(QMainWindow):
             self.power_button,
             self.power_button,
             settings_button,
+            self.volume_button,
             self.ext_media_button,
             self.camera_button,
             self.zoom_mic_button,
@@ -1277,70 +1284,33 @@ class MainWindow(QMainWindow):
         self.mode_label.setText(message)
 
     def _open_virtual_camera(self, parent=None) -> None:
-        from meeting_assistant.ui.virtual_camera_dialog import VirtualCameraDialog
-
-        dialog = VirtualCameraDialog(parent or self)
-        dialog.exec()
-        dialog.deleteLater()
+        self._open_settings_workspace("video", video_tab=3)
 
     def _open_audio_setup(self, parent=None) -> None:
-        from meeting_assistant.ui.audio_setup_dialog import AudioSetupDialog
-
-        dialog = AudioSetupDialog(
-            self.obs, self.settings, parent or self, settings_service=self.settings_service
-        )
-        dialog.exec()
-        dialog.deleteLater()
+        self._open_settings_workspace("audio")
 
     def _show_settings(self) -> None:
-        dialog = SettingsDialog(self.settings, self.obs_scenes, self)
-        dialog.hall_setup_requested.connect(lambda: self._open_hall_setup(dialog))
-        dialog.audio_setup_requested.connect(lambda: self._open_audio_setup(dialog))
-        dialog.update_history_requested.connect(self._trigger_update)
-        dialog.save_layout_requested.connect(lambda: self._persist_layout(capture=True))
-        dialog.restore_layout_requested.connect(self._restore_layout)
-        dialog.virtual_camera_requested.connect(lambda: self._open_virtual_camera(dialog))
-        dialog.observe_requested.connect(
-            lambda: (dialog.reject(), QTimer.singleShot(0, self._start_jwl_probe))
-        )
-        dialog.calibrate_requested.connect(
-            lambda: (dialog.reject(), QTimer.singleShot(0, self._calibrate_idle_reference))
-        )
-        dialog.setup_assistant_requested.connect(
-            lambda: (dialog.reject(), QTimer.singleShot(0, self._open_setup_assistant))
-        )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
+        self._open_settings_workspace("meeting")
+
+    def _open_settings_workspace(self, page, *, video_tab=None):
+        if self._setup_assistant is not None:
+            self._setup_assistant.select_page(page)
+            if video_tab is not None:
+                self._setup_assistant.video_tabs.setCurrentIndex(video_tab)
+            self._setup_assistant.raise_()
             return
+        from meeting_assistant.ui.setup_assistant_dialog import SetupAssistantDialog
 
-        from dataclasses import replace
-
-        pending = replace(self.settings)
-        dialog.apply_to(pending)
-        if pending.obs_start_at_logon != self.settings.obs_start_at_logon or (
-            pending.obs_start_at_logon and pending.obs_executable != self.settings.obs_executable
-        ):
-            try:
-                configure_obs_logon(pending.obs_start_at_logon, pending.obs_executable)
-            except ValueError as exc:
-                QMessageBox.warning(self, "Inicialização OBS", str(exc))
-                return
-            except Exception:
-                QMessageBox.warning(
-                    self,
-                    "Inicialização OBS",
-                    "Não foi possível configurar o atalho do OBS. Confira o executável e as permissões. "
-                    "Os ajustes não foram salvos.",
-                )
-                return
-        dialog.apply_to(self.settings)
-        self.settings_service.save(self.settings)
-        # Provisioning must not trigger the reconnect callback's Program change.
-        self._startup_scene_applied = dialog.prepare_obs_requested
-        self._set_component_status("OBS", "pending", "○ OBS", "Reconectando…")
-        self.obs.media_scene = self.settings.scene_media
-        self.obs.reconfigure(self._obs_config())
-        if dialog.prepare_obs_requested:
-            self.obs.prepare_stage(self.settings)
+        dialog = SetupAssistantDialog(self, page=page)
+        self._setup_assistant = dialog
+        if video_tab is not None:
+            dialog.video_tabs.setCurrentIndex(video_tab)
+        dialog.exec()
+        self._setup_assistant = None
+        if dialog.deferred_action:
+            QTimer.singleShot(0, dialog.deferred_action)
+        dialog.deleteLater()
+        self._refresh_yeartext_notice()
 
     def _on_obs_setup_finished(self, ok: bool, message: str) -> None:
         if ok:
@@ -1370,27 +1340,13 @@ class MainWindow(QMainWindow):
         for field in fields(pending):
             setattr(self.settings, field.name, getattr(pending, field.name))
         self._startup_scene_applied = True
+        self.obs.media_scene = self.settings.scene_media
         if previous_obs_config != self._obs_config():
-            self.obs.media_scene = self.settings.scene_media
-        self.obs.reconfigure(self._obs_config())
+            self._set_component_status("OBS", "pending", "○ OBS", "Reconectando…")
+            self.obs.reconfigure(self._obs_config())
 
     def _open_setup_assistant(self):
-        if self._setup_assistant is not None:
-            self._setup_assistant.raise_()
-            return
-        if self.state.automation_enabled or self.zoom_hall.active or self.zoom_hall.returning:
-            QMessageBox.information(
-                self, "Configuração", "Pause a automação e retorne ao JWL antes de configurar."
-            )
-            return
-        from meeting_assistant.ui.setup_assistant_dialog import SetupAssistantDialog
-
-        dialog = SetupAssistantDialog(self)
-        self._setup_assistant = dialog
-        dialog.exec()
-        self._setup_assistant = None
-        dialog.deleteLater()
-        self._refresh_yeartext_notice()
+        self._open_settings_workspace("installation")
 
     def _hall_capture_target(self):
         if self.external_media and self.external_media.active:
@@ -1405,12 +1361,7 @@ class MainWindow(QMainWindow):
         )
 
     def _open_hall_setup(self, parent):
-        dialog = HallSetupDialog(
-            self.yeartext_store, self._hall_capture_target, self.obs, self.settings, parent
-        )
-        dialog.exec()
-        dialog.deleteLater()
-        self._refresh_yeartext_notice()
+        self._open_settings_workspace("video", video_tab=2)
 
     def _refresh_yeartext_notice(self):
         from datetime import datetime

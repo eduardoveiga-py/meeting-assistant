@@ -23,10 +23,14 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
 class HallSetupDialog(QDialog):
-    def __init__(self, store, target_provider, obs, settings, parent=None, embedded=False):
+    def __init__(
+        self, store, target_provider, obs, settings, parent=None, embedded=False,
+        photo_only=False, before_apply=None,
+    ):
         super().__init__(parent)
         self.store, self.target_provider, self.obs, self.settings = store, target_provider, obs, settings
         self.pending_png = None
+        self.before_apply = before_apply
         self.setWindowTitle("Texto do Ano e fontes do OBS")
         self.resize(610, 700)
         self.setMinimumSize(340, 240)
@@ -57,18 +61,18 @@ class HallSetupDialog(QDialog):
         self.year.setValue(datetime.now().year)
         self.year.setPrefix("Ano do texto: ")
         root.addWidget(self.year)
-        self.confirm = QCheckBox("Conferi a foto do Texto do Ano e o ano.")
+        self.confirm = QCheckBox("Conferi a foto e o ano.")
         outer.addWidget(self.confirm)
         self.capture_button = QPushButton("Capturar foto da Tela do Salão")
         self.capture_button.clicked.connect(self._capture)
         root.addWidget(self.capture_button)
-        self.save_button = QPushButton("Salvar foto e aplicar no OBS")
+        self.save_button = QPushButton("Salvar e aplicar foto")
         self.save_button.setEnabled(False)
         self.save_button.clicked.connect(self._save)
         self.confirm.toggled.connect(self._update_save_state)
         self.year.valueChanged.connect(lambda _: self.confirm.setChecked(False))
         outer.addWidget(self.save_button)
-        self.apply_button = QPushButton("Aplicar foto já salva no OBS")
+        self.apply_button = QPushButton("Aplicar foto salva no OBS")
         self.apply_button.clicked.connect(self._apply)
         root.addWidget(self.apply_button)
         media = QPushButton("Preparar janela JWL em Mídias")
@@ -91,12 +95,16 @@ class HallSetupDialog(QDialog):
         self.result = QLabel("Nenhuma operação solicitada.")
         self.result.setWordWrap(True)
         self.result.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        for label in (hint, self.photo_status, self.result):
+            label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         outer.addWidget(self.result)
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         buttons.button(QDialogButtonBox.Close).setText("Fechar")
         buttons.rejected.connect(self.reject)
         outer.addWidget(buttons)
         self.obs.hall_task_finished.connect(self._finished)
+        for button in (media, virtual, inspect):
+            button.setVisible(not photo_only)
         self._refresh_photo()
         if embedded:
             self.setWindowFlags(Qt.Widget)
@@ -104,6 +112,9 @@ class HallSetupDialog(QDialog):
             self.setMinimumSize(0, 0)
         else:
             self._fit = ScreenFitController(self)
+
+    def disconnect_results(self):
+        self.obs.hall_task_finished.disconnect(self._finished)
 
     def _local_obs(self) -> bool:
         is_local = self.obs.local_connection is True
@@ -130,7 +141,7 @@ class HallSetupDialog(QDialog):
         self.photo_status.setText(message)
         self.apply_button.setEnabled(current is not None)
         self.capture_button.setText(
-            "Atualizar foto — capturar JWL" if current else "Criar foto — capturar JWL"
+            "Atualizar foto do JWL" if current else "Criar foto do JWL"
         )
 
     def _preview(self, image, width=None):
@@ -194,6 +205,9 @@ class HallSetupDialog(QDialog):
         self._apply()
 
     def _apply(self):
+        if self.before_apply is not None and not self.before_apply():
+            self.result.setText("Aplicação OBS pendente. Confira e salve os ajustes de conexão.")
+            return
         if self._local_obs():
             self.obs.hall_task(
                 "yeartext",

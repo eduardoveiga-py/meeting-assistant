@@ -4,6 +4,42 @@ O [histórico de incidentes](incident-history.md) reúne sintomas, soluções,
 confirmações e aprendizados desta conversa. Este arquivo registra as decisões
 técnicas; os roteiros específicos mantêm os detalhes de teste.
 
+## 2026-10-07 — Ajustes unificados, manutenção incremental e volumes
+
+**Solicitação:** a quantidade de subjanelas tornou configuração e manutenção
+confusas. O operador pede opções por assunto, fontes/plugins mais fáceis de
+preparar e volume acessível, preservando layout e dados.
+
+**Decisão:** uma janela com navegação por categorias, reutilizando os editores
+existentes. Separar controles cotidianos de níveis das escolhas de roteamento;
+acesso Volumes ocupa parte da célula Ajustes existente. Navegação e consultas
+não reconectam OBS nem recriam fontes. Salvar campos gerais parte dos ajustes
+atuais para preservar ganhos confirmados enquanto a janela está aberta.
+
+O serviço de manutenção verifica cenas, foto, câmera IP, captura HWND, estrutura
+de áudio e plugins. A conclusão atua somente nos itens ausentes, preservando
+nomes mapeados e ajustes existentes. Nomes/tipos conflitantes, fontes duplicadas
+ou desativadas exigem revisão. **Completar fontes de áudio** substitui a preparação
+silenciada descrita no registro de 03/10: mantém o envio existente; somente
+fontes novas começam silenciadas e desativadas. Mudar dispositivos/ativar envio
+continua uma ação explícita.
+
+Plugins ficam na categoria de instalação, em worker, com OBS fechado e
+autorização da operação. Audio Monitor 0.10.1 usa ZIP oficial, SHA-256 fixado,
+arquivos x64/traduções limitados, backup e conferência posterior. Componentes
+JWL/câmera reutilizam scripts que obtêm binários prontos; não há compilação,
+mudança de backend nem alteração do núcleo protegido.
+
+**Evidência:** testes da interface percorrem a fila do controlador com OBS
+simulado; cobrem navegação sem escrita, ganho independente, mescla de salvamento,
+cancelamento de fechamento e preparação repetida. Manutenção cobre fontes
+apagadas parcialmente, conflitos, falhas e preservação de RTSP/filtros.
+Instalação testa integridade, caminhos do ZIP, OBS fechado e repetição sem cópia.
+Layout é renderizado em quatro escalas. Instalação real, dois monitores e escuta
+das chamadas desta revisão continuam dependentes do operador.
+
+[Mapa de Ajustes e roteiro de aceite](settings-workspace.md).
+
 ## 2026-10-03 — leitura sem interrupção e volumes independentes
 
 **Retorno:** a nova captura mostra perfil com retorno Zoom e segundo cabo não

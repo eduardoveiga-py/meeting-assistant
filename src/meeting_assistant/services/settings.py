@@ -111,7 +111,12 @@ class SettingsService:
                     import math
 
                     valid = all(
-                        isinstance(k, str) and type(v) in (int, float) and math.isfinite(v) and 0 <= v <= 18
+                        isinstance(k, str) and type(v) in (int, float) and math.isfinite(v) and -30 <= v <= 18
+                        for k, v in value.items()
+                    )
+                if valid and field.name == "audio_sync_offsets_ms":
+                    valid = all(
+                        isinstance(k, str) and type(v) is int and -950 <= v <= 20000
                         for k, v in value.items()
                     )
                 if valid and field.name == "display_settings_version":

@@ -119,6 +119,10 @@ class FakeObs:
             self.sources[name]["monitor"] = data["monitorType"]
         elif request == "GetInputAudioMonitorType":
             return {"monitorType": self.sources[name]["monitor"]}
+        elif request == "GetInputAudioSyncOffset":
+            return {"inputAudioSyncOffset": self.sources[name].get("sync", 0)}
+        elif request == "SetInputAudioSyncOffset":
+            self.sources[name]["sync"] = data["inputAudioSyncOffset"]
         elif request == "SetInputSettings":
             self.sources[name]["settings"].update(data["inputSettings"])
         elif request == "GetInputSettings":
