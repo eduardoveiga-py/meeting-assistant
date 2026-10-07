@@ -6,6 +6,11 @@ técnicas; os roteiros específicos mantêm os detalhes de teste.
 
 ## 2026-10-07 — Ajustes unificados, manutenção incremental e volumes
 
+**Retorno posterior:** o operador aprovou a organização dos Ajustes na revisão
+`7a7697a`: “Os ajustes ficaram ótimo!”. Aceite limitado à interface relatada;
+instalação de plugins, escuta de áudio e manutenção repetida têm ensaios próprios.
+Volumes/Ajustes recebem ícones SVG na mesma célula, com os rótulos preservados.
+
 **Solicitação:** a quantidade de subjanelas tornou configuração e manutenção
 confusas. O operador pede opções por assunto, fontes/plugins mais fáceis de
 preparar e volume acessível, preservando layout e dados.
@@ -39,6 +44,26 @@ Layout é renderizado em quatro escalas. Instalação real, dois monitores e esc
 das chamadas desta revisão continuam dependentes do operador.
 
 [Mapa de Ajustes e roteiro de aceite](settings-workspace.md).
+
+## 2026-10-07 — apresentação de mídia externa restaurada antes da captura
+
+**Problema demonstrado:** inventário nativo oferecia players minimizados,
+enquanto a lista de captura OBS os exclui. Preparar a captura antes de restaurar
+impedia a apresentação. Cancelamento durante preparo perdia a cena anterior;
+falhas posteriores perdiam o motivo original. O relato do operador não inclui
+a mensagem exata e não há diagnóstico sincronizado atual para atribuição única.
+
+**Decisão:** preflight OBS sem escrita, snapshot de Program e da janela
+identificada, apresentação nativa em worker, leitura atualizada do título e
+captura exclusiva Player. Cancelamento espera a resposta antes de rollback.
+Identificar cada ciclo; invalidar pedidos de cena anteriores à suspensão, mantendo
+as mudanças manuais do OBS. A identificação externa respeita capitalização OBS
+sem aceitar títulos ambíguos ou captura de monitor. Fontes JWL/áudio não mudam.
+
+**Evidência:** regressões de cliques reais Qt, fila OBS e workers com backends
+simulados reproduzem as falhas; incluem dois ciclos, retorno confirmado,
+falha parcial e preservação da disposição/áudio. Aceite físico da correção
+permanece pendente. [Procedimento](external-media.md), INC-033.
 
 ## 2026-10-03 — leitura sem interrupção e volumes independentes
 

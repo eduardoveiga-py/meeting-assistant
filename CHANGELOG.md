@@ -1,5 +1,20 @@
 # Histórico de alterações
 
+## Não lançado — ícones e mídia externa — 07/10/2026
+
+- Documentado o aceite da organização de Ajustes na revisão `7a7697a`.
+  Botões Volumes/Ajustes recebem ícones SVG, preservando rótulos e posição.
+- Mídia Externa confere OBS antes de mover a janela e restaura players minimizados
+  antes de consultar a lista de captura. Revalida identidade e título atual.
+- Seletor por índice distingue opções com o mesmo texto. Captura ainda recusa
+  títulos ambíguos e monitor inteiro; comparação respeita capitalização do OBS.
+- Cancelamento aguarda operações pendentes; falha retorna player/JWL e preserva
+  o motivo. Resultados antigos e pedidos de cena anteriores à suspensão são descartados.
+- Diagnóstico por ação registra sucesso/falha sem títulos/URLs da mídia.
+
+Sem versão/release, compilação ou DLL nova. Ensaio físico de mídia externa
+pendente; [roteiro](docs/external-media.md) e INC-033 registram os limites.
+
 ## Não lançado — Ajustes unificados e manutenção do OBS — 07/10/2026
 
 - Uma janela por categorias: Reunião e janelas, OBS e vídeo, Áudio,
@@ -20,8 +35,9 @@
 - Regressões Qt/OBS simulado incluem repetição, falhas parciais, preservação de
   envio, cliques dos botões e layouts em 100%, 125%, 150% e 200%.
 
-Nenhuma mudança em DLLs, versão ou instalador. O ensaio físico desta organização
-é separado do aceite histórico da captura JWL. [Mapa e testes](docs/settings-workspace.md).
+Nenhuma mudança em DLLs, versão ou instalador. Organização da interface aceita
+na revisão `7a7697a`; manutenção/plugins/escuta mantêm ensaios próprios,
+separados do aceite histórico JWL. [Mapa e testes](docs/settings-workspace.md).
 
 ## Não lançado — captura JWL por HWND e registro de aceite — 07/10/2026
 

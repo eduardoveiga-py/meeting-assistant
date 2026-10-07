@@ -3,10 +3,17 @@
 Atualização de 07/10/2026 — organização de Ajustes: categorias unificadas, acesso
 direto a Volumes e verificação/conclusão incremental OBS implementados. Plugins
 ficam na mesma janela, com instalação explícita, OBS fechado e componentes
-prontos. Próximo aceite: preservação de dados, volume/escuta, preparação repetida
-e layout no computador real. Backup completo da coleção, seleção automática de
+prontos. O operador aprovou a organização dos Ajustes na revisão `7a7697a`:
+“Os ajustes ficaram ótimo!”. Próximo aceite específico: preservação de dados,
+volume/escuta, preparação repetida e instalação de plugins. Backup completo da coleção, seleção automática de
 dispositivos novos e instalador atualizado ainda não são entregues por este lote.
 [Mapa e testes](settings-workspace.md).
+
+Na mesma sessão, foi relatado conflito em Mídia Externa após a escolha da janela.
+O fluxo candidato restaura o player antes de consultar a captura OBS, revalida
+identidade/título, aguarda cancelamentos pendentes e preserva o motivo da falha.
+Novo teste físico pendente: player minimizado, apresentação/retorno com automação
+pausada e ativa, OBS manual e áudio. [Roteiro](external-media.md).
 
 Atualização de 07/10/2026: captura JWL por HWND em módulo OBS independente para
 resolver títulos duplicados. DLL compilada no CI Windows e distribuição automática

@@ -4,6 +4,13 @@ Organização implementada em 07/10/2026 para execução por Git/Python. **Ajust
 reúne configuração e manutenção; **Volumes**, no painel principal, abre a mesma
 janela diretamente nos controles de nível. Não há uma segunda cópia dos dados.
 
+**Aceite da organização:** em 07/10/2026, após atualizar para `7a7697a`, o
+operador respondeu: “Os ajustes ficaram ótimo!”. Isso confirma a organização
+relatada da interface. Instalação real de plugins, repetição da preparação OBS
+e escuta de todos os perfis continuam tendo critérios próprios; não foram
+declarados aprovados por esse retorno. Volumes e Ajustes recebem ícones SVG
+com os rótulos preservados, na mesma célula do painel.
+
 ## Onde encontrar cada opção
 
 | Categoria | Conteúdo | Quando usar |

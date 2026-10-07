@@ -85,6 +85,12 @@ ou retorno, eles respeitam a escolha do operador e aguardam a troca finalizar.
 | Volumes | Abrir diretamente os ganhos por fonte na categoria Áudio |
 | Ajustes | Reunião/janelas, OBS/vídeo, áudio, instalação/plugins e diagnóstico |
 
+Volumes e Ajustes têm ícones próprios, mantendo seus nomes e a mesma posição.
+Para VLC/navegador, consulte o [passo a passo de Mídia Externa](external-media.md).
+Players minimizados são restaurados antes da captura; aguarde a confirmação no
+retorno ao JWL. Títulos duplicados continuam bloqueados para evitar seleção
+incorreta no OBS.
+
 O rótulo de Emergência não garante imagem preta: o resultado depende da cena
 segura configurada e da conexão OBS. Sem OBS conectado, confira e opere a saída
 pelo OBS antes de prosseguir.

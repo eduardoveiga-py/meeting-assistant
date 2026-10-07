@@ -8,6 +8,7 @@ from PySide6.QtCore import (
     QPropertyAnimation,
     QRectF,
     QSequentialAnimationGroup,
+    QSize,
     Qt,
     QTimer,
     Signal,
@@ -390,9 +391,14 @@ class MainWindow(QMainWindow):
         self.force_jwl_button.clicked.connect(self._force_jwl)
         system_grid.addWidget(self.force_jwl_button, 0, 1)
         self.volume_button = QPushButton("Volumes")
+        icon_root = Path(__file__).parent.parent / "resources"
+        self.volume_button.setIcon(QIcon(str(icon_root / "volumes.svg")))
+        self.volume_button.setIconSize(QSize(14, 14))
         self.volume_button.setToolTip("Ajusta o áudio enviado às chamadas sem refazer as fontes.")
         self.volume_button.clicked.connect(self._open_audio_setup)
-        settings_button = QPushButton("Ajustes")
+        settings_button = self.settings_button = QPushButton("Ajustes")
+        settings_button.setIcon(QIcon(str(icon_root / "settings.svg")))
+        settings_button.setIconSize(QSize(14, 14))
         settings_button.clicked.connect(self._show_settings)
         settings_cell = QWidget()
         settings_row = QHBoxLayout(settings_cell)
@@ -405,7 +411,10 @@ class MainWindow(QMainWindow):
         # Row 1
         self.ext_media_button = QPushButton("🎬 Mídia Externa")
         self.ext_media_button.setCheckable(True)
-        self.ext_media_button.setToolTip("Envia o player de vídeo ativo para o telão")
+        self.ext_media_button.setToolTip(
+            "Apresenta o player ou navegador escolhido no Salão e nas chamadas. "
+            "Clique novamente para voltar ao JWL."
+        )
         self.ext_media_button.toggled.connect(self._toggle_ext_media)
         system_grid.addWidget(self.ext_media_button, 2, 0)
 
@@ -992,13 +1001,21 @@ class MainWindow(QMainWindow):
             self.external_media.stop_external_media()
 
     def _choose_external_media(self, candidates):
-        from PySide6.QtWidgets import QInputDialog
+        from meeting_assistant.ui.external_media_dialog import ExternalMediaDialog
 
-        labels = [f"{w.process} — {w.title}" for w in candidates]
-        selected, accepted = QInputDialog.getItem(
-            self, "Mídia externa", "Janela que será apresentada:", labels, 0, False
-        )
-        self.external_media.select(candidates[labels.index(selected)] if accepted else None)
+        if not self.external_media or self.external_media.phase != "choosing":
+            return
+        dialog = ExternalMediaDialog(candidates, self)
+        def cancelled(active, _message):
+            if not active:
+                dialog.reject()
+        self.external_media.state_changed.connect(cancelled)
+        try:
+            accepted = dialog.exec() == ExternalMediaDialog.DialogCode.Accepted
+        finally:
+            self.external_media.state_changed.disconnect(cancelled)
+        if self.external_media.phase == "choosing":
+            self.external_media.select(dialog.selected_window() if accepted else None)
 
     def _external_state(self, active, message):
         if (

@@ -6,8 +6,10 @@ dos registros existentes e do código entregue até
 Este arquivo complementa o [registro de decisões](decision-log.md);
 os documentos técnicos vinculados continuam descrevendo cada implementação.
 
-A organização de Ajustes de 07/10/2026 acrescenta o INC-032 como candidata,
-sem estender o aceite físico dos incidentes anteriores.
+A organização de Ajustes de 07/10/2026 recebeu aceite limitado à interface
+na revisão `7a7697a` (INC-032). Mídia externa foi relatada com conflito
+na mesma sessão (INC-033); a correção candidata tem ensaio próprio pendente.
+Nenhum dos retornos estende o aceite físico dos incidentes anteriores.
 
 ## Como interpretar o registro
 
@@ -30,7 +32,8 @@ operador foi coletada novamente nesta tarefa.
 
 | ID | Problema | Situação |
 | --- | --- | --- |
-| INC-032 | Ajustes fragmentados e manutenção de fontes frágil | Organização/serviços implementados; ensaio pendente |
+| INC-033 | Mídia externa falha após escolher a janela | Falhas reproduzidas/corrigidas; novo ensaio pendente |
+| INC-032 | Ajustes fragmentados e manutenção de fontes frágil | Organização aprovada em 07/10; manutenção/instalação com ensaio próprio |
 | INC-030 | OBS escolhia o JWL do operador entre títulos iguais | Captura por HWND confirmada em 07/10 |
 | INC-031 | Git bloqueava atualização por alterações locais | Atualização e execução confirmadas em 07/10 |
 | INC-001 | JWL carregava e fechava na primeira abertura | Contorno relatado; causa externa não confirmada |
@@ -63,6 +66,57 @@ operador foi coletada novamente nesta tarefa.
 | INC-028 | Mic Zoom levava cerca de cinco segundos | Otimização implementada; latência real pendente |
 | INC-029 | Windows bloqueava executável sem fornecedor verificado | Distribuição/assinatura pendentes |
 
+## INC-033 — Mídia externa falha depois da seleção
+
+**Relato.** Em 07/10/2026, o operador informou que a lista abre, mas a escolha
+da mídia externa gera conflitos. Não enviou a mensagem exata neste retorno.
+O repositório de diagnósticos consultado estava atualizado somente até 02/10;
+não há telemetria sincronizada desse ensaio para atribuir-lhe uma causa única.
+
+**Falhas demonstradas.** O inventário do app oferece players minimizados; a
+lista de captura de janela do OBS os exclui. O fluxo antigo tentava selecionar
+no OBS antes de restaurar o player. Um teste integrado reproduziu o retorno a
+idle sem apresentar essa janela. Outros dois testes reproduziram cancelamento
+usando cena anterior ainda não confirmada e falha de preparação sem retorno
+da janela/mensagem original. A seleção também reutilizava mensagem específica
+do JWL e comparava o seletor com capitalização rígida.
+
+**Correção candidata.** Conferir OBS/nomes sem escrita; salvar Program atual;
+revalidar a identidade do player e guardar sua disposição atual uma vez;
+restaurar/posicionar; reler o título e configurar a fonte Player exclusiva;
+revalidar e só então pedir a cena externa. Cancelamento aguarda o resultado
+pendente antes de desfazer. Falha restaura a disposição do player e solicita
+retorno explícito ao JWL, mantendo seu motivo na mensagem final.
+
+Respostas recebem identificação do ciclo para impedir uso de resultados antigos.
+Pedidos de cena do app recebem geração; os que antecedem a suspensão ou chegam
+durante a apresentação não podem ser executados depois do retorno. Alterações
+manuais feitas diretamente no OBS continuam preservadas. Guardião/sensor só
+retomam após o JWL confirmar visibilidade. O seletor usa índice, não procura
+o primeiro texto igual entre duas opções.
+
+**Proteções mantidas.** Títulos iguais continuam recusados pelo backend de
+captura: o OBS pode escolher pelo título sem distinguir processos/classes.
+Não há captura de monitor como alternativa; nenhum arquivo protegido ou DLL
+JWL foi modificado. A fonte Player não captura áudio; mix/filtros/ganhos existentes
+e captura JWL permanecem independentes.
+
+**Evidência/limite.** `tests/test_external_media_flow.py` percorre cliques do
+painel/seletor, workers reais com OBS/Win32 simulados, dois ciclos, minimização,
+título atualizado/capitalização, cancelamento por fase, falha parcial, mensagens,
+identidade do ciclo, pedidos antigos e preservação de áudio/Program manual.
+Testes de layout do painel incluem os novos ícones em quatro escalas. Isso não
+comprova o conteúdo do player nem áudio/chamadas físicas; repetir o
+[roteiro de mídia externa](external-media.md) no Windows 11.
+
+**Aprendizado.** Inventário Windows e lista de propriedades OBS têm critérios
+diferentes de visibilidade. Confirmar a conexão não confirma captura. Uma ação
+cancelada precisa consumir seu resultado antes de desfazer; estado antigo não
+é um rollback confiável. Distinguir erro de mídia externa de erro da captura JWL.
+
+Fontes primárias verificadas: [lista do OBS 31.0.3](https://github.com/obsproject/obs-studio/blob/31.0.3/plugins/win-capture/window-capture.c)
+e [visibilidade/comparação dos títulos](https://github.com/obsproject/obs-studio/blob/31.0.3/libobs/util/windows/window-helpers.c).
+
 ## INC-032 — Ajustes fragmentados e manutenção de fontes
 
 **Sintoma.** O operador considera Ajustes/subjanelas complexos e a preparação
@@ -82,6 +136,11 @@ fontes, renomear cenas ou trocar Program. Estrutura de áudio existente não
 é silenciada na preparação; só fontes novas começam silenciadas/desativadas.
 Instalação explícita de plugins usa componentes prontos e verifica integridade.
 Filtros/atraso ficam recolhidos na configuração de envio.
+
+**Aceite de interface.** Em 07/10/2026, na revisão publicada `7a7697a`, o
+operador respondeu: “Os ajustes ficaram ótimo!”. A organização foi aprovada;
+não há confirmação individual de cada operação de manutenção/plugin/áudio.
+Não recalculamos hashes do núcleo nem estendemos o aceite a outros cenários.
 
 **Evidência/limite.** Testes Qt percorrem ações reais do controlador com OBS
 simulado; cobrem dados persistidos, ganhos, preparação repetida e falha parcial.

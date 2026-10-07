@@ -41,7 +41,8 @@ a Volumes e verificação das fontes/plugins do OBS.
 * **🎬 Mídia externa:**
   O operador escolhe a janela de um player ou navegador permitido. Uma captura
   exclusiva envia sua imagem ao OBS e ao salão, preservando a fonte do JWL.
-  O retorno restaura a disposição anterior e verifica o JWL.
+  Players minimizados são restaurados antes da seleção OBS; o retorno preserva
+  a disposição anterior e verifica o JWL. [Operação e teste](docs/external-media.md).
 * **🎤 Microfone do operador no Zoom:**
   O painel mostra estado observado e solicita silenciar/ativar seu microfone.
   Controles coletivos e identidades ambíguas são recusados.

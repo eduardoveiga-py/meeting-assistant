@@ -237,6 +237,9 @@ def main() -> int:
     window.external_media = ExternalMediaService(current_hall_display, obs_controller, zoom_hall)
     window.external_media.state_changed.connect(window._external_state)
     window.external_media.candidates_ready.connect(window._choose_external_media)
+    window.external_media.diagnostic.connect(
+        lambda details: telemetry.event("external_media_task", **details)
+    )
 
     from meeting_assistant.services.window_layout import WindowLayoutService
     from meeting_assistant.ui.app_layout import operator_fraction, restore_app

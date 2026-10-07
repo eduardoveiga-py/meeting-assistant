@@ -57,6 +57,12 @@ class ObsConnectionConfig:
     password: str
 
 
+@dataclass(frozen=True, slots=True)
+class SceneRequest:
+    name: str
+    generation: int
+
+
 def extract_scene_names(payload: dict[str, Any]) -> list[str]:
     scenes = payload.get("scenes", [])
     names: list[str] = []
@@ -155,6 +161,8 @@ class ObsController(QObject):
         self._preview_interval = max(0.12, preview_interval)
         self._commands: queue.Queue[tuple[str, object | None]] = queue.Queue()
         self._stop_event = threading.Event()
+        self._external_scene_requests_suspended = threading.Event()
+        self._scene_request_generation = 0
         self._thread: threading.Thread | None = None
         self.local_connection: bool | None = None
         self.media_scene = "Mídias"
@@ -210,7 +218,8 @@ class ObsController(QObject):
         if not scene_name:
             self.error.emit("Nome de cena vazio; troca cancelada.")
             return
-        self._commands.put(("set_scene", scene_name))
+        if not self._external_scene_requests_suspended.is_set():
+            self._commands.put(("set_scene", SceneRequest(scene_name, self._scene_request_generation)))
 
     def prepare_stage(self, settings) -> None:
         from dataclasses import replace
@@ -220,8 +229,19 @@ class ObsController(QObject):
     def external_task(self, action, data):
         self._commands.put(("external_task", (action, dict(data))))
 
+    def set_external_media_active(self, active):
+        # Suppress requests queued by the sensor before it observed the pause.
+        # Changes made directly by the operator in OBS remain untouched.
+        if bool(active) != self._external_scene_requests_suspended.is_set():
+            self._scene_request_generation += 1
+        if active:
+            self._external_scene_requests_suspended.set()
+        else:
+            self._external_scene_requests_suspended.clear()
+
     def _handle_external_task(self, action, data):
         from meeting_assistant.services.obs_external_media import (
+            begin_external,
             prepare_external,
             restore_external,
             show_external,
@@ -230,19 +250,29 @@ class ObsController(QObject):
         try:
             if self._client is None or self.local_connection is not True:
                 raise ValueError("Mídia externa exige OBS conectado neste computador.")
-            if action == "prepare":
-                result = prepare_external(self._client, data["selector"])
+            if action == "begin":
+                result = begin_external(self._client)
+            elif action == "prepare":
+                result = prepare_external(self._client, data["selector"], prior=data.get("prior"))
             elif action == "show":
-                result = show_external(self._client, data["prior"])
+                result = show_external(self._client, data["prior"], data.get("selector"))
             elif action == "restore":
                 result = restore_external(self._client, data["prior"])
             else:
                 raise ValueError("Operação de mídia externa desconhecida.")
-            self.external_task_finished.emit(action, True, result)
+            ok = True
         except ValueError as exc:
-            self.external_task_finished.emit(action, False, {"message": str(exc)})
-        except Exception:
-            self.external_task_finished.emit(action, False, {"message": "OBS não confirmou a mídia externa."})
+            ok, result = False, {"message": str(exc)}
+        except Exception as exc:
+            ok, result = False, {
+                "message": "OBS não confirmou a mídia externa. Confira a conexão e a fonte Player."
+            }
+            code = getattr(exc, "code", None)
+            if type(code) is int:
+                result["error_code"] = code
+        if "token" in data:
+            result["token"] = data["token"]
+        self.external_task_finished.emit(action, ok, result)
 
     def hall_task(self, action: str, data: dict | None = None) -> None:
         self._commands.put(("hall_task", (action, dict(data or {}))))
@@ -405,8 +435,8 @@ class ObsController(QObject):
                     next_reconnect = 0.0
                     next_poll = 0.0
                     next_preview = 0.0
-                elif command == "set_scene" and isinstance(payload, str):
-                    self._handle_set_scene(payload)
+                elif command == "set_scene" and isinstance(payload, SceneRequest):
+                    self._handle_scene_request(payload)
                     next_preview = 0.0
                 elif command == "prepare_stage":
                     self._handle_prepare_stage(payload)
@@ -560,7 +590,13 @@ class ObsController(QObject):
                 return
             self._emit_preview_error(f"Preview indisponível: {exc}")
 
+    def _handle_scene_request(self, request: SceneRequest) -> None:
+        if request.generation == self._scene_request_generation:
+            self._handle_set_scene(request.name)
+
     def _handle_set_scene(self, scene_name: str) -> None:
+        if self._external_scene_requests_suspended.is_set():
+            return
         if self._client is None:
             self.error.emit("OBS desconectado; não foi possível trocar a cena.")
             return
@@ -577,6 +613,8 @@ class ObsController(QObject):
                 # this worker. Acknowledged settings alone cannot change Program.
                 wait_for_capture(self._client, target, self._stop_event, timeout=2)
                 assert_safe_media(self._client, scene_name, target)
+            if self._external_scene_requests_suspended.is_set():
+                return
             ensure_fade_transition(self._client)
             self._client.send(
                 "SetCurrentProgramScene",
