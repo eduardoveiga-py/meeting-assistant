@@ -15,7 +15,7 @@ foreach ($name in @('meeting-assistant-jwl-capture.dll','install-jwl-capture.ps1
     }
 }
 $info = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'BUILD-INFO.json') | ConvertFrom-Json
-if ($info.protocol -ne 1 -or $info.build_id -ne 'jwl-hwnd-v1' -or $info.source_kind -ne 'meeting_assistant_jwl_capture') {
+if ($info.protocol -ne 1 -or $info.build_id -ne 'jwl-hwnd-v1.1' -or $info.source_kind -ne 'meeting_assistant_jwl_capture') {
     throw 'Unsupported JWL capture package.'
 }
 if ($VerifyOnly) { Write-Host 'JWL capture package integrity OK. No files installed.'; return }
@@ -28,7 +28,8 @@ if (Get-Process obs64 -ErrorAction SilentlyContinue) { throw 'Feche OBS antes de
 $exe = Join-Path $ObsDirectory 'bin\64bit\obs64.exe'
 $backend = Join-Path $ObsDirectory 'bin\64bit\libobs-winrt.dll'
 if (-not (Test-Path -LiteralPath $exe) -or -not (Test-Path -LiteralPath $backend)) { throw 'OBS x64 com Windows Graphics Capture nao encontrado.' }
-$version = [version](Get-Item -LiteralPath $exe).VersionInfo.FileVersion
+$versionInfo = (Get-Item -LiteralPath $exe).VersionInfo
+$version = [version]::new($versionInfo.FileMajorPart, $versionInfo.FileMinorPart, $versionInfo.FileBuildPart, $versionInfo.FilePrivatePart)
 if ($version -lt [version]'31.0.3') { throw 'Atualize OBS para 31.0.3 ou posterior.' }
 $source = Join-Path $PSScriptRoot 'meeting-assistant-jwl-capture.dll'
 $target = Join-Path $ObsDirectory 'obs-plugins\64bit\meeting-assistant-jwl-capture.dll'

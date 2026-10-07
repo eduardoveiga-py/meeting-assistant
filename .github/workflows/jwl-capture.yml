@@ -50,9 +50,14 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           printf '%s\n' 'Independent OBS source: exact JWL secondary HWND via the OBS WGC backend.' "Source commit: $GITHUB_SHA" 'Windows 11 x64, OBS 31.0.3+. Native unit tests and package checks passed; physical JWL test pending.' 'Includes no app installer and does not replace the Program bridge or camera.' > component-notes.md
-          if ! gh release view jwl-capture-v1 >/dev/null 2>&1; then
-            gh release create jwl-capture-v1 --target "$GITHUB_SHA" --prerelease --title 'JWL HWND capture — component v1' --notes-file component-notes.md
-          else
-            gh release edit jwl-capture-v1 --notes-file component-notes.md
+          tag='jwl-capture-v1.1'
+          if gh release view "$tag" --json assets -q '.assets[].name' | grep -Fxq 'MeetingAssistant-JWL-HWND-Windows11-x64.zip'; then
+            echo 'Published component is pinned by the Python launcher; preserving its immutable payload.'
+            exit 0
           fi
-          gh release upload jwl-capture-v1 package/* --clobber
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --target "$GITHUB_SHA" --prerelease --title 'JWL HWND capture — component v1.1' --notes-file component-notes.md
+          else
+            gh release edit "$tag" --notes-file component-notes.md
+          fi
+          gh release upload "$tag" package/*

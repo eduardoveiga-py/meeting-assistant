@@ -27,7 +27,7 @@ Copy-Item (Join-Path $repoRoot 'scripts\install-jwl-capture.ps1') $package
 Copy-Item (Join-Path $repoRoot 'docs\jwl-hwnd-capture.md') $package
 Copy-Item (Join-Path $obs 'COPYING') (Join-Path $package 'LICENSE-OBS.txt')
 $sourceRevision = (& git -C $repoRoot rev-parse HEAD).Trim()
-@{ protocol = 1; build_id = 'jwl-hwnd-v1'; source_revision = $sourceRevision; obs_headers_revision = $revision;
+@{ protocol = 1; build_id = 'jwl-hwnd-v1.1'; source_revision = $sourceRevision; obs_headers_revision = $revision;
     source_kind = 'meeting_assistant_jwl_capture'; windows_min_build = 22000; obs_min_version = '31.0.3';
     physical_validation = 'pending' } | ConvertTo-Json | Set-Content (Join-Path $package 'BUILD-INFO.json') -Encoding utf8
 Get-ChildItem $package -File | Get-FileHash -Algorithm SHA256 |

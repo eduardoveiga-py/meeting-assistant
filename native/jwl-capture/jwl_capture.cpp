@@ -15,7 +15,7 @@ namespace {
 #define OBS_FUNCTIONS(X) \
     X(obs_register_source_s) X(obs_data_get_string) X(obs_data_get_int) \
     X(obs_properties_create) X(obs_properties_add_list) X(obs_property_list_add_string) \
-    X(obs_property_set_enabled) X(obs_enter_graphics) X(obs_leave_graphics) X(obs_queue_task)
+    X(obs_property_set_enabled) X(obs_enter_graphics) X(obs_leave_graphics) X(obs_queue_task) X(gs_get_device_type)
 #define DECLARE_OBS(name) decltype(&name) p_##name = nullptr;
 OBS_FUNCTIONS(DECLARE_OBS)
 #undef DECLARE_OBS
@@ -144,7 +144,9 @@ void tick(void* data, float seconds) {
             release_capture(capture); capture->bound = capture->requested;
             capture->pending = false; capture->check_timer = capture->retry_timer = 1;
         }
-        if (capture->check_timer >= 0.25f) {
+        if (p_gs_get_device_type() != GS_DEVICE_DIRECT3D_11) {
+            release_capture(capture); capture->state = "unsupported_graphics";
+        } else if (capture->check_timer >= 0.25f) {
             capture->check_timer = 0;
             if (!ma_jwl::matches(capture->bound, observe(capture->bound))) {
                 release_capture(capture);

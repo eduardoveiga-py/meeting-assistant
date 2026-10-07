@@ -2,6 +2,7 @@
 
 Windows 11 x64 e OBS **31.0.3 ou posterior**. Desenvolvimento continua com Python 3.12
 e `scripts/run.ps1`; não é preciso instalar Visual Studio nem compilar no computador do operador.
+O OBS precisa usar seu renderizador padrão **Direct3D 11**.
 
 A nova DLL registra `meeting_assistant_jwl_capture`. A fonte
 **Meeting Assistant - JWL (HWND)** usa diretamente a janela secundária identificada
@@ -51,6 +52,7 @@ das mídias permanece no barramento já configurado, evitando duplicação.
   HWND confirmado e dimensões; a telemetria registra `jwl_capture_status`.
 
 Estados `waiting`, `invalid_target`, `capture_failed` e `unbound` não são sucesso.
+`unsupported_graphics`: selecione Direct3D 11 em Configurações → Avançado no OBS e reinicie-o.
 Se o plugin não aparecer, confira versão do OBS, reinício após instalar e o log do OBS.
 Verifique **Ajuda → Arquivos de log → Ver arquivo de log atual**, procurando
 `meeting-assistant-jwl-capture`. Não substitua a fonte por captura de monitor.
@@ -65,3 +67,7 @@ Verifique **Ajuda → Arquivos de log → Ver arquivo de log atual**, procurando
 CI compila Windows x64, testa identidade/troca de processo e integridade do pacote.
 Isso não substitui o teste físico em JWL com dois monitores. O contrato histórico
 de troca JWL/Zoom e seus arquivos protegidos permanecem preservados.
+
+Os assets nativos publicados são preservados para corresponder ao SHA-256 fixado
+em `scripts/jwl-capture-package.json`. Uma mudança nativa exige novo build_id/tag,
+compilação no CI e atualização dos pins; não substituir uma DLL publicada pelo mesmo nome.
