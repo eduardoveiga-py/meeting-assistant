@@ -84,8 +84,11 @@ def extract_monitor(data, target):
         if sum(member.file_size for member in archive.infolist()) > MAX_PACKAGE_BYTES:
             raise ValueError("Pacote de plugin maior que o esperado.")
         for member in archive.infolist():
-            path = PurePosixPath(member.filename)
-            if path.is_absolute() or ".." in path.parts or "\\" in member.filename:
+            # ZipInfo.filename normalizes backslashes on Windows. Validate the
+            # original ZIP name so path policy is identical on every platform.
+            raw_name = member.orig_filename
+            path = PurePosixPath(raw_name)
+            if path.is_absolute() or ".." in path.parts or "\\" in raw_name or "\0" in raw_name:
                 raise ValueError("Caminho inválido no pacote do plugin.")
             allowed = str(path) == "obs-plugins/64bit/audio-monitor.dll" or str(path).startswith(
                 "data/obs-plugins/audio-monitor/"

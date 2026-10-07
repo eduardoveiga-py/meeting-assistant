@@ -71,9 +71,13 @@ for page, tab in views:
         dialog.maintenance.request("inspect")
         run_queued(owner, "maintenance_task")
         app.processEvents()
+    before_fit = (dialog.frameGeometry(), dialog.isMaximized(), dialog.isMinimized())
     dialog.resize(620, min(700, area.height() - 40))
+    after_resize = (dialog.frameGeometry(), dialog.isMaximized(), dialog.isMinimized())
     fit_window(dialog, area)
+    after_fit = (dialog.frameGeometry(), dialog.isMaximized(), dialog.isMinimized())
     app.processEvents()
+    before_grab = (dialog.frameGeometry(), dialog.isMaximized(), dialog.isMinimized())
     image = dialog.grab()
     directory = os.environ.get("MEETING_ASSISTANT_LAYOUT_CAPTURE_DIRECTORY")
     if directory:
@@ -82,7 +86,9 @@ for page, tab in views:
         assert image.save(str(folder / f"settings-{scale}-{page}-{tab}.png"))
     assert area.contains(dialog.frameGeometry()), (
         page, tab, dialog.frameGeometry(), area, dialog.minimumSize(), dialog.minimumSizeHint(),
-        dialog.maintenance.minimumSizeHint(), dialog.pages.minimumSizeHint()
+        dialog.maintenance.minimumSizeHint(), dialog.pages.minimumSizeHint(),
+        before_fit, after_resize, after_fit, before_grab, dialog.isMaximized(), dialog.isMinimized(),
+        dialog.screen().availableGeometry()
     )
     for scroll in dialog.findChildren(QScrollArea):
         if scroll.isVisible():
