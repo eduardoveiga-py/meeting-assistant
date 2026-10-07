@@ -1,0 +1,58 @@
+name: JWL HWND capture
+on:
+  push:
+    branches: [main, 'fix/jwl-hwnd-capture']
+    paths: ['native/jwl-capture/**', 'scripts/*jwl*.ps1', '.github/workflows/jwl-capture.yml']
+  pull_request:
+    paths: ['native/jwl-capture/**', 'scripts/*jwl*.ps1', '.github/workflows/jwl-capture.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jwl-capture-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build independent JWL capture source and test package
+        shell: pwsh
+        run: ./scripts/build-jwl-capture.ps1
+      - name: Package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path 'build/jwl-capture/package/*' -DestinationPath 'build/MeetingAssistant-JWL-HWND-Windows11-x64.zip'
+          $hash = (Get-FileHash 'build/MeetingAssistant-JWL-HWND-Windows11-x64.zip' -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  MeetingAssistant-JWL-HWND-Windows11-x64.zip" | Set-Content 'build/MeetingAssistant-JWL-HWND-SHA256.txt' -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meeting-assistant-jwl-capture
+          path: |
+            build/MeetingAssistant-JWL-HWND-Windows11-x64.zip
+            build/MeetingAssistant-JWL-HWND-SHA256.txt
+          if-no-files-found: error
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: meeting-assistant-jwl-capture
+          path: package
+      - name: Publish component for Python development
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          printf '%s\n' 'Independent OBS source: exact JWL secondary HWND via the OBS WGC backend.' "Source commit: $GITHUB_SHA" 'Windows 11 x64, OBS 31.0.3+. Native unit tests and package checks passed; physical JWL test pending.' 'Includes no app installer and does not replace the Program bridge or camera.' > component-notes.md
+          if ! gh release view jwl-capture-v1 >/dev/null 2>&1; then
+            gh release create jwl-capture-v1 --target "$GITHUB_SHA" --prerelease --title 'JWL HWND capture — component v1' --notes-file component-notes.md
+          else
+            gh release edit jwl-capture-v1 --notes-file component-notes.md
+          fi
+          gh release upload jwl-capture-v1 package/* --clobber
