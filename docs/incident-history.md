@@ -32,6 +32,8 @@ operador foi coletada novamente nesta tarefa.
 
 | ID | Problema | Situação |
 | --- | --- | --- |
+| INC-034 | Forçar JWL gera AttributeError repetido | Clique reproduzido/corrigido; ensaio físico pendente |
+| INC-035 | Qt amplia Ajustes além do tamanho solicitado | Restrição nativa reproduzida/corrigida; ensaio na escala do operador pendente |
 | INC-033 | Mídia externa falha após escolher a janela | Falhas reproduzidas/corrigidas; novo ensaio pendente |
 | INC-032 | Ajustes fragmentados e manutenção de fontes frágil | Organização aprovada em 07/10; manutenção/instalação com ensaio próprio |
 | INC-030 | OBS escolhia o JWL do operador entre títulos iguais | Captura por HWND confirmada em 07/10 |
@@ -65,6 +67,55 @@ operador foi coletada novamente nesta tarefa.
 | INC-027 | Botão Mic Zoom sem ação | Funcionamento confirmado após correção de identidade |
 | INC-028 | Mic Zoom levava cerca de cinco segundos | Otimização implementada; latência real pendente |
 | INC-029 | Windows bloqueava executável sem fornecedor verificado | Distribuição/assinatura pendentes |
+
+## INC-034 — Forçar JWL falha no slot da interface
+
+**Relato e revisão.** Em 07/10/2026, antes de executar a atualização anterior,
+o operador enviou tracebacks repetidos de `_force_jwl`: `AppSettings` não possui
+`automation_enabled`. A revisão local não foi informada. O mesmo defeito está
+presente em `af55369`, a revisão diagnosticada nesta correção.
+
+**Causa demonstrada.** O slot mistura configurações persistidas com AppState e
+referencia `automation_toggle`, `zoom_hall_button` e `hall_guard`, que não existem
+no MainWindow atual. Somente substituir settings por state produziria novos
+AttributeErrors e habilitaria automação indevidamente. Nove testes de clique
+reproduziram a primeira exceção, capturando o sys.excepthook usado pelo Qt.
+
+**Correção.** Usar o retorno explícito existente, com confirmação posterior.
+Preservar automação e configurações; não mudar Program nem o estado visual Zoom
+antes de confirmar. Se houver mídia externa, solicitar o retorno pelo serviço
+externo para restaurar Program/player antes do JWL. Preservar a mensagem específica
+de falha e informar recusa quando o serviço não inicia o retorno.
+
+**Aprendizado e limite.** Clique conectado e suíte verde não comprovam que todos
+os slots foram exercitados. Exceção num slot PySide pode ser impressa sem falhar
+o teste: verificar o caminho real e capturar essa exceção explicitamente.
+Serviços JWL/Zoom protegidos não mudaram. Ensaio físico novo permanece pendente.
+
+## INC-035 — Aviso QWindowsWindow::setGeometry nos Ajustes
+
+**Relato.** O mesmo terminal registra tamanho pedido 930×939 e resultado 930×1002.
+É um aviso de geometria Qt, separado do AttributeError; o log não identifica
+qual categoria estava aberta. Não representa uma borda na saída JWL.
+
+**Falha demonstrada.** fit_window deixa o formulário dentro da área útil no
+backend de teste, mas QLayout.closestAcceptableSize pede altura maior, sobretudo
+após selecionar Áudio. O viewport nativo Windows consulta essa restrição.
+QStackedLayout considera também páginas ocultas no cálculo da altura pela largura;
+uma mudança de categoria pode exigir mais altura que a disponível.
+
+Referências primárias Qt: [restrição da janela](https://github.com/qt/qtbase/blob/v6.10.2/src/widgets/kernel/qwidgetwindow.cpp),
+[tamanho aceito pelo layout](https://github.com/qt/qtbase/blob/v6.10.2/src/widgets/kernel/qlayout.cpp)
+e [pilha de páginas](https://github.com/qt/qtbase/blob/v6.10.2/src/widgets/kernel/qstackedlayout.cpp).
+
+**Correção.** Um viewport Qt limita a pilha de páginas, sem propagar essa altura
+ao diálogo nativo. Navegação/rodapé e ações de áudio ficam nas áreas existentes;
+cada página conserva sua rolagem, sem outra barra externa. Não suprimir o aviso.
+
+**Aprendizado e limite.** Geometria aparente em Linux pode caber e ainda ser
+recusada pelo Qt nativo. Acrescentados testes de closestAcceptableSize, abertura
+e troca de categorias, quatro escalas e recusa de setGeometry em stderr.
+A ausência do aviso no equipamento/escala do operador exige novo ensaio.
 
 ## INC-033 — Mídia externa falha depois da seleção
 

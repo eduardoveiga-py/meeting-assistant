@@ -1,5 +1,20 @@
 # Histórico de alterações
 
+## Não lançado — retorno manual JWL e geometria dos Ajustes — 07/10/2026
+
+- Forçar JWL Telão usa o retorno confirmado existente, preservando o estado
+  ativo/pausado da automação. Removidas referências a configurações e widgets
+  inexistentes; falhas não são anunciadas como sucesso.
+- Com mídia externa em andamento, o botão solicita o retorno pelo serviço
+  externo, sem sobrepor a restauração de Program/player/JWL.
+- Ajustes isolam as restrições de altura das páginas num viewport. Navegação,
+  rodapé e ações de áudio continuam acessíveis, com a rolagem interna existente.
+- Regressões verificam cliques reais, exceções nos slots, tamanho aceito pelo
+  Qt e ausência de avisos de geometria no ensaio nativo de quatro escalas.
+
+Sem compilação, DLL ou instalador novo. Ensaio físico da correção pendente;
+INC-034/035 registram causas demonstradas e os limites.
+
 ## Não lançado — ícones e mídia externa — 07/10/2026
 
 - Documentado o aceite da organização de Ajustes na revisão `7a7697a`.

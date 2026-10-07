@@ -3,12 +3,14 @@ from __future__ import annotations
 from dataclasses import replace
 from threading import Thread
 
-from PySide6.QtCore import QObject, QUrl, Signal
+from PySide6.QtCore import QObject, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QAbstractScrollArea,
     QCheckBox,
     QComboBox,
     QDialog,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -94,7 +96,17 @@ class SetupAssistantDialog(QDialog):
         self.hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         root.addWidget(self.hint)
         self.pages = QStackedWidget()
-        root.addWidget(self.pages, 1)
+        # QStackedLayout includes hidden pages in height-for-width constraints.
+        # Windows can then enlarge the dialog beyond fit_window's work area.
+        # A viewport bounds the stack without propagating that preferred height.
+        # Existing pages own their scrolling; navigation and Save/Close stay fixed.
+        self.page_viewport = QAbstractScrollArea()
+        self.page_viewport.setObjectName("SettingsPagesViewport")
+        self.page_viewport.setFrameShape(QFrame.NoFrame)
+        self.page_viewport.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.page_viewport.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.page_viewport.setViewport(self.pages)
+        root.addWidget(self.page_viewport, 1)
         self.editor = SettingsDialog(owner.settings, owner.obs_scenes, self, embedded=True)
         self.editor.hide()
         self.actions = []

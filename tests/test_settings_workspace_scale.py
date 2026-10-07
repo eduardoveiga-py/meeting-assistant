@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRect, Signal
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QCheckBox, QScrollArea
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QCheckBox, QScrollArea, QLayout
 
 import meeting_assistant.ui.program_preview as preview_module
 import meeting_assistant.ui.virtual_camera_dialog as camera_module
@@ -93,6 +93,9 @@ for page, tab in views:
         before_fit, after_resize, after_fit, before_grab, dialog.isMaximized(), dialog.isMinimized(),
         dialog.screen().availableGeometry()
     )
+    assert QLayout.closestAcceptableSize(dialog, dialog.size()) == dialog.size(), (
+        page, tab, dialog.size(), dialog.layout().minimumHeightForWidth(dialog.width())
+    )
     for scroll in dialog.findChildren(QScrollArea):
         if scroll.isVisible():
             assert scroll.horizontalScrollBar().maximum() == 0, (page, tab, scroll.objectName())
@@ -135,6 +138,7 @@ def test_all_settings_pages_fit_fhd_work_area_at_desktop_scale(tmp_path, scale):
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "QWindowsWindow::setGeometry" not in result.stderr, result.stderr
     details = json.loads(result.stdout.strip().splitlines()[-1])
     assert details["scale"] == pytest.approx(float(scale))
     assert details["views"] == 10

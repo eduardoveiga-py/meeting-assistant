@@ -27,6 +27,9 @@ com os rótulos preservados, na mesma célula do painel.
 | Diagnóstico | Telemetria, calibração, observação e histórico de versões | Investigar ou recuperar a configuração |
 
 A navegação fica em uma janela, com área rolável por categoria e rodapé acessível.
+Um viewport contém as páginas sem impor sua altura ao diálogo Windows; as áreas
+existentes continuam responsáveis pela rolagem. Isso evita o aviso setGeometry
+causado por uma restrição de altura incompatível com a área útil.
 Campos gerais usam **Salvar ajustes**. Áudio, volumes, foto e instalação têm ações
 próprias, com confirmação do resultado. Fechar com edições gerais pendentes oferece
 salvar, descartar ou cancelar. Seleções de áudio e foto não salva também geram aviso.
@@ -105,6 +108,9 @@ de atraso, escreve somente os ganhos alterados.
   Program ou mudança no envio existente. Não apague fontes reais só para testar.
 - Conferir layout na escala/resolução do computador; repetir JWL/Zoom, mídia e
   Windows+D conforme o [contrato validado](validated-hall-contract.md).
+- Abrir/trocar categorias e Volumes, conferir ações inferiores e ausência do aviso
+  setGeometry no terminal. Forçar JWL deve funcionar com automação pausada e
+  ativa, preservando esse estado; aguardar confirmação antes de considerar o retorno.
 
 Testes automatizados cobrem cliques Qt, salvamento, falhas parciais, preparação
 idempotente, instalação sem compilador e layout em 100%, 125%, 150% e 200%.

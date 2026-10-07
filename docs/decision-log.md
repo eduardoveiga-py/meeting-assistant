@@ -4,6 +4,29 @@ O [histórico de incidentes](incident-history.md) reúne sintomas, soluções,
 confirmações e aprendizados desta conversa. Este arquivo registra as decisões
 técnicas; os roteiros específicos mantêm os detalhes de teste.
 
+## 2026-10-07 — Forçar JWL preserva automação; Ajustes respeitam o tamanho aceito pelo Qt
+
+O log do operador, enviado antes de executar a atualização anterior, mostrou
+`AttributeError` no botão Forçar JWL. A revisão local exata não foi informada;
+o defeito também existe em `af55369` e foi reproduzido por clique Qt.
+O método usava `AppSettings.automation_enabled`, além de widgets/guardião
+que não pertencem ao MainWindow atual. Automação é estado de sessão em AppState.
+
+A recuperação manual não altera esse estado: solicita `zoom_hall.restore_jwl()`
+e deixa os sinais existentes confirmarem o resultado. Mídia externa ativa usa
+seu próprio retorno serializado. Não habilitar guardião, invalidar seus caches
+privados ou desmarcar Zoom antes da confirmação. Serviços protegidos permanecem
+idênticos; testes de clique capturam também exceções enviadas ao sys.excepthook.
+
+O aviso de geometria é distinto. Reproduzida a divergência entre tamanho que
+fit_window solicita e o que QLayout.closestAcceptableSize aceita: páginas
+empilhadas propagam uma altura mínima dependente da largura. Os Ajustes passam
+a conter a pilha num viewport Qt, sem outra barra de rolagem; as páginas
+existentes mantêm sua rolagem. Conferir dimensões/rodapé e a restrição nativa,
+além de falhar o teste de escala quando stderr contém setGeometry.
+
+Aceite físico das duas correções permanece pendente (INC-034/035).
+
 ## 2026-10-07 — Ajustes unificados, manutenção incremental e volumes
 
 **Retorno posterior:** o operador aprovou a organização dos Ajustes na revisão

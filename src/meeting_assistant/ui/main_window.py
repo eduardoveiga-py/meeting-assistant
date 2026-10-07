@@ -386,7 +386,8 @@ class MainWindow(QMainWindow):
 
         self.force_jwl_button = QPushButton("🛡️ Forçar JWL Telão")
         self.force_jwl_button.setToolTip(
-            "Garante que o JW Library esteja no telão e encerra o modo Zoom se ativo."
+            "Solicita o retorno ao JW Library sem ativar a automação. "
+            "Encerra primeiro a mídia externa ou o modo Zoom local, se ativo."
         )
         self.force_jwl_button.clicked.connect(self._force_jwl)
         system_grid.addWidget(self.force_jwl_button, 0, 1)
@@ -1082,18 +1083,18 @@ class MainWindow(QMainWindow):
             self._start_meeting()
 
     def _force_jwl(self):
-        self.settings.automation_enabled = True
-        self.automation_toggle.blockSignals(True)
-        self.automation_toggle.setChecked(True)
-        self.automation_toggle.blockSignals(False)
-        if self.zoom_hall:
-            self.zoom_hall.restore_jwl()
-            self.zoom_hall_button.blockSignals(True)
-            self.zoom_hall_button.setChecked(False)
-            self.zoom_hall_button.blockSignals(False)
-        if hasattr(self.hall_guard, "_clear_cache"):
-            self.hall_guard._clear_cache("manual_force")
-        self.mode_label.setText("Guardião ativado: JW Library forçado ao telão.")
+        # A manual return is one request, not permission to enable the guardian.
+        # The presentation service owns rollback and verified JWL visibility.
+        if self.external_media and self.external_media.active:
+            self.external_media.stop_external_media()
+            return
+        message = "Solicitando retorno do JW Library; aguarde a confirmação na Tela do Salão."
+        self.mode_label.setText(message)
+        if not self.zoom_hall.restore_jwl() and self.mode_label.text() == message:
+            # Preserve a more specific synchronous failure from status_changed.
+            self.mode_label.setText(
+                "Retorno do JW Library não iniciado. Confira a segunda tela e a saída do JWL."
+            )
 
     def _start_meeting(self) -> None:
         self._meeting_active = True

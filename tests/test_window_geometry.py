@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from PySide6.QtCore import QObject, QRect, Signal
-from PySide6.QtWidgets import QApplication, QDialogButtonBox
+from PySide6.QtWidgets import QApplication, QDialogButtonBox, QLayout
 
 from meeting_assistant.core.state import AppState
 from meeting_assistant.services.meeting_launcher import LaunchSummary
@@ -161,3 +161,33 @@ def test_main_window_camera_button_and_auto_start(app):
         assert "Iniciar câmera" in window.camera_button.text()
     finally:
         window.close()
+
+
+@pytest.mark.usefixtures("audio_monitor_profile")
+@pytest.mark.parametrize("area", [QRect(0, 0, 1280, 693), QRect(0, 0, 960, 520), QRect(0, 0, 800, 560)])
+def test_settings_workspace_fitted_size_is_accepted_by_qt_native_constraints(app, tmp_path, area):
+    from test_settings_workspace import make_owner
+
+    from meeting_assistant.ui.setup_assistant_dialog import SetupAssistantDialog
+
+    owner, _ = make_owner(tmp_path)
+    dialog = SetupAssistantDialog(owner, page="meeting")
+    dialog.show()
+    app.processEvents()
+    dialog.removeEventFilter(dialog._fit)
+    dialog._fit._timer.stop()
+    try:
+        for page in ("meeting", "video", "audio", "installation", "diagnostics"):
+            dialog.select_page(page)
+            fit_window(dialog, area)
+            app.processEvents()
+            assert area.contains(dialog.frameGeometry())
+            assert QLayout.closestAcceptableSize(dialog, dialog.size()) == dialog.size(), (
+                page, dialog.size(), dialog.layout().minimumHeightForWidth(dialog.width())
+            )
+            assert dialog.rect().contains(dialog.navigation.geometry())
+            if dialog.save_button.isVisible():
+                assert dialog.rect().contains(dialog.save_button.geometry())
+    finally:
+        dialog.close()
+        owner.close()
