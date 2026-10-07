@@ -88,6 +88,12 @@ simulado; cobrem dados persistidos, ganhos, preparação repetida e falha parcia
 Layout é renderizado em quatro escalas. Instalação real, disposição com dois
 monitores e escuta das chamadas precisam de aceite desta revisão.
 
+A primeira execução Windows encontrou expansão ao abrir Fontes em 200% e
+relatório com contraste ruim no estilo nativo. Rótulos de manutenção passam
+a encolher horizontalmente por quebra de linha; relatórios definem fundo e
+texto explicitamente. O teste mantém a exigência de caber na área útil, sem
+retirar a escala que encontrou o problema.
+
 **Aprendizado.** Navegar, consultar, reparar estrutura e mudar o roteamento são
 ações diferentes. Uma consulta não deve interferir na reunião; completar o
 que falta não implica reconfigurar fontes que já funcionam. Salvar só o estado

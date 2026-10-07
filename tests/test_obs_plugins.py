@@ -20,7 +20,11 @@ def archive(entries):
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as package:
         for name, data in entries.items():
-            package.writestr(name, data)
+            # ZipInfo normalizes backslashes on Windows. Restore the raw member
+            # name so malformed ZIP paths are tested on every host platform.
+            member = zipfile.ZipInfo(name)
+            member.filename = name
+            package.writestr(member, data)
     return buffer.getvalue()
 
 

@@ -75,6 +75,11 @@ class SetupAssistantDialog(QDialog):
         self.deferred_action = None
         self._views_disconnected = False
         self.setWindowTitle("Ajustes — Meeting Assistant")
+        # The native Windows style gives QTextEdit a white viewport even when
+        # the parent has a dark QWidget rule. Specify both colors for reports.
+        self.setStyleSheet(
+            "QTextEdit { background: #0e141c; color: #f2f4f8; border: 1px solid #46546a; }"
+        )
         self.resize(620, 700)
         self.setMinimumSize(360, 280)
         root = QVBoxLayout(self)

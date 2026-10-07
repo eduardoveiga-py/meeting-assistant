@@ -80,7 +80,10 @@ for page, tab in views:
         folder = Path(directory)
         folder.mkdir(parents=True, exist_ok=True)
         assert image.save(str(folder / f"settings-{scale}-{page}-{tab}.png"))
-    assert area.contains(dialog.frameGeometry()), (page, tab, dialog.frameGeometry(), area)
+    assert area.contains(dialog.frameGeometry()), (
+        page, tab, dialog.frameGeometry(), area, dialog.minimumSize(), dialog.minimumSizeHint(),
+        dialog.maintenance.minimumSizeHint(), dialog.pages.minimumSizeHint()
+    )
     for scroll in dialog.findChildren(QScrollArea):
         if scroll.isVisible():
             assert scroll.horizontalScrollBar().maximum() == 0, (page, tab, scroll.objectName())

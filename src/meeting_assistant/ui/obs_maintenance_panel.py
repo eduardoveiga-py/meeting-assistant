@@ -3,7 +3,15 @@
 from uuid import uuid4
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QLabel, QPushButton, QScrollArea, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class ObsMaintenancePanel(QWidget):
@@ -28,6 +36,7 @@ class ObsMaintenancePanel(QWidget):
             "Áudio novo começa silenciado; ative na categoria Áudio."
         )
         hint.setWordWrap(True)
+        hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         layout.addWidget(hint)
         self.check_button = QPushButton("Verificar fontes e plugins")
         self.check_button.clicked.connect(lambda: self.request("inspect"))
@@ -51,6 +60,7 @@ class ObsMaintenancePanel(QWidget):
         layout.addWidget(self.virtual_button)
         self.status = QLabel("Preparação disponível com a automação pausada.")
         self.status.setWordWrap(True)
+        self.status.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         root.addWidget(self.status)
         owner.obs.maintenance_task_finished.connect(self._finished)
         owner.obs.hall_task_finished.connect(self._capture_finished)
