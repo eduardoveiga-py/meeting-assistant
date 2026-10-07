@@ -1,129 +1,137 @@
-# 📖 Manual Completo do Operador: Meeting Assistant
+# Guia do operador — Meeting Assistant
 
-Bem-vindo ao centro de controle do **Meeting Assistant**. Este manual foi desenhado para equipar você, Operador de Áudio e Vídeo, com todo o conhecimento prático e técnico necessário para conduzir uma reunião impecável.
+Atualizado em 07/10/2026. Operação em Windows 11 x64, com OBS, JW Library,
+Zoom e WhatsApp. O [histórico de incidentes](incident-history.md) registra
+quais testes foram confirmados e o que permanece pendente.
 
----
+## Preparar fora da reunião
 
-## 🏗️ 1. O Ecossistema (Como tudo se conecta)
-O Meeting Assistant não é apenas um painel com botões; ele é um **Guardião Invisível** que orquestra e sincroniza quatro programas gigantes simultaneamente: JW Library, Zoom, WhatsApp e OBS Studio.
+1. Atualize pelo [fluxo Git/Python](test-python-update.md). Para instalar a nova
+   captura JWL, feche OBS e o app antes de executar o script.
+2. Abra OBS/JWL e deixe o Windows em modo **Estender**. Habilite a saída secundária
+   do JWL e selecione a **Tela do Salão** nos ajustes do app.
+3. Confira host, porta e senha do WebSocket do OBS. Aguarde a conexão indicada pelo
+   app antes de preparar fontes.
+4. Em **Ajustes → Texto do Ano e fontes do OBS**, prepare a captura JWL em Mídias.
+   Requer OBS 31.0.3+ e Direct3D 11. A fonte
+   **Meeting Assistant - JWL (HWND)** deve mostrar a saída do Salão, mesmo com
+   nomes iguais no OBS. [Instalação e diagnóstico](jwl-hwnd-capture.md).
+5. Na mesma ferramenta, capture/confirme a foto do Texto do Ano e seu ano quando
+   faltar ou precisar atualizar. Salvar a foto **não recalibra o sensor**.
+6. Em **Ajustes → Áudio da mesa e das mídias**, confira o perfil e os dispositivos.
+   Se a estrutura já estiver funcionando, consultar a tela não exige recriá-la.
+   **Criar fontes** prepara/repara fontes silenciadas; use **Ativar envio** somente
+   após conferir o roteamento.
+7. No Zoom, selecione **OBS Virtual Camera** e o microfone virtual correspondente.
+   No WhatsApp, selecione **Meeting Assistant** e o microfone virtual do seu perfil.
+   Faça uma chamada curta: a prévia do app não comprova recepção remota.
 
-```mermaid
-flowchart TD
-    subgraph PC["🖥️ Computador do Salão"]
-        MA((Meeting\nAssistant))
-        JWL[JW Library\nTelão e Mídias]
-        ZOOM[Zoom\nVideoconferência]
-        WPP[WhatsApp\nTransmissão WPP]
-        OBS[OBS Studio\nMixagem Geral]
-    end
+Configure links/dispositivos antes da reunião. Dados de conexão e fotos ficam
+na pasta privada do usuário; não os publique junto do projeto.
 
-    subgraph Audio["🎛️ Som Físico"]
-        MESA[Mesa Analógica]
-    end
+## Áudio: escolher o perfil
 
-    MA -- "Vigia Tela e Alterna" --> JWL
-    MA -- "Muta e Traz para Frente" --> ZOOM
-    MA -- "Injeta Câmera (Virtual)" --> WPP
-    MA -- "Troca Cenas e Ajusta Volume" --> OBS
+| Perfil | Microfone Zoom | Microfone WhatsApp | O que o WhatsApp recebe |
+| --- | --- | --- | --- |
+| Mesa e mídias nos dois aplicativos | Cabo A Output | Cabo A Output | Mesa e mídias locais |
+| Incluir participantes do Zoom no WhatsApp | Cabo A Output | Cabo B Output | Mesa, mídias e retorno Zoom |
 
-    MESA -- "Captura USB (Microfones)" --> ZOOM
-    ZOOM -- "Cabo P2 (Retorno para a plateia)" --> MESA
-```
+No OBS, o monitoramento global aponta para **Cabo A Input**. O perfil com
+retorno Zoom exige outro cabo e o plugin **Audio Monitor do Exeldro**.
+Use os nomes realmente instalados no seu computador; os endpoints de reprodução
+(Input) e gravação (Output) têm papéis diferentes.
 
----
+- Mídias e som recebido do Zoom seguem para a saída física do notebook/mesa.
+- O retorno do WhatsApp começa silenciado; o botão **WhatsApp** controla apenas
+  o som recebido desse aplicativo.
+- O áudio enviado ao Zoom exclui seu próprio retorno. O retorno WhatsApp não
+  deve entrar nos mixes enviados.
+- A entrada da mesa precisa excluir sinais que já são capturados separadamente.
+  Software não separa com confiabilidade o que já veio somado pelo cabo analógico.
 
-## 🎛️ 2. Mapeamento de Áudio e Cabos no OBS Studio
-O áudio é o coração da reunião híbrida. O Meeting Assistant reconfigura e controla o envio do som para que quem assista pelo Zoom ou WhatsApp ouça perfeitamente a mesa, as mídias, e até mesmo os comentários remotos (sem causar microfonia ou o temido "eco infinito").
+Leia o [roteamento completo](audio-routing.md) antes de alterar cabos/filtros.
+O sucesso histórico do perfil de um cabo não valida automaticamente o segundo.
 
-### Os Dois Perfis de Envio
+## Iniciar, operar e encerrar
 
-O sistema suporta dois perfis de roteamento, escolhidos dentro do painel `Ajustes -> Áudio -> Envio`:
+Clique **Iniciar reunião** para solicitar abertura dos aplicativos configurados
+e iniciar as verificações de câmera. Confira as mensagens: aplicativo solicitado,
+janela aberta e reunião efetivamente ativa são etapas diferentes.
 
-#### Perfil 1: Comum (Um único cabo)
-Neste perfil, as pessoas de casa (Zoom e WPP) ouvem a mesa e as mídias, mas **não** ouvem os comentários do Zoom uns dos outros pelo WPP.
-- **Microfone do Zoom:** Configurado para `CABLE-A Output`.
-- **Microfone do WhatsApp:** Configurado para `CABLE-A Output`.
-- **Monitoramento do OBS:** O operador acessa o OBS e configura o *Dispositivo de Monitoramento de Áudio* global para `CABLE-A Input`. O aplicativo bloqueia a entrada do Zoom no OBS para evitar loop.
+O app começa com automação **pausada**. Depois de conferir o Texto do Ano e a
+calibração, use **Ativar**. O sensor compara a saída secundária JWL com o repouso:
+repouso corresponde a Palco; mídia real aciona Mídias; ao terminar, volta a Palco.
+Não há promessa de resposta instantânea: leitura, estabilização e transição têm prazo.
 
-#### Perfil 2: WhatsApp escuta o Zoom (Dois cabos)
-Necessário quando o WhatsApp precisa ouvir os comentários feitos pelos irmãos via Zoom. Exige a instalação do Cabo B e do plugin oficial *Audio Monitor* no OBS.
-```mermaid
-flowchart TD
-    A["Mesa (USB) e Mídias (JWL)"] --> B["Cabo A: Microfone Zoom"]
-    A --> C["Cabo B: Microfone WhatsApp"]
-    D["Retorno Remoto Zoom"] --> C
-    D --> E["Caixas do Salão (Saída P2)"]
-```
-- **Microfone do WhatsApp:** Muda para `CABLE-B Output`.
-- **Filtros Automáticos:** O Meeting Assistant criará magicamente filtros do tipo *Audio Monitor* no OBS para isolar a voz do Zoom e mandá-la exclusivamente para o WhatsApp (Cabo B), sem deixar vazar de volta para o próprio Zoom.
+O guardião protege a janela JWL **somente enquanto a automação está ativa**.
+Sensor e guardião têm funções distintas. Durante Zoom no Salão, mídia externa
+ou retorno, eles respeitam a escolha do operador e aguardam a troca finalizar.
 
-### As Fontes e Filtros no OBS
-Ao clicar em **"Criar Fontes"** no painel de áudio do app, o Meeting Assistant cria no OBS uma cena silenciada com as seguintes fontes:
-1. `Entrada de Áudio` (Sua placa USB da mesa).
-2. `Captura de Aplicativo` (JW Library, VLC, Chrome).
-3. `Captura de Aplicativo` (Processo de áudio do Zoom - apenas no Perfil 2).
+| Comando do painel | Uso |
+| --- | --- |
+| Texto do Ano / Palco / Mídia | Seleção manual da cena correspondente no OBS |
+| Zoom → Salão | Exibir janela secundária Zoom no Salão; clicar novamente solicita retorno ao JWL |
+| Ativar / Pausar | Controlar automação e proteção periódica do JWL |
+| Emergência (Tela Preta) | Solicitar cena segura configurada e pausar automação; conferir a saída real |
+| Forçar JWL Telão | Solicitar recuperação explícita do JWL e encerrar o modo Zoom local; conferir a confirmação |
+| Câmera | Iniciar/parar a câmera nativa usada no WhatsApp |
+| Mic Zoom | Alternar seu próprio microfone; não controla microfones dos participantes |
+| WhatsApp | Silenciar/liberar somente o áudio recebido do WhatsApp nas caixas |
+| Mídia Externa | Escolher uma janela permitida e retornar explicitamente ao JWL após a apresentação |
+| Ajustes | Dispositivos, cenas, fotos, áudio, diagnósticos e disposição |
 
-**Filtros Aplicados (Proteção e Volume):**
-Cada fonte criada ganha, obrigatoriamente, dois filtros pela nossa automação:
-- **Ganho (0 a 18 dB):** Permite subir o volume de mídias muito baixas sem mexer no Windows. (Ajustável na aba *Volumes* do nosso app).
-- **Limitador (-3 dB):** O Guardião invisível que impede que um som repentino ou um microfone batido "estoure" (clipping) o áudio dos irmãos em casa.
+O rótulo de Emergência não garante imagem preta: o resultado depende da cena
+segura configurada e da conexão OBS. Sem OBS conectado, confira e opere a saída
+pelo OBS antes de prosseguir.
 
-> [!CAUTION]
-> **Atenção Física Máxima:** O cabo USB que vem da sua mesa de som deve trazer **apenas** a voz dos microfones do salão. Se o técnico de som da mesa enviar o retorno do computador para esse cabo USB, o OBS dobrará a mídia, causando microfonia e distorção severa.
+Para Zoom → Salão, habilite **Usar dois monitores** no Zoom antes de entrar na
+reunião. A apresentação local não envia a imagem dos participantes de volta ao
+Program. Ambas as janelas devem permanecer abertas. Aguarde confirmação do
+JWL no retorno, mesmo com automação pausada.
 
----
+Para volume, use **Ajustes → Áudio → Volumes → Salvar volumes**. A ação salva
+somente os ganhos editados. Comece em 0 dB e aumente em passos pequenos, ouvindo
+no receptor. O limitador não corrige entrada já distorcida nem remove ruído.
 
-## 🕹️ 3. O Painel de Controle Frontal
+Para terminar, clique **Encerrar reunião**. O app solicita fechamento normal;
+confirme no Zoom quando necessário e confira se há aplicativos ainda abertos.
+Não instale atualizações com reunião/automação em andamento.
 
-A interface foi redesenhada para que você não precise tirar os olhos da reunião. Tudo está a um clique de distância.
+## Foto, calibração e disposição
 
-```mermaid
-flowchart LR
-    A[🔘 Iniciar/Encerrar] --> |Ciclo Completo| B(Prepara Zoom, OBS, WPP e Câmera Virtual)
-    C[🟢 Câmera WhatsApp] --> |Atalho Rápido| D(Pausa ou ativa a câmera para a ligação extra)
-    E[🎙️ Microfone Zoom] --> |Corte Direto| F(Abre/Fecha a captação que vai para os irmãos em casa)
-    G[🛡️ Forçar JWL Telão] --> |Botão de Segurança| H(Recupera o Telão se o Zoom roubar a tela)
-    I[🚨 Emergência] --> |Pânico| J(Corta imediatamente qualquer vídeo para o Texto do Ano)
-```
+**Foto do Texto do Ano:** imagem persistida para a cena OBS, com ano e confirmação
+humana. Deixe JWL visível, sem mídia ou Zoom por cima. Confira o arquivo salvo e
+a aplicação da fonte. [Passos e limites](yeartext-and-obs.md).
 
-### Detalhamento dos Comandos:
-- 🔘 **Botão de Energia (Iniciar/Encerrar Reunião):** É o mestre da operação. No início da reunião, ao dar "Iniciar", ele pré-aquece as conexões de áudio, limpa janelas residuais e ativa a ponte com o OBS. No final da reunião, ele fecha as abas do Zoom e encerra os programas graciosamente.
-- 🟢 **Controle do WhatsApp:** Uma chave simples para ativar ou desativar o envio de vídeo para a ligação do WhatsApp (extremamente útil quando só há Zoom ativo).
-- 🛡️ **Forçar JWL Telão:** O Zoom atualizou e roubou a tela secundária? A janela minimizou? Clique neste escudo. O sistema buscará o player do JW Library a força e o colocará na tela estendida.
-- 🚨 **Emergência (Tela Preta/Texto):** Use se o PC der uma travada feia durante a reprodução de um vídeo ou surgir algo inadequado. Ele corta a imagem e manda o sinal do OBS imediatamente para a cena de Repouso.
+**Calibração do sensor:** referência de repouso para detectar mídia. Faça com
+somente o Texto do Ano exibido na saída do JWL. Atualizar a foto da cena não
+substitui esse procedimento.
 
----
+**Disposição de janelas:** salve a disposição pelos ajustes após posicionar app
+e JWL principal. Monitores/DPI diferentes exigem nova conferência; preservar a
+saída secundária do JWL é um requisito separado.
 
-## 🤖 4. A Automação (O Guardião Invisível)
-A beleza do Meeting Assistant é que você não precisa coordenar o OBS e o JW Library ao mesmo tempo. O **Guardião** vigia os pixels da sua tela dezenas de vezes por segundo.
+F1 apresenta os atalhos. Atalhos globais são opcionais; conflitos precisam ser
+informados, sem desativar indiscriminadamente atalhos do Windows.
 
-1. **Estado de Repouso:** Quando a tela principal do JWL exibe apenas a imagem estática do "Texto do Ano", o Guardião informa ao OBS: *"Coloque a Câmera do Palco no ar"*.
-2. **Estado de Mídia:** No milissegundo em que você aperta "Play" num cântico ou vídeo, o Guardião avisa ao OBS: *"Corte a câmera do Palco, coloque a cena de Mídias e libere o áudio interno"*.
-3. **Transição Automática:** Assim que o vídeo do JWL atinge 100%, o Guardião devolve a imagem suavemente para o Palco.
+## Diagnóstico rápido
 
-> [!NOTE]
-> Durante essa transição de vídeo, o app entra numa "Pausa" microscópica para não atropelar comandos. Apenas relaxe e deixe o Guardião agir.
+| Sintoma | Verificação e ação |
+| --- | --- |
+| Git recusa atualizar | Guardar trabalho local e verificar códigos de saída; [procedimento](test-python-update.md) |
+| OBS desconectado | Conferir servidor WebSocket, host/porta/senha e mensagem do app; não presumir a causa pelo indicador |
+| Captura mostra JWL do operador | Preparar fonte HWND; conferir plugin/reinício OBS e [diagnóstico](jwl-hwnd-capture.md) |
+| OBS mostra Zoom ou espelhamento | Suspender uso da cena insegura e revisar fontes; não substituir HWND por captura do monitor |
+| Fonte HWND informa waiting/invalid_target | Conferir JWL secundário, monitor e estado nativo; esses estados não confirmam captura |
+| JWL não voltou após Zoom | Aguardar/observar a mensagem de retorno e solicitar Forçar JWL; registrar horário se não confirmar |
+| Mídia sem áudio remoto | Conferir fontes, mute, monitoramento, endpoints e microfone de cada chamada |
+| Som duplicado/eco | Revisar retornos no mix e na entrada física; silenciar o caminho que recaptura a própria chamada |
+| Volume baixo | Ajustar ganho da fonte e ouvir no receptor; [passos](audio-routing.md) |
+| Ruído só no OBS | Manter incidente aberto e comparar a rota/filtros com entrada direta; Audio Monitor não comprova correção |
+| Mic Zoom lento ou sem ação | Conferir mensagem/tooltip e [roteiro do microfone](zoom-microphone-control.md) |
+| Câmera ausente/travando no WhatsApp | Conferir sessão/bridge/diagnóstico e carga de CPU; [teste da câmera](test-virtual-camera.md) |
 
----
-
-## ⚙️ 5. Menu de Ajustes e Ferramentas
-
-Ao clicar na catraca de Ajustes, você acessa o coração técnico do aplicativo:
-
-- **Mídias da Reunião 📥:** (Estrutura pronta para a V2.0). Aqui você define o idioma da congregação (Ex: `T` para Português). Em breve, um toque nesse botão vasculhará os servidores do jw.org e preparará um pacote automático com todas as mídias da semana para você importar.
-- **Calibrar Texto do Ano:** Como o Guardião sabe que um vídeo começou? Ele compara com a "foto" da sua tela parada. Se você trocar a imagem de fundo (ex: novo ano de serviço), clique aqui para calibrar o sensor.
-- **Rede (WebSocket):** Painel para garantir que a ponte de IPs entre o Meeting Assistant e o OBS Studio está fluindo sem barreiras de Firewall.
-
----
-
-## 🚑 6. Resolução Rápida de Problemas (Troubleshooting)
-
-| Sintoma na Reunião | Qual a provável causa? | O que o Operador deve fazer? |
-| :--- | :--- | :--- |
-| **OBS não responde ao App** | OBS foi aberto *depois* ou está com senha velha no painel. | Cheque as luzes de rede do app. Verifique a aba *WebSocket Server Settings* no OBS. |
-| **Os irmãos em casa escutam a própria voz dobrada** | O Zoom está capturando sua própria saída. | Verifique imediatamente se o PC está mandando o som para a **Saída P2** em vez do Cabo Virtual. |
-| **Vídeo do JWL tá tocando, mas a TV mostra a galeria do Zoom** | O Zoom roubou o foco da segunda tela (Telão). | Sem pânico. Clique no botão **🛡️ Forçar JWL Telão** no painel principal. |
-| **Câmera do WPP sumiu** | Configuração do WhatsApp foi desmarcada. | Vá em Ajustes, reative a caixinha do WhatsApp e alterne a câmera no painel frontal. |
-
----
-*Construído com excelência para aliviar a carga operacional e manter o foco exclusivamente no ensino espiritual.*
+Para relatar, informe revisão (`git rev-parse HEAD`), horário, ação, mensagem
+e resultado esperado/observado. Não envie senhas, links de reunião ou nomes de
+participantes. A confirmação atual da captura não encerra todos os cenários de
+reinício/monitor nem o problema de vários destaques no Zoom secundário.

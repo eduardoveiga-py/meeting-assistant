@@ -1,18 +1,23 @@
 # Texto do Ano e fontes OBS — teste com o operador
 
-Implementado em 21/09/2026; testes automatizados não substituem o teste físico com JWL, OBS e dois monitores.
+Foto implementada em 21/09/2026; instruções de captura Mídias atualizadas em
+07/10/2026 para a fonte por HWND. Foto persistida, referência do sensor e captura
+ao vivo são funções distintas.
 
 ## Atualizar a instalação de desenvolvimento
 
-Feche somente o Meeting Assistant, mantendo JWL e Zoom abertos:
+Feche o Meeting Assistant. Na primeira instalação/atualização do componente
+JWL, feche também OBS. Na pasta do projeto:
 
 ```powershell
 cd C:\MeetingAssistant\meeting-assistant
 git pull --ff-only
-.\scripts\run-dev.ps1
+if ($LASTEXITCODE -ne 0) { throw "Atualização falhou; preserve as alterações locais." }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1
 ```
 
-Nenhuma biblioteca nova foi acrescentada nesta entrega.
+O script baixa e instala a DLL pronta. Se o Git bloquear por alterações locais,
+siga [test-python-update.md](test-python-update.md). Não é preciso compilar.
 
 ## Capturar e salvar a foto
 
@@ -32,19 +37,31 @@ Foto inexistente/corrompida ou ano diferente gera aviso não modal na abertura e
 
 O app cria/atualiza a fonte própria **Meeting Assistant - Texto do Ano**, tipo imagem, na cena mapeada a Fundo. Mantém outras fontes, posiciona a fonte própria acima delas e ajusta proporcionalmente ao canvas. Confira as margens e composição no OBS.
 
-Se OBS estiver desconectado, a foto permanece salva e pendente. Na próxima conexão local, tenta aplicar e confirma o caminho da fonte. Também é possível clicar **Aplicar foto já salva no OBS**. Aplicação de arquivo/janela é suportada para OBS no mesmo computador (localhost/127.0.0.1/::1).
+Se OBS estiver desconectado, a foto permanece salva e pendente. Na próxima conexão
+local, tenta aplicar e confirma o caminho da fonte. Também é possível clicar
+**Aplicar foto já salva no OBS**. Aplicação automática é suportada para OBS no mesmo
+computador, inclusive por IP/nome que corresponda às interfaces locais; não apenas
+localhost. OBS remoto exige acesso explícito ao arquivo, não ao caminho local do app.
 
 A confirmação significa configuração aplicada; observar o conteúdo continua sendo um teste do operador.
 
 ## Preparar a cena Mídias
 
-1. Com o JWL secundário visível, clique **Preparar janela JWL em Mídias** e confirme.
-2. O app cria/reutiliza **Meeting Assistant - JWL**, tipo captura de janela, vinculada à identidade JWL observada.
-3. Exige uma opção exata e de título único na lista do OBS. Em ambiguidade ou ausência, informa a falha e não seleciona outra janela.
-4. Usa captura de janela Windows Graphics Capture, correspondência de título exata, sem cursor e sem áudio. Ajusta proporcionalmente ao canvas e preserva fontes anteriores.
-5. Confira no OBS o texto do ano e depois uma mídia. Não considerar só a mensagem de configuração como prova de vídeo.
+1. Abra OBS e JWL, habilite a segunda saída e selecione a Tela do Salão nos ajustes.
+2. Clique **Preparar janela JWL em Mídias**. O app cria/reutiliza
+   **Meeting Assistant - JWL (HWND)**, tipo `meeting_assistant_jwl_capture`.
+3. O vínculo usa o HWND identificado pelo app; títulos duplicados/vazios não
+   selecionam a janela do operador. Identidade e imagem nativa precisam ser confirmadas.
+4. A captura usa o backend Windows Graphics Capture do OBS, área cliente, sem cursor
+   e sem áudio. Ajusta proporcionalmente ao canvas e preserva fontes anteriores.
+5. A antiga **Meeting Assistant - JWL** fica desativada somente na cena gerenciada
+   após a nova fonte confirmar captura. Confira no OBS o Texto do Ano e depois uma mídia.
 
 Não usa captura de monitor como alternativa e não altera a cena Program. Fonte nova permanece desativada se a identificação falhar. Fontes existentes são preservadas; configurações OBS não são uma transação, portanto revise o resultado em caso de falha parcial.
+
+Requer Windows 11 x64, OBS 31.0.3+ e Direct3D 11. A nova captura foi confirmada
+pelo operador em 07/10/2026, sem resultados individuais de toda a matriz de
+regressão. [Instalação e diagnóstico](jwl-hwnd-capture.md).
 
 ## Câmera virtual
 

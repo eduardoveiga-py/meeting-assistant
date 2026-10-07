@@ -12,10 +12,16 @@ Esse backend chama `IGraphicsCaptureItemInterop::CreateForWindow(HWND)`.
 Nenhuma imagem é enviada pelo Python, nenhum monitor é capturado e nenhum aplicativo
 de terceiros é usado. O plugin não modifica áudio, câmera virtual, janelas ou guardião.
 
+**Estado em 07/10/2026:** operador confirmou funcionamento da nova captura após
+atualização. O aceite se limita ao uso relatado; resultados individuais dos
+cenários abaixo não foram enviados. [Registro de validação](jwl-capture-candidate.md).
+
 ## Atualizar e executar
 
 1. Feche Meeting Assistant e OBS na primeira instalação deste componente.
 2. Na pasta do projeto, execute `git pull --ff-only`.
+   Se houver alterações locais, preserve-as e confira o resultado do Git antes
+   de executar: [procedimento](test-python-update.md).
 3. Execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1`.
    O script verifica e baixa a DLL pronta, valida o SHA-256 fixado no código e pede
    elevação do Windows somente para copiar o plugin para a instalação do OBS.

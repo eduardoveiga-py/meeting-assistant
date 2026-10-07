@@ -150,6 +150,9 @@ confirmação de uma versão antiga a código posteriormente alterado.
   Confirme ausência de retorno indevido do Zoom no vídeo das chamadas.
 - Informe resultados reais, avisos relevantes e verificações pendentes. Não fixe
   uma contagem de testes como característica permanente.
+- Registre incidentes e aprendizados em [incident-history.md](docs/incident-history.md),
+  vinculando decisões e testes. Diferencie causa demonstrada de hipótese e
+  delimite o aceite físico por cenário/revisão; preserve o registro quando o caso reabrir.
 
 Comandos existentes, na raiz e com dependências de desenvolvimento instaladas:
 ```powershell

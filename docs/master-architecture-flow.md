@@ -1,177 +1,101 @@
-# Arquitetura Mestra — Meeting Assistant
+# Fluxo atual — Meeting Assistant
 
-Este documento descreve o fluxo **completo e absoluto** da operação, unindo a infraestrutura do Windows, o roteamento de áudio, o fluxo de vídeo nativo e a lógica interna do aplicativo *Meeting Assistant*.
+Revisão documental de 07/10/2026, baseada na entrega `e9bf684`.
+Este documento resume os limites dos módulos; não certifica todos os ensaios.
+Ver [incidentes e aprendizados](incident-history.md) e
+[estado da nova captura](jwl-capture-candidate.md).
 
----
+## Controle, janelas e Program
 
-## 1. Topologia Geral (Como o App controla o ecossistema)
+O app coordena OBS por WebSocket e serviços Windows/UIA para identificação e
+operação. A janela secundária JWL é a saída física padrão; o Zoom secundário
+pode substituí-la por escolha do operador. A apresentação local Zoom não
+altera Program para reenviar os participantes à própria chamada.
 
-O *Meeting Assistant* atua como o maestro, conversando com os outros softwares através de pontes invisíveis (WebSockets, UI Automation, APIs Nativas do Windows 11).
+| Módulo/caminho | Responsabilidade |
+| --- | --- |
+| Identificação JWL / inventário de janelas | Descobrir processo, janela e papel do monitor, sem depender de título único |
+| Guardião / política do Salão | Recuperar saída quando autorizado e respeitar Zoom, mídia externa e transições |
+| Sensor visual | Comparar saída JWL com referência de repouso e solicitar cenas |
+| ObsController e worker serial | Executar pedidos, reconectar e confirmar estado OBS sem bloquear GUI |
+| Fonte JWL HWND | Capturar somente a área cliente da janela vinculada e invalidar identidade perdida |
+| Foto Texto do Ano | Capturar imagem candidata, confirmar, persistir e aplicar fonte de imagem |
 
-```mermaid
-flowchart TD
-    App{"🖥️ Meeting Assistant (Cérebro)"}
-    
-    subgraph Motores de Captura
-        OBS["🎬 OBS Studio"]
-        JWL["📖 JW Library"]
-    end
-    
-    subgraph Destinos de Transmissão
-        Zoom["🔵 Zoom"]
-        Wapp["🟢 WhatsApp"]
-    end
-    
-    %% Conexões do App
-    App -- "obs-websocket (Cenas/Áudio)" --> OBS
-    App -- "pywinauto/UIA (Lê Tela, Pausa/Muta)" --> JWL
-    App -- "API Windows (Posição, Foco)" --> Zoom
-    
-    %% Fluxos Visuais
-    JWL -. "Captura de Janela" .-> OBS
-    OBS -. "Bridge DLL (Vídeo)" .-> Wapp & Zoom
-```
+Automação inicia pausada. Guardião periódico funciona somente com automação ativa.
+Retorno explícito Zoom → JWL precisa funcionar também pausado. Sensor fica suspenso
+durante apresentação Zoom/externa e até o retorno confirmar exposição JWL.
+Sensor não é estado de reprodução obtido de uma fonte OBS inativa.
 
----
+Nomes padronizados das cenas visuais: **Texto do Ano**, **Palco** e **Mídias**,
+conforme mapeamento dos ajustes. Fonte visual JWL gerenciada:
+**Meeting Assistant - JWL (HWND)**. A cena compartilhada de áudio tem papel
+separado; não se deve inferir duplicação apenas pela presença em várias cenas.
 
-## 2. A Lógica do App: Botões, Estados e Automação
-
-O aplicativo não apenas clica em botões; ele gerencia "Estados" (Background, Speaker, Media, Zoom).
-
-```mermaid
-flowchart LR
-    subgraph Botões do App
-        B1("Fundo / Palco / Mídia")
-        B2("Zoom ➔ Salão")
-        B3("Ativar/Pausar Automação")
-        B4("Cena Segura ➔ Palco")
-    end
-
-    subgraph Ações / Backend
-        S1["Força cena no OBS"]
-        S2["Traz Zoom pra Frente / Esconde JWL"]
-        S3["Liga/Desliga Sensor Visual JWL"]
-        S4["Pausa Automação + Corta pra Palco"]
-    end
-
-    subgraph Efeitos no Salão
-        E1(("Muda Telão/Transmissão"))
-        E2(("Mostra Participante na TV"))
-        E3(("Vídeo roda automático"))
-        E4(("Salva o operador do Pânico"))
-    end
-
-    B1 --> S1 --> E1
-    B2 --> S2 --> E2
-    B3 --> S3 --> E3
-    B4 --> S4 --> E4
-    
-    %% Relações Especiais
-    B2 -. "Força pausa na" .-> B3
-    S3 -. "Monitora repouso do JWL" .-> S1
-```
-
-### Funções Vitais do App:
-*   **Guardião de Janela (JWL Fast Window Guard):** Fica em loop (180ms) garantindo que o JW Library esteja na tela secundária, na posição correta, sem barras do Windows por cima.
-*   **Ducking Inteligente:** Abaixa o áudio da música de fundo automaticamente quando começa a reunião ou quando um vídeo é tocado.
-*   **Controle de Microfone do Zoom:** Injeta cliques UIA diretamente no botão "Mute" do Zoom, com tempo de resposta ultrarrápido, sem precisar que o operador foque na janela do Zoom.
-
----
-
-## 3. Estrutura do OBS: Cenas, Fontes e Filtros
-
-O app exige uma estrutura rigorosa no OBS para poder rotear tudo com segurança.
-
-```mermaid
-mindmap
-  root((OBS Studio))
-    Cenas
-      Fundo
-        (Imagem: Texto do Ano)
-      Palco
-        (Vídeo: Câmera Física)
-        (Áudio: Mesa de Som)
-      Mídias
-        (Vídeo: Captura JW Library)
-        (Áudio: JWL Application Audio)
-    Filtros de Áudio
-      Mesa de Som
-        1. Limitador (Impede estouro)
-        2. Ganho (Controlado pelo App)
-      JWL Áudio
-        1. Limitador
-        2. Audio Monitor (Envia pro WhatsApp)
-```
-
----
-
-## 4. O Fluxo de Vídeo Definitivo (Câmeras Virtuais)
-
-O projeto usa **duas** vias de vídeo para contornar restrições do Windows 11 e do WhatsApp.
-
-```mermaid
-flowchart LR
-    Cam["Câmera Física"] --> OBS
-    JWL["JWL (Mídia)"] --> OBS
-    OBS -- "Sinal Program (Misturado)" --> Bridge
-    
-    subgraph A Mágica do Meeting Assistant
-        Bridge["meeting-assistant-bridge.dll"]
-        Win11["Win11 Media Foundation"]
-        Bridge -- "Injeta NV12 720p30" --> Win11
-    end
-    
-    Win11 -- "Câmera Virtual Nativa" --> WhatsApp["WhatsApp Desktop"]
-    Win11 -- "Câmera Virtual Nativa" --> Zoom["Zoom"]
-    
-    %% Fallback
-    OBS -. "OBS Virtual Camera Tradicional" .-> Zoom
-```
-*Por que a Bridge DLL?* O WhatsApp UWP do Windows 11 frequentemente recusa a "OBS Virtual Camera" padrão. O nosso projeto cria uma câmera nativa a nível de núcleo (Media Foundation) que engana o WhatsApp perfeitamente.
-
----
-
-## 5. Roteamento de Áudio: Com e Sem WhatsApp
-
-Aqui está o coração do "Mix-Minus", separando o perfil básico do perfil avançado.
-
-### Cenário A: Sem WhatsApp (Apenas Zoom) - 1 Cabo Virtual
-```mermaid
-flowchart LR
-    Mesa["🎤 Mesa de Som"] --> OBS
-    JWL["▶️ JWL Mídias"] --> OBS
-    OBS -- "Dispositivo de Monitoramento" --> CaboA["VB-Cable A"]
-    CaboA -->|"Input"| ZoomMic["🎙️ Zoom Microfone"]
-    ZoomFalante["🔊 Zoom Alto-falante"] --> Retorno["Caixa do Salão"]
-```
-
-### Cenário B: Com WhatsApp (Dual Cable + Audio Monitor Plugin)
-Neste cenário, o WhatsApp precisa ouvir o Salão, mas não pode ouvir a si mesmo nem o Zoom.
+## Entrada JWL e saídas de vídeo
 
 ```mermaid
 flowchart TD
-    Mesa["🎤 Mesa de Som"] --> OBS["OBS Studio"]
-    JWL["▶️ JWL Mídias"] --> OBS
-    
-    %% Rota Zoom (Padrão)
-    OBS -- "Áudio de Monitoramento Global" --> CaboA["VB-Cable A"]
-    CaboA --> ZoomMic["🎙️ Zoom Mic"]
-    
-    %% Rota WhatsApp (Exclusiva via Plugin)
-    OBS -- "Filtro: Audio Monitor (Plugin)" --> CaboB["VB-Cable B"]
-    CaboB --> WappMic["🎙️ WhatsApp Mic"]
-    
-    %% Saída Física Segura
-    ZoomSpk["🔊 Zoom Áudio"] --> SaidaFisica["Caixas do Salão"]
-    WappSpk["🔊 WhatsApp Áudio"] --> SaidaFisica
+    JWL["Janela secundária JWL"] --> WGC["Fonte OBS por HWND"]
+    WGC --> OBS["Program OBS"]
+    PALCO["Câmera Palco"] --> OBS
+    FOTO["Foto Texto do Ano"] --> OBS
+    OBS --> OCAM["OBS Virtual Camera"]
+    OCAM --> ZOOM["Zoom"]
+    OBS --> BRIDGE["Bridge NV12"]
+    BRIDGE --> PREVIEW["Prévia Qt"]
+    BRIDGE --> MF["Câmera Media Foundation"]
+    MF --> WA["WhatsApp"]
 ```
-*O Pulo do Gato:* Como a saída do Zoom vai direto para a caixa do Salão e não volta pro OBS, o WhatsApp não capta o eco do Zoom. Cada um tem seu microfone alimentado por um cabo virtual dedicado.
 
----
+A fonte HWND reutiliza `libobs-winrt` do OBS e texturas GPU. Python publica
+identidade; não transporta pixels desta captura. O vínculo inclui processos,
+gerações, parentesco UWP, classe e monitor. Outra janela de mesmo título não
+é alternativa. A fonte não captura monitor nem áudio e não move janelas.
+Windows 11 x64, OBS 31.0.3+ e Direct3D 11 são requisitos desse componente.
 
-## 6. O Fluxo de Emergência (Troubleshooting do App)
+A bridge recebe **Program**, não Preview do modo estúdio. A câmera própria
+usa **MFCreateVirtualCamera**, uma API em modo usuário; não é driver de núcleo,
+injeção no WhatsApp ou dependência do NDI. OBS Virtual Camera permanece o
+caminho do Zoom. Câmeras virtuais carregam vídeo; áudio tem rota independente.
 
-O que o app faz quando algo dá errado:
-1. **JWL minimizou ou perdeu foco?** O `JWLFastWindowGuard` detecta em menos de 1 segundo, tira o estado de *cloak* (oculto do Windows), desminimiza, restaura as coordenadas e traz para o monitor secundário.
-2. **OBS perdeu conexão WebSocket?** O `obs_controller.py` tenta reconectar em loop sem travar a interface Qt, avisando na barra inferior.
-3. **Mídia tocou, mas cena não mudou?** O operador clica no botão "Mídia" manualmente. Se precisar cancelar tudo, aperta **"Cena Segura -> Palco"**, o que força a câmera do salão e pausa a automação instantaneamente até o operador resolver o problema.
+Canais `Preview.v1` e `Program.v1` separam prévia e envio autorizado.
+`program_video.py` mantém conexão/leitor; `program_preview.py` entrega NV12
+ao renderer Qt; `camera_session.py` controla a sessão nativa. Filas limitadas
+mantêm o quadro recente. Não usar PNG/JPEG periódico para recuperar fluidez.
+[Arquitetura nativa completa](windows11-video-architecture.md).
+
+## Áudio e limites físicos
+
+| Sinal | Zoom | WhatsApp | Salão |
+| --- | --- | --- | --- |
+| Mesa e mídias selecionadas | Cabo A | Cabo A ou B, conforme perfil | Ligação física existente |
+| Retorno Zoom | Excluído do seu próprio envio | Cabo B somente no perfil separado | Saída física |
+| Retorno WhatsApp | Excluído | Excluído do seu próprio envio | Começa silenciado |
+
+Perfil comum: OBS **Monitorar apenas (silenciar saída)** → Cabo A Input;
+clientes selecionam Cabo A Output. Nenhuma faixa Program recebe as fontes locais
+gerenciadas. Fontes são criadas silenciadas e ativadas após validação do operador.
+
+Perfil separado: um segundo cabo e **Audio Monitor do Exeldro** enviam mesa/mídias
+e retorno Zoom ao WhatsApp; esse retorno não entra no Cabo A. A instalação e o
+teste desse perfil são distintos do aceite histórico com um cabo.
+
+Ganho por fonte precede limitador. Salvar volumes altera filtros editados,
+preservando rotas/mute/dispositivos. Limitador não desfaz clipping na entrada.
+Se a mesa já mistura retorno Zoom ou mídia no sinal USB, software não separa
+esses componentes com confiabilidade. [Contrato de áudio](audio-routing.md).
+
+## Distribuição e evidência
+
+- **Desenvolvimento:** `git pull` e `scripts/run.ps1`, Python 3.12 x64 e
+  componentes prontos. Preservar mudanças locais antes de atualizar.
+- **Componente JWL:** pacote próprio, hashes fixados e instalação separada;
+  não recompila câmera/bridge. Assets publicados não são sobrescritos.
+- **Aplicativo instalado:** atualização por instalador verificado, fora da
+  reunião. O instalador já publicado não inclui este lote; integração futura
+  precisa de build e ensaio próprios.
+- **Aceites:** nova captura confirmada pelo operador em 07/10; contrato
+  histórico JWL/Zoom preservado. CI e build não substituem ensaio de reinícios,
+  troca de monitor, recepção remota ou circuito físico de áudio.
+
+Pendências permanecem por cenário/revisão no [roteiro do projeto](roadmap-after-hall-validation.md).

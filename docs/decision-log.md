@@ -1,5 +1,9 @@
 # Registro de decisão
 
+O [histórico de incidentes](incident-history.md) reúne sintomas, soluções,
+confirmações e aprendizados desta conversa. Este arquivo registra as decisões
+técnicas; os roteiros específicos mantêm os detalhes de teste.
+
 ## 2026-10-03 — leitura sem interrupção e volumes independentes
 
 **Retorno:** a nova captura mostra perfil com retorno Zoom e segundo cabo não
@@ -119,4 +123,28 @@ nativo, migração sem apagar fontes e bloqueio de feedback inclusive em simula�
 
 **Entrega:** `git pull` e `scripts/run.ps1` baixam o componente pronto com SHA-256
 fixado. Nenhuma compilação local ou novo instalador do app é exigido neste lote.
-[Arquitetura, limites e ensaio físico pendente](jwl-capture-candidate.md).
+[Arquitetura, limites e estado de validação](jwl-capture-candidate.md).
+
+## 2026-10-07 — aceite da captura e atualização preservando trabalho local
+
+**Retorno físico:** após atualizar o projeto e executar pelo Python, o operador
+confirmou: “Excelente! Funcionou perfeitamente!”. Revisão entregue: `e9bf684`;
+componente `jwl-capture-v1.1`. O ambiente declarado é Windows 11 com dois monitores;
+não foram enviados versões exatas OBS/JWL, diagnóstico ou resultados individuais
+de reinícios e de todos os cenários do contrato.
+
+**Decisão:** registrar a captura JWL por HWND como confirmada no uso relatado.
+Manter a matriz de regressão operacional e os hashes históricos separados desse
+aceite. Não reclassificar como concluídas a otimização Mic Zoom, o ruído OBS ou
+a visualização de vários participantes por causa dessa confirmação.
+
+**Obstáculo da atualização:** `git pull --ff-only` recusou sobrescrever
+alterações locais em decisão e segurança de captura. Elas foram guardadas com
+`git stash push --include-untracked`; a orientação passou a verificar
+`$LASTEXITCODE` antes de atualizar/executar. O stash não foi coletado nem
+reaplicado automaticamente.
+
+**Aprendizado:** identidade por título/classe/executável não distinguia as
+janelas JWL; a nova fonte resolve a ambiguidade pelo HWND sem liberar captura de
+monitor. Preservar trabalho local e confirmar o resultado do Git evita testar
+código antigo. [Casos INC-030/031 e histórico completo](incident-history.md).

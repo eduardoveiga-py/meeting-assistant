@@ -267,3 +267,22 @@ cinco segundos. Otimização candidata mantém worker/elemento, lê o estado atu
 diretamente e redescobre quando necessário; confirmação imediata e tempos por
 fase no diagnóstico. Validar três ciclos, mudança manual no Zoom e reinício do
 Zoom, comparando tempo até o ícone no Zoom mudar e tempo até o botão do app mudar.
+
+## Captura JWL por HWND — retorno de 07/10/2026
+
+- [x] Implementar fonte independente por HWND, sem captura de monitor ou áudio.
+- [x] Compilar/publicar DLL pronta, hashes fixados e instalação pelo script Python.
+- [x] Confirmar funcionamento da nova captura com o operador: retorno
+  “Excelente! Funcionou perfeitamente!” após atualização.
+- [ ] Registrar resultados individuais nesta revisão para reinícios JWL/OBS,
+  Windows+D e ciclos JWL/Zoom com automação ativa/pausada.
+- [ ] Incluir o componente no próximo instalador e testar instalação/atualização.
+
+Revisão entregue `e9bf684`, componente `jwl-capture-v1.1`. A confirmação
+atual não muda o baseline histórico nem valida os cenários sem retorno específico.
+[Estado e roteiro](jwl-capture-candidate.md).
+
+O [histórico consolidado de incidentes](incident-history.md) também mantém
+abertos: ruído da entrada da mesa somente no OBS, latência real após otimização
+Mic Zoom, vários participantes no Zoom secundário e confiança/assinatura do
+executável. Trabalho local guardado no stash não foi comparado nem reintegrado.

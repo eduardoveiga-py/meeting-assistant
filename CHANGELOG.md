@@ -1,5 +1,24 @@
 # Histórico de alterações
 
+## Não lançado — captura JWL por HWND e registro de aceite — 07/10/2026
+
+- Fonte independente **Meeting Assistant - JWL (HWND)** distingue a saída
+  secundária mesmo com títulos duplicados/vazios. Reutiliza Windows Graphics
+  Capture do OBS; não captura monitor nem áudio.
+- Vínculo valida identidade/geração, relação UWP e monitor. Migração preserva
+  fontes; perda de alvo não procura outra janela pelo título.
+- DLL pronta no componente `jwl-capture-v1.1`, download e hashes fixados pelo
+  fluxo Python. Requer Windows 11 x64, OBS 31.0.3+ e Direct3D 11.
+- Operador confirmou funcionamento após atualizar em 07/10/2026. Aceite
+  limitado ao uso relatado; matriz de reinícios/monitor permanece por cenário.
+- Registrados 31 incidentes, soluções e aprendizados em
+  [incident-history.md](docs/incident-history.md), complementando o registro de decisões.
+- Guias corrigidos para captura HWND, guardião condicionado à automação,
+  separação de foto/calibração e atualização Git que preserva trabalho local.
+
+O lote de documentação não altera código, DLLs, versão ou instalador. O
+instalador já publicado não contém a nova captura; desenvolvimento usa Git/Python.
+
 ## Não lançado — configuração de áudio simplificada — 03/10/2026
 
 - Corrigida enumeração de cabos virtuais: estado Enum do pycaw era comparado com

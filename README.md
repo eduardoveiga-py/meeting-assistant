@@ -25,8 +25,6 @@ O **Meeting Assistant** é um orquestrador open-source criado para simplificar e
 * **🤖 Automação do JW Library e OBS:**
   O sensor de imagem identifica repouso e mídia, com calibração do Texto do Ano.
   O guardião atua somente com a automação ligada; respeita Zoom, mídia externa e transições.
-* **🔄 Atualizador Automático (Versão Estável):**
-  A partir da versão v0.9.1, o aplicativo verifica, baixa e instala atualizações de forma automática através do GitHub Releases, sem interromper reuniões em andamento.
 * **🎛️ Gestão Avançada de Áudio e Sincronia:**
   Configuração de Ganho, Filtros (Limiter, Redução de Ruído) e **Atraso de Sincronização (Sync Offset)** direto pelo aplicativo. Perfeito para alinhar o áudio de mesas de som físicas com o atraso de Câmeras IP.
 * **🎥 Câmera virtual Windows 11:**
@@ -103,8 +101,9 @@ F1 mostra os atalhos disponíveis. Atalhos globais são opcionais e não substit
 
 ## Correções em desenvolvimento
 
-O código de `main` inclui as correções da revisão de 03/10/2026. Elas ainda precisam
-de ensaio físico em Windows 11; o instalador v0.8.1 já publicado não contém este lote.
+O código de `main` inclui as correções da revisão de 03/10/2026 e a captura JWL
+por HWND entregue em 07/10/2026. Cada correção tem seu próprio estado de validação;
+o instalador v0.8.1 já publicado não contém este lote.
 [Confira as alterações e o roteiro de testes](docs/review-fixes-2026-10-03.md).
 
 A correção do **Mic Zoom** consulta o estado atual antes de alternar e informa
@@ -127,6 +126,19 @@ instalar automaticamente a nova DLL pronta. Requer Windows 11 x64 e OBS 31.0.3+.
 Depois use **Ajustes → Texto do Ano e fontes do OBS → Preparar janela JWL em Mídias**.
 [Instalação, diagnóstico e testes com dois monitores](docs/jwl-hwnd-capture.md).
 O instalador do app já publicado não inclui esta atualização; use o fluxo Python acima.
+
+O operador confirmou o funcionamento da nova captura em **07/10/2026**.
+Esse aceite não significa que toda a matriz de reinícios e troca de monitores
+foi executada novamente. Se o Git bloquear a atualização por trabalho local,
+use o [procedimento com preservação das alterações](docs/test-python-update.md).
+
+## Histórico e documentação
+
+- [Problemas, soluções e aprendizados](docs/incident-history.md): relatos e evidências,
+  incluindo casos confirmados, alternativas abandonadas e pendências ainda abertas.
+- [Registro de decisões](docs/decision-log.md): escolhas técnicas e seus motivos.
+- [Guia do operador](docs/operator-guide.md): preparar, operar e recuperar.
+- [Fluxo atual de arquitetura](docs/master-architecture-flow.md): janelas, vídeo e áudio.
 
 ## 👨‍💻 Para Desenvolvedores
 
