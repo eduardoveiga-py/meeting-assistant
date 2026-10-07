@@ -88,11 +88,15 @@ simulado; cobrem dados persistidos, ganhos, preparação repetida e falha parcia
 Layout é renderizado em quatro escalas. Instalação real, disposição com dois
 monitores e escuta das chamadas precisam de aceite desta revisão.
 
-A primeira execução Windows encontrou expansão ao abrir Fontes em 200% e
-relatório com contraste ruim no estilo nativo. Rótulos de manutenção passam
-a encolher horizontalmente por quebra de linha; relatórios definem fundo e
-texto explicitamente. O teste mantém a exigência de caber na área útil, sem
-retirar a escala que encontrou o problema.
+A primeira execução Windows encontrou relatório com contraste ruim e retorno
+ao tamanho inicial depois do redimensionamento em 200%. A janela passa a ser
+limitada antes da criação nativa, além da conferência após Show. O teste define
+o tamanho do desktop FHD sintético antes de Show, como o teste do painel, em
+vez de começar pelos 700 px numa área real do runner de 512 × 364. Mantém a
+exigência de caber no FHD testado, sem retirar a escala que encontrou o problema.
+Rótulos de manutenção permitem quebra sem expansão horizontal; os relatórios
+definem fundo/texto. ZIP é validado pelo nome original do membro, pois o Python
+normaliza barras invertidas ao ler o pacote no Windows.
 
 **Aprendizado.** Navegar, consultar, reparar estrutura e mudar o roteamento são
 ações diferentes. Uma consulta não deve interferir na reunião; completar o

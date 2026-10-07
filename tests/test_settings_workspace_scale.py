@@ -52,9 +52,12 @@ dialog = SetupAssistantDialog(owner, page="meeting")
 dialog.removeEventFilter(dialog._fit)
 dialog._fit._timer.stop()
 dialog._fit._timer.timeout.disconnect()
+area = QRect(0, 0, round(1920 / scale), round(1040 / scale))
+# Like the operator-window probe, request the synthetic desktop size before
+# native creation; otherwise Windows retains the constructor's 700 px height.
+dialog.resize(620, min(700, area.height() - 40))
 dialog.show()
 app.processEvents()
-area = QRect(0, 0, round(1920 / scale), round(1040 / scale))
 views = [("meeting", None), ("video", 0), ("video", 1), ("video", 2), ("video", 3),
          ("audio", 0), ("audio", 1), ("audio", 2), ("installation", None), ("diagnostics", None)]
 for page, tab in views:

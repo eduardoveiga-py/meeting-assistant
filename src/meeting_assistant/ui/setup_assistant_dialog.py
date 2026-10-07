@@ -32,7 +32,7 @@ from meeting_assistant.ui.hall_setup_dialog import HallSetupDialog
 from meeting_assistant.ui.obs_maintenance_panel import ObsMaintenancePanel
 from meeting_assistant.ui.settings_dialog import SettingsDialog
 from meeting_assistant.ui.virtual_camera_dialog import VirtualCameraDialog
-from meeting_assistant.ui.window_geometry import ScreenFitController
+from meeting_assistant.ui.window_geometry import ScreenFitController, fit_window
 
 
 class SetupWorker(QObject):
@@ -82,6 +82,9 @@ class SetupAssistantDialog(QDialog):
         )
         self.resize(620, 700)
         self.setMinimumSize(360, 280)
+        # Video children can create native handles before Show; bound the size
+        # before constructing them, then fit again after the form is complete.
+        fit_window(self)
         root = QVBoxLayout(self)
         self.navigation = QComboBox()
         self.navigation.setAccessibleName("Categoria dos ajustes")
@@ -246,6 +249,9 @@ class SetupAssistantDialog(QDialog):
         self.finished.connect(self._disconnect_views)
         self.navigation.currentIndexChanged.connect(self._page_changed)
         self.select_page(page)
+        # Bound the requested size before Windows creates the native dialog.
+        # Fitting only after Show can race queued native resize events at high DPI.
+        fit_window(self)
         if page == "installation":
             self._inspect()
 
