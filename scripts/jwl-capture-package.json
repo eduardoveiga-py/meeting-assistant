@@ -1,0 +1,8 @@
+{
+  "build_id": "jwl-hwnd-v1.1",
+  "source_revision": "6655475b7e6cb28150d54abfb3d321755acb5c72",
+  "url": "https://github.com/eduardoveiga-py/meeting-assistant/releases/download/jwl-capture-v1.1/MeetingAssistant-JWL-HWND-Windows11-x64.zip",
+  "zip_sha256": "4d0136c14cb487cff7bf89effb1d9d41f685accbad10373e724d9650e22f5dbe",
+  "dll_sha256": "792cd0e932e64baa24010717195ffcd38358b2a642b465694d7fe37ec8831218",
+  "installer_sha256": "dfa1a1b2cf79467d2babd1a53c60e3a6e00932fa1a46a3e18e0c25217fe98c8b"
+}

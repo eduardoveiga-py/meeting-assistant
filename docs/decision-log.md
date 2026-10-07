@@ -103,3 +103,20 @@ entre leituras sem confirmação, e registrar os tempos por fase. Não transferi
 elementos COM entre workers nem usar o cache de mute da GUI para decidir a ação.
 Os testes medem a redução de varreduras no backend simulado; a latência real desta
 nova revisão permanece pendente. O núcleo de telas/áudio/vídeo não foi alterado.
+
+## 2026-10-07 — captura direta da saída JWL
+
+**Decisão:** fonte OBS independente por HWND, usando o backend GPU `libobs-winrt`
+do próprio OBS. A captura padrão por título/classe/executável não distingue as
+duas janelas JWL com títulos iguais. Não usar captura de monitor como fallback,
+nem trocar o player, áudio, ponte Program ou câmera virtual.
+
+**Evidência:** código upstream do OBS confirma seleção por título/classe/executável.
+A implementação nova passa o HWND identificado pelo núcleo existente e verifica
+PID/geração, relação UWP, classe e papel do monitor. CI Windows compila a DLL,
+testa a política de identidade e verifica integridade. Python confirma diagnóstico
+nativo, migração sem apagar fontes e bloqueio de feedback inclusive em simulação.
+
+**Entrega:** `git pull` e `scripts/run.ps1` baixam o componente pronto com SHA-256
+fixado. Nenhuma compilação local ou novo instalador do app é exigido neste lote.
+[Arquitetura, limites e ensaio físico pendente](jwl-capture-candidate.md).

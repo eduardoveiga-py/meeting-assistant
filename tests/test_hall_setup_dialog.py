@@ -132,3 +132,23 @@ def test_shell_taskbar_allows_preview_but_never_automatic_save(tmp_path, monkeyp
     dialog._save()
     assert store.current() is not None
     dialog.close()
+
+
+def test_media_binding_discovery_is_queued_not_run_on_ui_thread(tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    controller = ObsController()
+    controller.local_connection = True
+
+    def forbidden_ui_read():
+        raise AssertionError("Photo/Win32 target provider must not run for native media binding")
+
+    dialog = hall_setup_dialog.HallSetupDialog(
+        YeartextStore(tmp_path), forbidden_ui_read, controller, AppSettings()
+    )
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
+    dialog._media()
+    action, payload = controller._commands.get_nowait()
+    assert action == "hall_task" and payload == ("media", {"scene": "Mídias"})
+    assert "aguardando imagem" in dialog.result.text()
+    dialog.close()

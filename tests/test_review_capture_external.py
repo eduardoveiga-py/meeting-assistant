@@ -2,7 +2,7 @@ from unittest.mock import Mock
 
 import pytest
 from PySide6.QtCore import QObject, Signal
-from test_obs_hall_setup import FakeObs
+from test_obs_hall_setup import FakeObs, binding
 from test_review_windows import window
 
 from meeting_assistant.services.external_media_service import ExternalMediaService, media_candidates
@@ -45,7 +45,7 @@ def test_legacy_monitor_disabled_only_in_managed_scene_and_no_sources_deleted():
     obs.inputs["Whole desktop"] = {"kind": "monitor_capture", "settings": {}}
     for scene in ("Mídias", "Operator capture"):
         obs.scenes[scene] = [{"sourceName": "Whole desktop", "sceneItemId": 4, "sceneItemEnabled": True}]
-    prepare_media(obs, "Mídias", ["JWL media:Class:JWLibrary.exe"])
+    prepare_media(obs, "Mídias", binding())
     assert not obs.scenes["Mídias"][0]["sceneItemEnabled"]
     assert obs.scenes["Operator capture"][0]["sceneItemEnabled"]
     assert "Whole desktop" in obs.inputs

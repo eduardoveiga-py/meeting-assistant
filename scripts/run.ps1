@@ -16,6 +16,29 @@ if ([Environment]::OSVersion.Version.Build -lt 22000 -or -not [Environment]::Is6
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'python-environment.ps1')
 $python = Ensure-ProjectPython -RepoRoot $repoRoot
+if (-not $PSBoundParameters.ContainsKey('ObsDirectory')) {
+    # Use the OBS installation already configured in the app. Do not print the
+    # settings object: it can contain WebSocket/camera credentials.
+    $settingsPath = Join-Path $env:APPDATA 'MeetingAssistant\settings.json'
+    if (Test-Path -LiteralPath $settingsPath) {
+        try {
+            $saved = Get-Content -Raw -Encoding UTF8 -LiteralPath $settingsPath | ConvertFrom-Json
+            if ($saved.PSObject.Properties['obs_executable']) {
+                $configuredObs = [string]$saved.obs_executable
+                $configuredObs = $configuredObs.Trim().Trim('"')
+                if (-not [string]::IsNullOrWhiteSpace($configuredObs) -and
+                    (Split-Path $configuredObs -Leaf) -eq 'obs64.exe' -and
+                    (Test-Path -LiteralPath $configuredObs)) {
+                    $ObsDirectory = Split-Path (Split-Path (Split-Path $configuredObs -Parent) -Parent) -Parent
+                }
+            }
+        } catch { Write-Warning 'Nao foi possivel ler o caminho OBS salvo; usando o caminho padrao.' }
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $ObsDirectory 'bin\64bit\obs64.exe'))) {
+        $userObs = Join-Path $env:LOCALAPPDATA 'Programs\obs-studio'
+        if (Test-Path -LiteralPath (Join-Path $userObs 'bin\64bit\obs64.exe')) { $ObsDirectory = $userObs }
+    }
+}
 $project = Join-Path $repoRoot 'pyproject.toml'
 $stampFile = Join-Path $repoRoot '.venv\meeting-assistant-dependencies.sha256'
 $dependencyHash = (Get-FileHash -LiteralPath $project -Algorithm SHA256).Hash
@@ -31,6 +54,7 @@ try {
     if (-not $SkipNativeInstall) {
         & (Join-Path $PSScriptRoot 'ensure-video-native.ps1') -Refresh:$Refresh `
             -PackageDirectory $NativePackageDirectory -BundleUrl $BundleUrl -ObsDirectory $ObsDirectory
+        & (Join-Path $PSScriptRoot 'ensure-jwl-capture.ps1') -ObsDirectory $ObsDirectory
     }
     $previousPythonPath = $env:PYTHONPATH
     $env:PYTHONPATH = Join-Path $repoRoot 'src'

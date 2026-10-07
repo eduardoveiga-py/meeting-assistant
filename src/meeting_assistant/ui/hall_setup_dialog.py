@@ -206,23 +206,18 @@ class HallSetupDialog(QDialog):
     def _media(self):
         if not self._local_obs():
             return
-        try:
-            target = self.target_provider()
-        except Exception as exc:
-            self.result.setText(str(exc) if isinstance(exc, ValueError) else "JWL indisponível.")
-            return
         answer = QMessageBox.question(
             self,
             "Preparar Mídias",
-            "Criar/atualizar a fonte gerenciada JWL na cena Mídias? "
-            "Fontes existentes serão preservadas. Confira o resultado no OBS.",
+            "Criar/atualizar a captura direta da segunda janela JWL na cena Mídias? "
+            "As fontes antigas serão preservadas; a captura antiga do app será desativada "
+            "nesta cena após confirmar a nova imagem. Confira o resultado no OBS.",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
         if answer == QMessageBox.Yes:
-            self.obs.hall_task(
-                "media", {"scene": self.settings.scene_media, "selectors": target["selectors"]}
-            )
+            self.result.setText("Identificando a segunda janela JWL e aguardando imagem no OBS…")
+            self.obs.hall_task("media", {"scene": self.settings.scene_media})
 
     def _finished(self, action, ok, message):
         if self.pending_png is not None and action == "yeartext":

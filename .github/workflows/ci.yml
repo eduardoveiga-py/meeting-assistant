@@ -19,7 +19,7 @@ jobs:
       - name: Validate launch scripts in Windows PowerShell 5.1
         shell: powershell
         run: |
-          foreach ($name in @('run.ps1','ensure-video-native.ps1','python-environment.ps1','setup-dev.ps1')) {
+          foreach ($name in @('run.ps1','ensure-video-native.ps1','ensure-jwl-capture.ps1','install-jwl-capture.ps1','build-jwl-capture.ps1','test-jwl-package.ps1','python-environment.ps1','setup-dev.ps1')) {
             $tokens = $null
             $parseErrors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(

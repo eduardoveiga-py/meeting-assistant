@@ -151,6 +151,17 @@ def main() -> int:
         display_provider=current_hall_display,
         interval_ms=180,
     )
+    # Qt only publishes cached discovery/monitor snapshots. Win32 identity and
+    # OBS binding run in the existing serialized OBS worker, independently of
+    # the guardian's activation policy and photo/exposure verification.
+    jwl_capture_snapshot_timer = QTimer(app)
+    jwl_capture_snapshot_timer.setInterval(650)
+    jwl_capture_snapshot_timer.timeout.connect(
+        lambda: obs_controller.update_jwl_capture_snapshot(
+            jwl_secondary.current or jwl_fast_guard.cached_candidate, current_hall_display()
+        )
+    )
+    jwl_capture_snapshot_timer.start()
     jwl_virtual_desktop = JwlVirtualDesktopPinService()
     hall_capture_region = HallMonitorSensorRegionProvider(current_hall_display)
 
@@ -310,6 +321,9 @@ def main() -> int:
         lambda action, ok, message: telemetry.event(
             "obs_hall_task_finished", action=action, ok=ok, message=message
         )
+    )
+    obs_controller.jwl_capture_status.connect(
+        lambda details: telemetry.event("jwl_capture_status", **details)
     )
     obs_controller.connected_changed.connect(
         lambda connected, message: telemetry.event(

@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 import pytest
@@ -5,14 +6,21 @@ from test_yeartext_store import png
 
 from meeting_assistant.services.obs_controller import ObsController
 from meeting_assistant.services.obs_hall_setup import (
-    MEDIA_SOURCE,
     PHOTO_SOURCE,
     apply_yeartext,
     prepare_media,
     select_exact_window,
     virtual_camera_step,
 )
+from meeting_assistant.services.obs_jwl_capture import IDENTITY_KEYS, KIND, SOURCE, STATUS_PROPERTY
 from meeting_assistant.services.yeartext_store import YeartextStore
+
+
+def binding(hwnd="7"):
+    return {"hwnd": hwnd, "pid": 123, "created": "10001", "jwl_hwnd": "8",
+            "jwl_pid": 124, "jwl_created": "10002", "window_class": "ApplicationFrameWindow",
+            "hall_left": -1920, "hall_top": 0, "hall_right": 0, "hall_bottom": 1080,
+            "session": "a" * 32}
 
 
 class FakeObs:
@@ -23,6 +31,9 @@ class FakeObs:
         self.virtual = False
         self.confirm_start = True
         self.options = [{"itemValue": "JWL media:Class:JWLibrary.exe", "itemEnabled": True}]
+        self.native_state = "active"
+        self.native_identity = None
+        self.kinds = ["image_source", "window_capture", KIND]
 
     def send(self, request, data=None, raw=True):
         self.calls.append((request, data))
@@ -34,14 +45,17 @@ class FakeObs:
                     {"inputName": name, "inputKind": entry["kind"]} for name, entry in self.inputs.items()
                 ]
             }
+        if request == "GetInputKindList":
+            return {"inputKinds": self.kinds}
         if request == "CreateScene":
             self.scenes[data["sceneName"]] = []
         if request == "CreateInput":
             self.inputs[data["inputName"]] = {"kind": data["inputKind"], "settings": data["inputSettings"]}
+            item_id = max((i["sceneItemId"] for i in self.scenes[data["sceneName"]]), default=0) + 1
             self.scenes[data["sceneName"]].append(
                 {
                     "sourceName": data["inputName"],
-                    "sceneItemId": 1,
+                    "sceneItemId": item_id,
                     "sceneItemEnabled": data["sceneItemEnabled"],
                 }
             )
@@ -54,13 +68,20 @@ class FakeObs:
         if request == "GetVideoSettings":
             return {"baseWidth": 1920, "baseHeight": 1080}
         if request == "GetInputPropertiesListPropertyItems":
+            if data.get("propertyName") == STATUS_PROPERTY:
+                values = self.native_identity or self.inputs[data["inputName"]]["settings"]
+                status = {k: values.get(k) for k in IDENTITY_KEYS}
+                status.update(protocol=1, state=self.native_state, width=1920, height=1080)
+                return {"propertyItems": [{"itemValue": json.dumps(status)}]}
             return {"propertyItems": self.options}
         if request == "GetVirtualCamStatus":
             return {"outputActive": self.virtual}
         if request == "StartVirtualCam":
             self.virtual = self.confirm_start
         if request == "SetSceneItemEnabled":
-            self.scenes[data["sceneName"]][0]["sceneItemEnabled"] = data["sceneItemEnabled"]
+            for row in self.scenes[data["sceneName"]]:
+                if row["sceneItemId"] == data["sceneItemId"]:
+                    row["sceneItemEnabled"] = data["sceneItemEnabled"]
         return {}
 
 
@@ -74,27 +95,23 @@ def test_apply_photo_is_idempotent_and_does_not_switch_program(tmp_path):
     assert not any(request == "SetCurrentProgramScene" for request, _ in client.calls)
 
 
-def test_media_is_window_only_mutes_audio_and_keeps_single_source():
+def test_media_uses_silent_native_hwnd_source_and_keeps_single_source():
     client = FakeObs()
-    selectors = ["JWL media:Class:JWLibrary.exe"]
-    prepare_media(client, "Mídias", selectors)
-    prepare_media(client, "Mídias", selectors)
+    prepare_media(client, "Mídias", binding())
+    prepare_media(client, "Mídias", binding())
     assert len(client.scenes["Mídias"]) == 1
-    assert client.inputs[MEDIA_SOURCE]["kind"] == "window_capture"
-    assert client.inputs[MEDIA_SOURCE]["settings"]["capture_audio"] is False
-    assert client.inputs[MEDIA_SOURCE]["settings"]["priority"] == 0
-    assert ("SetInputMute", {"inputName": MEDIA_SOURCE, "inputMuted": True}) in client.calls
+    assert client.inputs[SOURCE]["kind"] == KIND
+    assert client.inputs[SOURCE]["settings"]["hwnd"] == "7"
+    assert not any(r in {"SetInputMute", "SetCurrentProgramScene"} for r, _ in client.calls)
 
 
-def test_ambiguous_title_does_not_enable_capture(monkeypatch):
-    from pathlib import Path
-    monkeypatch.setattr(Path, "exists", lambda self: False)
+def test_ambiguous_obs_title_is_not_used_by_native_capture():
     client = FakeObs()
     client.options.append({"itemValue": "JWL media:Other:JWLibrary.exe"})
-    with pytest.raises(ValueError, match="única"):
-        prepare_media(client, "Mídias", ["JWL media:Class:JWLibrary.exe"])
-    assert not client.scenes["Mídias"][0]["sceneItemEnabled"]
-    assert not any(request == "SetInputSettings" for request, _ in client.calls)
+    prepare_media(client, "Mídias", binding())
+    assert client.scenes["Mídias"][0]["sceneItemEnabled"]
+    assert client.inputs[SOURCE]["settings"]["hwnd"] == "7"
+    assert not any(data and data.get("propertyName") == "window" for _, data in client.calls)
 
 
 def test_zoom_is_never_used_as_fallback():

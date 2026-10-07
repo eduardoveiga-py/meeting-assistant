@@ -3,26 +3,6 @@
 Disable the item in the managed scene, not a shared scene/group's children.
 """
 
-import json
-from os import environ
-from pathlib import Path
-
-
-def _is_simulation() -> bool:
-    """Return True when simulation_enabled=True in the persisted settings."""
-    try:
-        appdata = environ.get("APPDATA")
-        if appdata:
-            settings_path = Path(appdata) / "MeetingAssistant" / "settings.json"
-        else:
-            settings_path = Path.home() / ".meeting-assistant" / "settings.json"
-        if settings_path.exists():
-            return bool(json.loads(settings_path.read_text("utf-8")).get("simulation_enabled", False))
-    except Exception:
-        pass
-    return False
-
-
 def call(client, request, **data):
     return client.send(request, data or None, raw=True)
 
@@ -73,26 +53,43 @@ def disable_managed_display_captures(client, scenes):
     return disabled
 
 
-def assert_safe_media(client, scene):
-    from meeting_assistant.services.obs_hall_setup import MEDIA_SOURCE, select_exact_window
-
-    simulation = _is_simulation()
+def assert_safe_media(client, scene, expected_target=None):
+    from meeting_assistant.services.obs_jwl_capture import KIND, SOURCE, confirmed_status
 
     if display_capture_items(client, scene):
-        if not simulation:
-            raise ValueError("Captura de monitor ativa em Mídias. Prepare a fonte JWL em Ajustes antes de usar.")  # noqa: E501
+        raise ValueError("Captura de monitor ativa em Mídias. Prepare a fonte JWL em Ajustes antes de usar.")
 
     rows = call(client, "GetSceneItemList", sceneName=scene)["sceneItems"]
-    if not any(i["sourceName"] == MEDIA_SOURCE and i.get("sceneItemEnabled") for i in rows):
-        if not simulation:
-            raise ValueError("Fonte JWL secundária não preparada. Use Ajustes → Texto do Ano e fontes OBS.")
+    kinds = {i["inputName"]: i["inputKind"] for i in call(client, "GetInputList")["inputs"]}
+    if kinds.get(SOURCE) != KIND or not any(
+        i["sourceName"] == SOURCE and i.get("sceneItemEnabled") for i in rows
+    ):
+        raise ValueError("Fonte JWL por HWND não preparada. Use Ajustes → Texto do Ano e fontes OBS.")
+    scenes = {s["sceneName"] for s in call(client, "GetSceneList")["scenes"]}
 
-    if simulation:
-        return
+    def unsafe(items, visited):
+        for row in items:
+            if not row.get("sceneItemEnabled"):
+                continue
+            name = row["sourceName"]
+            kind = kinds.get(name)
+            if kind in {"window_capture", "game_capture", "monitor_capture"} or (
+                kind == KIND and name != SOURCE
+            ):
+                return True
+            if name in visited:
+                continue
+            if row.get("isGroup") or name in scenes:
+                request = "GetGroupSceneItemList" if row.get("isGroup") else "GetSceneItemList"
+                children = call(client, request, sceneName=name)["sceneItems"]
+                if unsafe(children, visited | {name}):
+                    return True
+        return False
 
-    values = call(client, "GetInputSettings", inputName=MEDIA_SOURCE)["inputSettings"]
-    options = call(
-        client, "GetInputPropertiesListPropertyItems", inputName=MEDIA_SOURCE, propertyName="window"
-    )["propertyItems"]
-    select_exact_window(options, [values.get("window", "")])
+    if unsafe(rows, {scene}):
+        raise ValueError(
+            "Outra captura de janela/jogo permanece ativa em Mídias, inclusive em cena/grupo. "
+            "Desative esse item nesta cena para impedir retorno do Zoom. Nenhuma fonte foi apagada."
+        )
+    confirmed_status(client, expected_target)
 

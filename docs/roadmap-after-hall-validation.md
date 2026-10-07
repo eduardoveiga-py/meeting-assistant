@@ -1,5 +1,12 @@
 # Roteiro de conclusão — 21/09/2026
 
+Atualização de 07/10/2026: captura JWL por HWND em módulo OBS independente para
+resolver títulos duplicados. DLL compilada no CI Windows e distribuição automática
+no fluxo Python, com integridade fixada. [Implementação e roteiro](jwl-hwnd-capture.md).
+Priorizar agora o ensaio de captura, fluidez, três ciclos Zoom/JWL e Windows+D
+com dois monitores. Os arquivos protegidos do núcleo e o checkpoint são preservados.
+Após esse aceite, incluir o novo componente no próximo instalador do aplicativo.
+
 Atualização de 03/10/2026 após novo retorno: corrigida detecção de cabos ativos
 com estado Enum. A configuração passa a Envio, Volumes e Ajuda; abrir/atualizar
 preserva áudio e o ganho usa ação independente. Falta ensaio físico desta revisão,

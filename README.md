@@ -121,6 +121,13 @@ O script usa Python 3.12, atualiza a `.venv` e verifica os componentes nativos
 pré-compilados conforme o manifesto. Não exige MSBuild nem compilação local.
 Os componentes da câmera e da ponte OBS não foram alterados neste lote.
 
+**Captura da segunda janela JWL:** o módulo independente usa diretamente seu HWND,
+resolvendo títulos iguais no OBS. Na primeira execução, feche OBS para o script
+instalar automaticamente a nova DLL pronta. Requer Windows 11 x64 e OBS 31.0.3+.
+Depois use **Ajustes → Texto do Ano e fontes do OBS → Preparar janela JWL em Mídias**.
+[Instalação, diagnóstico e testes com dois monitores](docs/jwl-hwnd-capture.md).
+O instalador do app já publicado não inclui esta atualização; use o fluxo Python acima.
+
 ## 👨‍💻 Para Desenvolvedores
 
 Se deseja modificar ou rodar a partir do código fonte:

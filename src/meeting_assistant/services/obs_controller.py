@@ -142,6 +142,7 @@ class ObsController(QObject):
     operator_finished = Signal(str, bool, object)
     audio_task_finished = Signal(str, str, bool, object)
     audio_levels_changed = Signal(object)
+    jwl_capture_status = Signal(object)
 
     def __init__(
         self, poll_interval: float = 0.5, preview_interval: float = 0.15, *, screenshot_preview: bool = False
@@ -165,6 +166,10 @@ class ObsController(QObject):
         self._last_preview_error: str | None = None
         self._virtual_deadline = 0.0
         self._next_virtual_check = 0.0
+        from meeting_assistant.services.obs_jwl_capture import JwlCaptureRuntime
+
+        self.jwl_capture = JwlCaptureRuntime()
+        self._next_jwl_capture_check = 0.0
 
         from meeting_assistant.services.audio_levels import AudioLevels
 
@@ -240,6 +245,23 @@ class ObsController(QObject):
 
     def hall_task(self, action: str, data: dict | None = None) -> None:
         self._commands.put(("hall_task", (action, dict(data or {}))))
+
+    def update_jwl_capture_snapshot(self, candidate, display) -> None:
+        self.jwl_capture.update_snapshot(candidate, display)
+
+    def _sync_jwl_capture(self) -> None:
+        if self._client is None or self.local_connection is not True:
+            return
+        try:
+            status = self.jwl_capture.sync(self._client)
+        except Exception:
+            # A deleted source/plugin or transient discovery failure must not
+            # reset the working OBS/audio connection or claim capture success.
+            self.jwl_capture.reset_connection()
+            status = {"protocol": 1, "state": "unavailable",
+                      "message": "Captura JWL não confirmada. Verifique as fontes e o log do OBS."}
+        if status is not None:
+            self.jwl_capture_status.emit(status)
 
     def audio_task(self, token: str, action: str, data: dict) -> None:
         from copy import deepcopy
@@ -403,6 +425,10 @@ class ObsController(QObject):
                     next_reconnect = time.monotonic() + 2.0
                 next_poll = now + self._poll_interval
 
+            if self._client is not None and now >= self._next_jwl_capture_check:
+                self._next_jwl_capture_check = time.monotonic() + 1.0
+                self._sync_jwl_capture()
+
             if self._screenshot_preview and self._client is not None and now >= next_preview:
                 self._refresh_preview()
                 if self._client is None:
@@ -501,8 +527,16 @@ class ObsController(QObject):
         try:
             if scene_name == self.media_scene:
                 from meeting_assistant.services.obs_capture_safety import assert_safe_media
+                from meeting_assistant.services.obs_jwl_capture import wait_for_capture
 
-                assert_safe_media(self._client, scene_name)
+                if self.local_connection is not True:
+                    raise ValueError("Captura JWL exige OBS conectado neste computador.")
+                self._sync_jwl_capture()
+                target = self.jwl_capture.target()
+                # After a HWND change, wait briefly for the new WGC frame on
+                # this worker. Acknowledged settings alone cannot change Program.
+                wait_for_capture(self._client, target, self._stop_event, timeout=2)
+                assert_safe_media(self._client, scene_name, target)
             ensure_fade_transition(self._client)
             self._client.send(
                 "SetCurrentProgramScene",
@@ -552,8 +586,14 @@ class ObsController(QObject):
                     "Para substituí-la, capture uma nova foto, confirme e salve."
                 )
             elif action == "media":
-                prepare_media(self._client, data["scene"], data["selectors"])
-                message = "Fonte JWL configurada. Confira a imagem no OBS; nenhuma cena Program foi trocada."
+                status = prepare_media(
+                    self._client, data["scene"], self.jwl_capture.target(), self._stop_event
+                )
+                self.jwl_capture.reset_connection()
+                self.jwl_capture_status.emit(status)
+                message = (f"Captura nativa JWL confirmada • HWND {status['hwnd']} • "
+                           f"{status['width']}×{status['height']}. Confira o conteúdo no OBS. "
+                           "Nenhuma cena Program foi trocada.")
             elif action == "inspect":
                 message = inspect_visual_sources(self._client, data["background"], data["media"])
             else:
@@ -587,6 +627,8 @@ class ObsController(QObject):
         self._last_scene = None
         self._last_scenes = []
         self._last_preview_error = None
+        self.jwl_capture.reset_connection()
+        self._next_jwl_capture_check = 0.0
         if client is None:
             return
         try:

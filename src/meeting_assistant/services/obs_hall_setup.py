@@ -118,7 +118,7 @@ def apply_yeartext(client, photo: dict, scene: str) -> None:
     fit_and_enable(client, scene, item_id)
 
 
-def select_exact_window(items: list[dict], selectors: list[str], *, allow_ambiguous: bool = False) -> str:
+def select_exact_window(items: list[dict], selectors: list[str]) -> str:
     available = [item["itemValue"] for item in items if item.get("itemEnabled", True)]
     for selector in selectors:
         if selector not in available:
@@ -126,74 +126,48 @@ def select_exact_window(items: list[dict], selectors: list[str], *, allow_ambigu
         title = selector.split(":", 1)[0].casefold()
         matches = [v for v in available if v.split(":", 1)[0].casefold() == title]
         # OBS title matching cannot distinguish two windows with the same title.
-        # In simulation mode (allow_ambiguous=True) we accept the first match anyway.
-        if len(matches) == 1 or allow_ambiguous:
+        if len(matches) == 1:
             return selector
     raise ValueError("OBS não identificou uma janela JWL secundária única. Não foi usada captura de monitor.")
 
 
-def prepare_media(client, scene: str, selectors: list[str]) -> str:
-    import json
-    from os import environ
-    from pathlib import Path
+def prepare_media(client, scene: str, target: dict, stop_event=None) -> dict:
+    """Warm/verify the exact HWND source before migrating managed scene items."""
+    import threading
 
-    simulation = False
-    try:
-        appdata = environ.get("APPDATA")
-        if appdata:
-            settings_path = Path(appdata) / "MeetingAssistant" / "settings.json"
-        else:
-            settings_path = Path.home() / ".meeting-assistant" / "settings.json"
-        if settings_path.exists():
-            simulation = json.loads(settings_path.read_text("utf-8")).get("simulation_enabled", False)
-    except Exception:
-        pass
+    from meeting_assistant.services.obs_jwl_capture import KIND, SOURCE, bind, wait_for_capture
 
-    if not selectors and not simulation:
+    if not isinstance(target, dict) or not target.get("hwnd") or not target.get("session"):
         raise ValueError("A identidade da janela secundária JWL não está disponível.")
-    item_id = ensure_source(client, scene, MEDIA_SOURCE, "window_capture", {})
-    items = client.send(
-        "GetInputPropertiesListPropertyItems",
-        {
-            "inputName": MEDIA_SOURCE,
-            "propertyName": "window",
-        },
-        raw=True,
-    )["propertyItems"]
-
-    if simulation and not selectors:
-        # Em modo simulação sem segundo monitor, usa qualquer janela JWL disponível
-        jwl_items = [i for i in items if "jwlibrary" in i.get("itemValue", "").lower() and i.get("itemEnabled", True)]  # noqa: E501
-        if not jwl_items:
-            jwl_items = items[:1]  # último recurso: qualquer janela
-        selectors = [jwl_items[0]["itemValue"]] if jwl_items else []
-
-    selector = select_exact_window(items, selectors, allow_ambiguous=simulation)
-    client.send(
-        "SetInputSettings",
-        {
-            "inputName": MEDIA_SOURCE,
-            "inputSettings": {
-                "window": selector,
-                "priority": 0,
-                "method": 2,
-                "cursor": False,
-                "client_area": True,
-                "capture_audio": False,
-            },
-            "overlay": True,
-        },
-        raw=True,
-    )
-    applied = client.send("GetInputSettings", {"inputName": MEDIA_SOURCE}, raw=True)["inputSettings"]
-    if applied.get("window") != selector:
-        raise ValueError("OBS não confirmou o vínculo da janela JWL.")
-    client.send("SetInputMute", {"inputName": MEDIA_SOURCE, "inputMuted": True}, raw=True)
+    kinds = client.send("GetInputKindList", raw=True).get("inputKinds", [])
+    if KIND not in kinds:
+        raise ValueError(
+            "Plugin de captura JWL ausente no OBS. Feche OBS e execute scripts/run.ps1 "
+            "para baixar a DLL; depois abra OBS novamente. Requer OBS 31.0.3 ou posterior."
+        )
+    item_id = ensure_source(client, scene, SOURCE, KIND, {})
+    bind(client, target)
+    status = wait_for_capture(client, target, stop_event or threading.Event())
     from meeting_assistant.services.obs_capture_safety import disable_managed_display_captures
 
     disable_managed_display_captures(client, [scene])
+    # Preserve the old input and all uses outside this scene. No source removal,
+    # replacement by type, or mutation of a shared scene/group's children.
+    rows = client.send("GetSceneItemList", {"sceneName": scene}, raw=True)["sceneItems"]
+    for row in rows:
+        if row["sourceName"] == MEDIA_SOURCE and row.get("sceneItemEnabled"):
+            client.send("SetSceneItemEnabled", {"sceneName": scene, "sceneItemId": row["sceneItemId"],
+                                               "sceneItemEnabled": False}, raw=True)
     fit_and_enable(client, scene, item_id)
-    return selector
+    from meeting_assistant.services.obs_capture_safety import assert_safe_media
+
+    try:
+        assert_safe_media(client, scene)
+    except ValueError:
+        client.send("SetSceneItemEnabled", {"sceneName": scene, "sceneItemId": item_id,
+                                           "sceneItemEnabled": False}, raw=True)
+        raise
+    return status
 
 
 def virtual_camera_step(client) -> bool:
@@ -204,12 +178,14 @@ def virtual_camera_step(client) -> bool:
 
 
 def inspect_visual_sources(client, background: str, media: str) -> str:
+    from meeting_assistant.services.obs_jwl_capture import KIND, SOURCE, confirmed_status
+
     inputs = {item["inputName"]: item for item in client.send("GetInputList", raw=True)["inputs"]}
     scenes = {item["sceneName"] for item in client.send("GetSceneList", raw=True)["scenes"]}
     lines = []
     for scene, name, kind in (
         (background, PHOTO_SOURCE, "image_source"),
-        (media, MEDIA_SOURCE, "window_capture"),
+        (media, SOURCE, KIND),
     ):
         if scene not in scenes:
             lines.append(f"{scene}: cena ausente.")
@@ -224,16 +200,15 @@ def inspect_visual_sources(client, background: str, media: str) -> str:
             ok = bool(values.get("file")) and Path(values["file"]).is_file()
             lines.append(f"{scene}: " + ("arquivo encontrado." if ok else "arquivo ausente."))
         else:
-            options = client.send(
-                "GetInputPropertiesListPropertyItems",
-                {
-                    "inputName": name,
-                    "propertyName": "window",
-                },
-                raw=True,
-            )["propertyItems"]
-            ok = any(o.get("itemEnabled", True) and o["itemValue"] == values.get("window") for o in options)
-            lines.append(f"{scene}: " + ("janela cadastrada disponível." if ok else "janela indisponível."))
+            try:
+                from meeting_assistant.services.obs_capture_safety import assert_safe_media
+
+                assert_safe_media(client, scene)
+                status = confirmed_status(client)
+                lines.append(f"{scene}: captura nativa ativa • HWND {status['hwnd']} • "
+                             f"{status['width']}×{status['height']}.")
+            except ValueError as exc:
+                lines.append(f"{scene}: {exc}")
     active = client.send("GetVirtualCamStatus", raw=True).get("outputActive", False)
     lines.append("Câmera virtual: " + ("ativa." if active else "parada."))
     lines.append("Verificação de configuração; confira o conteúdo visual no OBS antes da reunião.")
