@@ -2,9 +2,12 @@ name: Windows 11 video
 on:
   push:
     branches: [main, 'feature/**']
-    paths: ['native/**', 'scripts/*video*', 'scripts/prepare-camera-source.py', '.github/workflows/video-native.yml']
+    # JWL input capture has its own build. Do not rebuild/publish the already
+    # validated Program bridge/camera when only the new capture module changes.
+    # Workflow-only changes can be tested by workflow_dispatch or pull_request.
+    paths: ['native/virtual-camera/**', 'scripts/*video*', 'scripts/prepare-camera-source.py']
   pull_request:
-    paths: ['native/**', 'scripts/*video*', 'scripts/prepare-camera-source.py', '.github/workflows/video-native.yml']
+    paths: ['native/virtual-camera/**', 'scripts/*video*', 'scripts/prepare-camera-source.py', '.github/workflows/video-native.yml']
   workflow_dispatch:
 permissions:
   contents: read
