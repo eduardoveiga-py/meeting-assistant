@@ -100,10 +100,28 @@ class ExternalWindowBackend(WindowBackend):
             raise ValueError("Saída JWL não identificada. Use Forçar JWL antes de apresentar mídia externa.")
         con, gui = self._win32()
         root = int(gui.GetAncestor(identified.hwnd, con.GA_ROOT) or identified.hwnd)
-        matches = [w for w in self.windows() if is_jwl(w) and w.hwnd == root]
-        if len(matches) != 1 or not self.same_window(matches[0]):
-            raise ValueError("A saída JWL mudou. Confirme o JWL antes de apresentar mídia externa.")
-        hall = matches[0]
+        import win32process, psutil
+        from meeting_assistant.services.window_inventory import NativeWindow
+        if not gui.IsWindow(root) or not gui.IsWindowVisible(root):
+            raise ValueError(f"A saída JWL desapareceu. Confirme o JWL antes de apresentar mídia externa. Root: {root}")
+            
+        matches = [w for w in self.windows() if w.hwnd == root]
+        if matches:
+            hall = matches[0]
+        else:
+            _, pid = win32process.GetWindowThreadProcessId(root)
+            try: created = psutil.Process(pid).create_time()
+            except psutil.Error: created = 0
+            hall = NativeWindow(
+                hwnd=root, pid=pid, created=created, process="jwlibrary.exe",
+                title=gui.GetWindowText(root), class_name=gui.GetClassName(root),
+                rect=gui.GetWindowRect(root), placement=gui.GetWindowPlacement(root),
+                visible=True, minimized=bool(gui.IsIconic(root)),
+                topmost=bool(gui.GetWindowLong(root, -20) & 8),
+                style=gui.GetWindowLong(root, -16), extended_style=gui.GetWindowLong(root, -20),
+                meeting_controls=False
+            )
+        
         actual_class = hall.class_name if root == identified.hwnd else gui.GetClassName(identified.hwnd)
         if actual_class != identified.class_name:
             raise ValueError("A classe da saída JWL mudou; apresentação cancelada.")

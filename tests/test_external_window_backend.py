@@ -66,6 +66,9 @@ class Win32:
     def IsWindowVisible(self, hwnd):
         return self.current[hwnd].visible
 
+    def IsWindow(self, hwnd):
+        return hwnd in self.current
+
     def IsIconic(self, hwnd):
         return self.current[hwnd].minimized
 
