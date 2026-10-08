@@ -53,7 +53,7 @@ def test_secondary_window_selected_without_english_title(monkeypatch):
     assert all("title" not in row for row in records[-1]["windows"])
 
 
-def test_main_window_and_other_processes_are_never_selected(monkeypatch):
+def test_main_window_selected_when_secondary_absent(monkeypatch):
     service, _ = setup_windows(
         monkeypatch,
         {
@@ -62,7 +62,7 @@ def test_main_window_and_other_processes_are_never_selected(monkeypatch):
             3: {"unreadable": True},
         },
     )
-    assert service._find_zoom_window() is None
+    assert service._find_zoom_window().hwnd == 1
 
 
 def test_ambiguous_windows_are_reported_not_guessed(monkeypatch):
@@ -81,7 +81,7 @@ def test_hidden_secondary_can_be_reused_after_returning_to_jwl(monkeypatch):
 def test_cached_handle_revalidated_against_process_and_controls(monkeypatch):
     service, _ = setup_windows(monkeypatch, {1: {"controls": True}, 2: {"process": "other.exe"}})
     service._zoom_hwnd = 2
-    assert service._find_zoom_window() is None
+    assert service._find_zoom_window().hwnd == 1
 
 
 def test_unknown_zoom_window_class_is_included_in_diagnostics(monkeypatch):

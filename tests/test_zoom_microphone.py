@@ -169,9 +169,20 @@ class Window(Node):
     def is_minimized(self):
         return self._minimized
 
-    def descendants(self, *, control_type):
-        assert control_type == "Button"
-        return self.buttons
+    def descendants(self, *, control_type=None, class_name=None):
+        if control_type == "Button":
+            return self.buttons
+        
+        class FakeContainer:
+            def __init__(self, buttons):
+                self.buttons = buttons
+            def descendants(self, *, control_type):
+                assert control_type == "Button"
+                return self.buttons
+                
+        if control_type == "ToolBar" or class_name == "ZPControlPanelClass":
+            return [FakeContainer(self.buttons)]
+        return []
 
 
 @pytest.mark.parametrize("source", ["help", "status", "legacy", "default_action"])
