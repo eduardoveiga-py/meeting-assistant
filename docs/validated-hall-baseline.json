@@ -3,7 +3,7 @@
     "checkpoint_branch": "checkpoint/zoom-jwl-validated-20260921",
     "normalization": "UTF-8, LF newlines, one final newline",
     "sha256": {
-        "src/meeting_assistant/services/zoom_hall_service.py": "e52f7db8dd92b77ddfb54273198e5fd884f71d190c7fcadc100f7292cc85fab5",
+        "src/meeting_assistant/services/zoom_hall_service.py": "096b08cb9f5a5818b6433b00fb401217003b9943583ac0da9e5d4584fd115bda",
         "src/meeting_assistant/services/native_window.py": "8b87daa6681167e979ee67534741a1a67df54fcaafc9c9eb7983cb48efb08edf",
         "src/meeting_assistant/services/jwl_fast_window_guard.py": "ee53065f7ba09b435279d7c12073b5cda68f73b2e57e35cd449414f62e39a4ab",
         "src/meeting_assistant/services/jwl_uia_secondary_window.py": "3356c99566c23a8f4745494322245c2e2c2cce38e8fd7500b16cea45d533ad7a",
@@ -15,5 +15,5 @@
         "src/meeting_assistant/services/jwl_screen_sensor.py": "1cf32cd9dd3a6a0a63cf64e14fca998d85d1611c7e32403e44034ada026fcb80",
         "tests/test_zoom_hall_discovery.py": "5eba8bc28164b1721825e6455400b78cd35c9c2580263d99e38cafbb91b1e922"
     },
-    "validation_note": "Operador confirmou Testes 1, 2 e 3 OK em 21/09/2026; checkpoint original preservado. Candidato 0.8.2: zoom_hall_service atualizado para aceitar a janela principal do Zoom (ZPPTopWndClass) como opção válida para o Salão, conforme solicitado pelo operador. Requer revalidação física com o novo comportamento no telão."
+    "validation_note": "Operador confirmou Testes 1, 2 e 3 OK em 21/09/2026; checkpoint original preservado. Candidato 0.8.2: zoom_hall_service atualizado para aceitar a janela principal do Zoom (ZPPTopWndClass e ConfMultiTabContentWndClass do Zoom Workplace) como opção válida para o Salão, conforme solicitado pelo operador. Requer revalidação física com o novo comportamento no telão."
 }

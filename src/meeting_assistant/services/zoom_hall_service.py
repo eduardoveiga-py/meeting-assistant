@@ -474,7 +474,7 @@ class ZoomHallService(QObject):
                         "has_controls": controls,
                     }
                 )
-                if class_name not in (_ZOOM_WINDOW_CLASS, "ZPPTopWndClass"):
+                if class_name not in (_ZOOM_WINDOW_CLASS, "ZPPTopWndClass", "ConfMultiTabContentWndClass"):
                     return True
                 # A previous app instance may have hidden this window. Its
                 # process/class/controls identify it even without our HWND cache.
