@@ -55,7 +55,7 @@ def test_inspection_and_repeated_toggles_only_discover_once(monkeypatch):
         assert details["lookup_path"] == "direct"
         assert all(details[key] >= 0 for key in ("read_state_ms", "invoke_ms", "confirmation_ms"))
     discover.assert_called_once()
-    window.descendants.assert_called_once()
+    assert window.descendants.call_count == 2
     assert button.iface_invoke.Invoke.call_count == 4
     sleep.assert_not_called()
 

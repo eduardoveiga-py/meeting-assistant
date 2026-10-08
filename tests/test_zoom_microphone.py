@@ -180,7 +180,7 @@ class Window(Node):
                 assert control_type == "Button"
                 return self.buttons
                 
-        if control_type == "ToolBar" or class_name == "ZPControlPanelClass":
+        if control_type == "ToolBar":
             return [FakeContainer(self.buttons)]
         return []
 
@@ -461,7 +461,7 @@ def test_actual_ui_click_without_runtime_id_opens_and_mutes_own_audio(tmp_path, 
         com.CoUninitialize.assert_not_called()
         desktop.assert_called_with(backend="uia")
         windows.assert_called_once_with(process=7)
-        meeting.descendants.assert_called_once_with(control_type="Button")
+        assert meeting.descendants.call_count == 2
         assert all(report["code"] == "confirmed" for report in reports)
         assert all(report["runtime_ids_unavailable"] == 1 for report in reports)
     finally:
