@@ -3,7 +3,7 @@
     "checkpoint_branch": "checkpoint/zoom-jwl-validated-20260921",
     "normalization": "UTF-8, LF newlines, one final newline",
     "sha256": {
-        "src/meeting_assistant/services/zoom_hall_service.py": "40120786588aa9a3334fae667f137805908cc8effd5288727837231ec991fb95",
+        "src/meeting_assistant/services/zoom_hall_service.py": "8edef12595125356bd2288da68666dbb186898990a383b528406b5f38ff48053",
         "src/meeting_assistant/services/native_window.py": "8b87daa6681167e979ee67534741a1a67df54fcaafc9c9eb7983cb48efb08edf",
         "src/meeting_assistant/services/jwl_fast_window_guard.py": "ee53065f7ba09b435279d7c12073b5cda68f73b2e57e35cd449414f62e39a4ab",
         "src/meeting_assistant/services/jwl_uia_secondary_window.py": "3356c99566c23a8f4745494322245c2e2c2cce38e8fd7500b16cea45d533ad7a",

@@ -300,19 +300,20 @@ class ZoomHallService(QObject):
         rect = self._return_rect
         try:
             if self._is_window(self._zoom_hwnd) and self._original_zoom_placement:
-                win32gui.SetWindowPlacement(self._zoom_hwnd, self._original_zoom_placement)
+                rc = self._original_zoom_placement[4]
+                # Force the window bounds back to the original screen before restoring state
                 win32gui.SetWindowPos(
                     self._zoom_hwnd,
                     win32con.HWND_NOTOPMOST,
-                    0,
-                    0,
-                    0,
-                    0,
-                    win32con.SWP_NOACTIVATE
-                    | win32con.SWP_NOMOVE
-                    | win32con.SWP_NOSIZE
-                    | win32con.SWP_ASYNCWINDOWPOS,
+                    rc[0],
+                    rc[1],
+                    rc[2] - rc[0],
+                    rc[3] - rc[1],
+                    win32con.SWP_NOACTIVATE | win32con.SWP_ASYNCWINDOWPOS,
                 )
+                flags = self._original_zoom_placement[0] | 4  # WPF_ASYNCWINDOWPLACEMENT
+                placement = (flags,) + self._original_zoom_placement[1:]
+                win32gui.SetWindowPlacement(self._zoom_hwnd, placement)
             show_window_async(self._jwl_hwnd, win32con.SW_SHOWNOACTIVATE)
             win32gui.SetWindowPos(
                 self._jwl_hwnd,
