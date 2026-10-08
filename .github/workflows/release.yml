@@ -33,11 +33,11 @@ jobs:
       - name: Validate code and release version
         shell: pwsh
         run: |
-          ruff check .
+          python -m ruff check .
           if ($LASTEXITCODE -ne 0) { throw "Ruff falhou." }
-          pytest
+          python -m pytest
           if ($LASTEXITCODE -ne 0) { throw "Testes falharam." }
-          $version = python -c "from importlib.metadata import version; print(version('meeting-assistant'))"
+          $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
           if ($env:GITHUB_REF -like 'refs/tags/*' -and $env:GITHUB_REF_NAME -ne "v$version") {
             throw "Tag e versão do pacote não correspondem."
           }
