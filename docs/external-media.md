@@ -27,6 +27,14 @@ a aba ou a reunião. Uma falha de retorno mantém **Repetir retorno** disponíve
 
 ## Cessão do monitor e proteção durante a apresentação
 
+O retorno seguinte de `e072427` também foi negativo: a mesma mensagem e nenhuma
+janela movida para a segunda tela. Sem diagnóstico atual, a causa específica do
+PC não foi confirmada. A revisão encontrou/reproduziu outra falha: o estilo
+salvo do player reaplicava WS_MINIMIZE/WS_MAXIMIZE após pedir restauração.
+A nova candidata espera o estado normal/visível antes de ceder JWL; lê o estilo
+atual e altera somente a borda. Snapshot original permanece reservado ao retorno.
+O CI também exercita Win32 real com janelas de teste, em processo separado.
+
 O retorno físico de `7a5f7db` falhou: o player chegou à frente brevemente e o
 app abortou por não confirmar sua exposição. Demover TOPMOST uma vez não
 assegurou a cessão da janela UWP. Essa candidata não foi aceita fisicamente.
@@ -111,6 +119,16 @@ horário. Em **Ajustes → Diagnóstico**, `external_media_task` registra
 `native_stop_media` e `native_restore`, com resultado, tempo e exposição/cessão
 JWL. Monitoramento saudável não gera evento a cada tick. Não registra títulos,
 URLs ou nomes de participantes. Telemetria sincronizada permanece opcional.
+
+Na mensagem, `[PLAYER_RESTORE]` indica restauração não confirmada;
+`[PLAYER_POSITION]`, posição/tamanho; `[JWL_HANDOFF]`, cessão JWL;
+`[PLAYER_CLOAKED]`, cloaking Windows; `[PLAYER_EXPOSURE]`, cobertura por outra
+janela; `[WINDOW_API:etapa]`, falha da chamada nativa antes da confirmação.
+Se persistir, abra **Ajustes → Diagnóstico → Exportar diagnóstico…** logo após
+a tentativa e envie o ZIP da sessão. Não precisa ativar envio remoto nem captura
+de tela. O diagnóstico registra etapa, flags, posição e classes das janelas que
+cobrem os pontos consultados, sem títulos/URLs. Confira também `git rev-parse
+--short HEAD` para identificar o código realmente executado.
 
 Testes automatizados verificam cliques Qt, workers/processos reais, OBS/Win32
 simulados, cessão que se perde depois da confirmação, cancelamento, restauração

@@ -4,6 +4,35 @@ O [histórico de incidentes](incident-history.md) reúne sintomas, soluções,
 confirmações e aprendizados desta conversa. Este arquivo registra as decisões
 técnicas; os roteiros específicos mantêm os detalhes de teste.
 
+## 2026-10-08 — confirmar restauração sem reaplicar estado antigo
+
+**Retorno:** após `e072427`, o operador informou o mesmo erro e que a janela
+não foi para a segunda tela. Sem mensagem nova/diagnóstico exportado ou
+telemetria sincronizada desse ensaio; não atribuir uma causa única ao PC.
+
+**Falha reproduzida:** GWL_STYLE salvo inclui WS_MINIMIZE/WS_MAXIMIZE. Pedir
+ShowWindowAsync(SW_RESTORE) e escrever esse estilo antigo logo em seguida
+reaplica o estado anterior. A simulação antiga usava minimized=True sem
+WS_MINIMIZE, por isso não reproduzia essa sequência. Estilos independentes
+também podiam ser sobrescritos enquanto o aplicativo processava a restauração.
+
+**Decisão:** validar JWL sem escrita, pedir restauração do player, aguardar
+estado normal/visível com prazo e cancelamento, então revalidar JWL, ceder
+monitor e alterar somente a borda a partir dos estilos atuais. Snapshot
+original continua exclusivo do retorno. Erros identificam etapa não confirmada;
+tipo/código de exceção nativa são sanitizados. Não aumentar tolerância nem
+anunciar sucesso de exposição só porque a posição coincide.
+
+**Verificação:** simulação passa a incluir os flags reais e atraso de fila;
+prova separada no CI Windows exercita as APIs reais em HWNDs de teste próprios,
+com bombeamento na thread GUI e operações nativas no worker. Não envolve
+Chrome, VLC ou JWL reais nem comprova duas telas. Ensaio físico ainda pendente
+em [external-media.md](external-media.md). Núcleo protegido, áudio, DLLs,
+versões e distribuição preservados.
+
+Fontes primárias: [ShowWindowAsync](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindowasync)
+e [estados/estilos de janela](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features).
+
 ## 2026-10-08 — cessão explícita da saída e popup de mídia
 
 **Novo retorno:** candidata `7a5f7db` não manteve a janela externa; captura mostra

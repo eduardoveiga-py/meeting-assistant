@@ -126,6 +126,29 @@ A ausência do aviso no equipamento/escala do operador exige novo ensaio.
 
 ## INC-033 — Mídia externa falha depois da seleção
 
+**Reabertura após `e072427`.** O operador relatou a mesma mensagem, agora sem
+mover a janela para a segunda tela. CI anterior passou, mas não constitui aceite
+físico. Diagnósticos remotos continuam somente até 02/10; causa local não confirmada.
+
+**Falha adicional reproduzida.** O estilo salvo incluía os bits de estado
+WS_MINIMIZE/WS_MAXIMIZE. Depois de pedir SW_RESTORE assíncrono, aplicar o estilo
+salvo podia reaplicar minimização/maximização. A simulação antiga representava
+minimized=True sem o flag de estilo correspondente; não detectou a sequência.
+
+**Nova candidata.** Esperar restauração normal/visível antes de ocultar JWL e
+alterar somente a borda do player com os estilos atuais. Preservar snapshot
+original para retorno. Erros distintos informam restauração, posição, cloaking,
+cessão ou exposição; falha nativa informa etapa/tipo/código sem conteúdo privado.
+Prova Windows separada cria HWNDs próprios e bombeia mensagens na thread dona,
+testando APIs reais em normal/minimizado/maximizado. Não controla apps do operador.
+Simulação reproduz flag reaplicado, atraso, estilos atualizados e timeout que
+preserva JWL. O roteiro físico permanece pendente; pedir ZIP do diagnóstico se
+falhar, em vez de inferir outra causa pela mensagem genérica.
+
+**Aprendizado adicional.** Propriedade booleana simulada não substitui flags e
+fila reais. Snapshot pertence à restauração final, não à escrita integral no
+início. Validar chamadas reais do Windows além de integrar UI/serviço em mocks.
+
 **Reabertura após `7a5f7db`.** O operador viu o player à frente por um momento,
 mas não permaneceu. A imagem confirma a mensagem “Player não ficou visível à
 frente do JWL no Salão” seguida do retorno confirmado ao JWL. A candidata

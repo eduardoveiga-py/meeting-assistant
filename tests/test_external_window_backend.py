@@ -29,6 +29,7 @@ CON = SimpleNamespace(
     WS_EX_WINDOWEDGE=0x100, WS_EX_TOPMOST=8, SWP_NOSIZE=1, SWP_NOMOVE=2,
     SWP_NOACTIVATE=16, SWP_SHOWWINDOW=64, SWP_FRAMECHANGED=32, SWP_ASYNCWINDOWPOS=0x4000,
     GA_ROOT=2, SW_HIDE=0, SW_SHOWNOACTIVATE=4,
+    WS_MINIMIZE=0x20000000, WS_MAXIMIZE=0x1000000, WS_VISIBLE=0x10000000,
 )
 HALL_RECT = (1920, 0, 3840, 1080)
 
@@ -59,6 +60,9 @@ class Win32:
     def GetWindowRect(self, hwnd):
         return self.current[hwnd].rect
 
+    def GetClassName(self, hwnd):
+        return self.current[hwnd].class_name if hwnd in self.current else "UnrelatedFixtureWindow"
+
     def IsWindowVisible(self, hwnd):
         return self.current[hwnd].visible
 
@@ -81,7 +85,8 @@ class Win32:
     def SetWindowLong(self, hwnd, kind, value):
         self.calls.append(("style", hwnd, kind, value))
         key = "style" if kind == CON.GWL_STYLE else "extended_style"
-        self.current[hwnd] = replace(self.current[hwnd], **{key: value})
+        runtime = {"minimized": bool(value & CON.WS_MINIMIZE)} if kind == CON.GWL_STYLE else {}
+        self.current[hwnd] = replace(self.current[hwnd], **{key: value}, **runtime)
 
     def SetWindowPos(self, hwnd, order, left, top, width, height, flags):
         self.calls.append(("position", hwnd, order, flags))
@@ -106,7 +111,11 @@ class Win32:
             else:
                 placement = self.pending_placement[1]
                 self.current[hwnd] = replace(self.current[hwnd], placement=(0, *placement[1:]),
-                                             rect=placement[4], minimized=placement[1] == 2)
+                                             rect=placement[4], minimized=placement[1] == 2,
+                                             style=(self.current[hwnd].style
+                                                    & ~(CON.WS_MINIMIZE | CON.WS_MAXIMIZE))
+                                             | (CON.WS_MINIMIZE if placement[1] == 2 else 0)
+                                             | (CON.WS_MAXIMIZE if placement[1] == 3 else 0))
                 self.pending_placement = None
         return self.current[hwnd].placement
 
@@ -117,7 +126,8 @@ class Win32:
             self.current[hwnd] = replace(w, visible=False)
             return
         self.current[hwnd] = replace(w, minimized=False, visible=True,
-                                     placement=(0, 1, *w.placement[2:]))
+                                     placement=(0, 1, *w.placement[2:]),
+                                     style=w.style & ~(CON.WS_MINIMIZE | CON.WS_MAXIMIZE))
 
     def activate(self, hwnd):
         self.calls.append(("activate", hwnd))
@@ -128,7 +138,8 @@ class Win32:
 
 def make_backend(monkeypatch, *, activate=True, restore_reads=0, minimized=True):
     player = replace(window(41, process="vlc.exe", title="video"),
-                     style=CON.WS_CAPTION | CON.WS_THICKFRAME,
+                     style=CON.WS_CAPTION | CON.WS_THICKFRAME
+                     | (CON.WS_MINIMIZE if minimized else 0),
                      extended_style=CON.WS_EX_CLIENTEDGE | CON.WS_EX_WINDOWEDGE,
                      minimized=minimized, placement=(0, 2 if minimized else 1, (0, 0), (0, 0),
                                                      (520, 40, 1200, 720)))
@@ -148,6 +159,76 @@ def make_backend(monkeypatch, *, activate=True, restore_reads=0, minimized=True)
     monkeypatch.setattr(module, "activate_window", gui.activate)
     monkeypatch.setattr(module, "show_window_async", gui.show)
     return backend, gui, clock
+
+
+@pytest.mark.parametrize("runtime_style", [CON.WS_MINIMIZE, CON.WS_MAXIMIZE])
+def test_present_does_not_reapply_saved_minimized_or_maximized_style(monkeypatch, runtime_style):
+    backend, gui, _ = make_backend(monkeypatch, minimized=False)
+    original = replace(gui.player, style=gui.player.style | runtime_style,
+                       minimized=runtime_style == CON.WS_MINIMIZE)
+    gui.current[original.hwnd] = original
+    assert backend.present(original, HALL_RECT)
+    writes = [call[3] for call in gui.calls if call[:3] == ("style", original.hwnd, CON.GWL_STYLE)]
+    assert writes and not any(style & (CON.WS_MINIMIZE | CON.WS_MAXIMIZE) for style in writes)
+    assert not gui.current[original.hwnd].minimized
+
+
+def test_async_restore_is_confirmed_before_hiding_jwl_or_changing_player_styles(monkeypatch):
+    backend, gui, clock = make_backend(monkeypatch)
+    original_show, original_pause, original_style = gui.show, clock.pause, gui.SetWindowLong
+    pending = []
+    extra_runtime_flag = 0x2000000  # A style change delivered while processing restore.
+
+    def async_show(hwnd, command):
+        if hwnd == gui.player.hwnd and command == CON.SW_RESTORE:
+            gui.calls.append(("restore_requested", hwnd))
+            pending.append((hwnd, command))
+        else:
+            assert not pending  # JWL must remain visible until restoration is confirmed.
+            original_show(hwnd, command)
+
+    def pump(seconds):
+        original_pause(seconds)
+        if pending and clock.now >= 0.15:
+            hwnd, command = pending.pop()
+            original_show(hwnd, command)
+            gui.current[hwnd] = replace(gui.current[hwnd], style=gui.current[hwnd].style | extra_runtime_flag)
+
+    def write_style(hwnd, kind, value):
+        assert not pending
+        original_style(hwnd, kind, value)
+
+    monkeypatch.setattr(module, "show_window_async", async_show)
+    gui.SetWindowLong = write_style
+    backend._pause = pump
+    assert backend.present(gui.player, HALL_RECT)
+    assert clock.now >= 0.15
+    assert gui.current[gui.player.hwnd].style & extra_runtime_flag
+    assert not pending
+
+
+def test_restore_timeout_does_not_hide_jwl_or_rewrite_player_runtime_state(monkeypatch):
+    backend, gui, clock = make_backend(monkeypatch)
+    monkeypatch.setattr(module, "show_window_async",
+                        lambda hwnd, command: gui.calls.append(("show", hwnd, command)))
+    with pytest.raises(ValueError, match="PLAYER_RESTORE"):
+        backend.present(gui.player, HALL_RECT)
+    assert gui.current[gui.hall.hwnd].visible and gui.current[gui.hall.hwnd].topmost
+    assert not [call for call in gui.calls if call[0] in {"style", "position"}]
+    assert 2.5 <= clock.now < 2.6
+    assert backend.last_snapshot["stage"] == "player_restore"
+
+
+@pytest.mark.parametrize("field,code", [
+    ("minimized", "PLAYER_STATE"), ("cloaked", "PLAYER_CLOAKED"),
+    ("geometry_ok", "PLAYER_POSITION"), ("hall_hidden", "JWL_HANDOFF"),
+    ("exposed", "PLAYER_EXPOSURE"),
+])
+def test_failure_identifies_the_actual_unconfirmed_stage(field, code):
+    snapshot = {"minimized": False, "visible": True, "cloaked": False,
+                "geometry_ok": True, "hall_hidden": True, "exposed": True}
+    snapshot[field] = field in {"minimized", "cloaked"}
+    assert code in ExternalWindowBackend._presentation_failure(snapshot)
 
 
 def test_old_geometry_confirmation_accepts_player_behind_fullscreen_jwl(monkeypatch):

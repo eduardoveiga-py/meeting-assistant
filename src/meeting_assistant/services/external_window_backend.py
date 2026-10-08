@@ -70,7 +70,7 @@ class ExternalWindowBackend(WindowBackend):
 
         return win32con, win32gui
 
-    def _release_hall(self, rect):
+    def _identified_hall(self, rect):
         # The provider publishes the already identified secondary HWND. Never
         # demote the operator's JWL by guessing among identical window titles.
         identified = self._hall_window_provider()
@@ -93,6 +93,11 @@ class ExternalWindowBackend(WindowBackend):
         x1, y1, x2, y2 = hall.rect
         if min(right, x2) <= max(left, x1) or min(bottom, y2) <= max(top, y1):
             raise ValueError("A saída JWL não está no monitor do Salão.")
+        return identified, hall
+
+    def _release_hall(self, rect):
+        identified, hall = self._identified_hall(rect)
+        con, gui = self._win32()
         self._hall_original = hall
         if isinstance(identified, JwlSecondaryWindowInfo):
             self.return_candidate = replace(
@@ -146,10 +151,50 @@ class ExternalWindowBackend(WindowBackend):
         gui.SetWindowPos(window.hwnd, con.HWND_TOPMOST, rect[0], rect[1],
                          rect[2] - rect[0], rect[3] - rect[1], flags)
 
+    def _restore_player(self, window, *, deadline=None):
+        """Wait for queued restore before reading/changing its current frame.
+
+        A saved GWL_STYLE includes live WS_MINIMIZE/WS_MAXIMIZE bits. Writing
+        that saved style immediately after ShowWindowAsync can undo restoration.
+        The original snapshot belongs only to the later rollback.
+        """
+        con, gui = self._win32()
+        deadline = self._clock() + 2.5 if deadline is None else deadline
+        self.last_snapshot = {"stage": "player_restore", "hwnd": window.hwnd,
+                              "original_minimized": window.minimized, "ready": False}
+        show_window_async(window.hwnd, con.SW_RESTORE)
+        while not self.cancelled():
+            if not self.same_window(window):
+                raise ValueError("[PLAYER_RESTORE] Player mudou durante a restauração.")
+            style = gui.GetWindowLong(window.hwnd, con.GWL_STYLE)
+            minimized = bool(gui.IsIconic(window.hwnd))
+            visible = bool(gui.IsWindowVisible(window.hwnd))
+            self.last_snapshot.update(style=style, minimized=minimized, visible=visible)
+            if visible and not minimized and not style & (con.WS_MINIMIZE | con.WS_MAXIMIZE):
+                return
+            if self._clock() >= deadline:
+                raise ValueError(
+                    "[PLAYER_RESTORE] O player não saiu do estado minimizado/maximizado em 2,5 s."
+                )
+            self._pause(0.05)
+        raise ValueError("[PLAYER_RESTORE] Restauração cancelada.")
+
+    @staticmethod
+    def _presentation_failure(snapshot):
+        if snapshot.get("minimized") or not snapshot.get("visible"):
+            return "[PLAYER_STATE] O player continua minimizado ou oculto."
+        if snapshot.get("cloaked"):
+            return "[PLAYER_CLOAKED] O Windows manteve o player fora da área visível."
+        if not snapshot.get("geometry_ok"):
+            return "[PLAYER_POSITION] O player não confirmou o tamanho/posição no monitor do Salão."
+        if not snapshot.get("hall_hidden"):
+            return "[JWL_HANDOFF] A saída secundária JWL não confirmou a cessão do monitor."
+        return "[PLAYER_EXPOSURE] Player não ficou visível à frente do JWL no Salão."
+
     def presentation_snapshot(self, window, rect):
         con, gui = self._win32()
-        snapshot = {"hwnd": window.hwnd, "target_rect": list(rect), "ready": False,
-                    "valid": self.same_window(window)}
+        snapshot = {"stage": "player_exposure", "hwnd": window.hwnd, "target_rect": list(rect),
+                    "ready": False, "valid": self.same_window(window)}
         if not snapshot["valid"]:
             self.last_snapshot = snapshot
             return snapshot
@@ -167,7 +212,10 @@ class ExternalWindowBackend(WindowBackend):
         snapshot.update(rect=list(actual), visible=bool(gui.IsWindowVisible(window.hwnd)),
                         minimized=bool(gui.IsIconic(window.hwnd)), cloaked=cloak_state(window.hwnd),
                         geometry_ok=all(abs(a - b) <= 12 for a, b in zip(actual, rect, strict=True)),
-                        exposed=all(hit == root for hit in covers), cover_hwnd=covers[0])
+                        exposed=all(hit == root for hit in covers), cover_hwnd=covers[0],
+                        cover_hwnds=covers, style=gui.GetWindowLong(window.hwnd, con.GWL_STYLE))
+        if not snapshot["exposed"]:
+            snapshot["cover_classes"] = [gui.GetClassName(hit) if hit else "" for hit in covers]
         hall = self._hall_original
         snapshot["hall_hidden"] = bool(hall and self.same_window(hall)
                                        and not gui.IsWindowVisible(hall.hwnd))
@@ -183,12 +231,19 @@ class ExternalWindowBackend(WindowBackend):
             raise ValueError("Player mudou de processo.")
         self._hall_original = None
         self.return_candidate = None
+        self.last_snapshot = {"stage": "hall_identity", "hwnd": window.hwnd, "ready": False}
+        self._identified_hall(rect)  # Refuse an unknown output before changing either window.
+        self._restore_player(window)
+        self.last_snapshot["stage"] = "jwl_handoff"
         self._release_hall(rect)
-        show_window_async(window.hwnd, con.SW_RESTORE)
+        self.last_snapshot["stage"] = "player_frame"
         gui.SetWindowLong(window.hwnd, con.GWL_STYLE,
-                          window.style & ~(con.WS_CAPTION | con.WS_THICKFRAME))
+                          gui.GetWindowLong(window.hwnd, con.GWL_STYLE)
+                          & ~(con.WS_CAPTION | con.WS_THICKFRAME))
         gui.SetWindowLong(window.hwnd, con.GWL_EXSTYLE,
-                          window.extended_style & ~(con.WS_EX_CLIENTEDGE | con.WS_EX_WINDOWEDGE))
+                          gui.GetWindowLong(window.hwnd, con.GWL_EXSTYLE)
+                          & ~(con.WS_EX_CLIENTEDGE | con.WS_EX_WINDOWEDGE))
+        self.last_snapshot["stage"] = "player_position"
         self._position(window, rect, frame_changed=True)
         deadline = self._clock() + 2.5
         activation_attempted = False
@@ -212,7 +267,7 @@ class ExternalWindowBackend(WindowBackend):
             if self._clock() >= deadline:
                 snapshot.update(activation_attempted=activation_attempted,
                                 activation_accepted=activation_accepted)
-                raise ValueError("Player não ficou visível à frente do JWL no Salão.")
+                raise ValueError(self._presentation_failure(snapshot))
             self._pause(0.05)
             if not self.same_window(window):
                 raise ValueError("Player mudou de processo durante a apresentação.")
@@ -235,9 +290,8 @@ class ExternalWindowBackend(WindowBackend):
                 raise ValueError("Player fechado ou substituído; retornando ao JWL.")
             if self._clock() >= deadline:
                 raise ValueError("Player perdeu a exibição no Salão; retornando ao JWL.")
-            con, _ = self._win32()
             if snapshot["minimized"]:
-                show_window_async(window.hwnd, con.SW_SHOWNOACTIVATE)
+                self._restore_player(window, deadline=deadline)
             self._position(window, rect)
             repaired = True
             self._pause(0.05)

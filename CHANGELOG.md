@@ -1,5 +1,20 @@
 # Histórico de alterações
 
+## Não lançado — restauração nativa antes da projeção externa — 08/10/2026
+
+- Reaberto INC-033: após entrega `e072427`, o operador relatou o mesmo erro,
+  agora sem mover o player para a segunda tela. Falta diagnóstico desse ensaio.
+- Corrigida restauração que reaplicava WS_MINIMIZE/WS_MAXIMIZE do snapshot:
+  aguarda o pedido assíncrono e lê estilos atuais antes de alterar a borda.
+  JWL só cede o monitor depois dessa confirmação; disposição original preservada.
+- Falhas distinguem restauração, posição, cessão JWL, cloaking e exposição;
+  exceções nativas indicam etapa/tipo/código sem texto privado.
+- Regressões modelam flags reais e fila de mensagens; prova nativa Windows usa
+  HWNDs de teste próprios, em processo separado, para estados normal/min/max.
+
+Código Python candidato, sem nova DLL/compilação/versão. Aceite físico pendente.
+[Teste e exportação do diagnóstico](docs/external-media.md).
+
 ## Não lançado — cessão persistente e controles externos — 08/10/2026
 
 - Reaberto INC-033 após falha física de `7a5f7db`. Só a saída secundária JWL

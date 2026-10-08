@@ -219,8 +219,19 @@ class ExternalMediaService(QObject):
         except Exception as exc:
             # Return the fresh pre-placement snapshot even when styles/position
             # partially changed before the native operation failed.
-            message = (str(exc) if isinstance(exc, ValueError)
-                       else "Posicionamento da mídia externa não confirmado.")
+            if isinstance(exc, ValueError):
+                message = str(exc)
+            else:
+                # Keep the native stage/code without private exception text
+                # (titles, paths, URLs). A generic exposure message hid API
+                # failures occurring before the player ever moved.
+                snapshot = getattr(self.backend, "last_snapshot", {})
+                stage = (snapshot.get("stage", "player_position")
+                         if isinstance(snapshot, dict) else "player_position")
+                code = getattr(exc, "winerror", None)
+                native = f"; WinError={code}" if isinstance(code, int) else ""
+                message = (f"Posicionamento não confirmado [WINDOW_API:{stage}]: "
+                           f"{type(exc).__name__}{native}.")
             raise PlacementError(message + " Restaurando a janela.", original) from exc
         return {"window": original, "selector": obs_window_key(
             live[0].title, live[0].class_name, live[0].process

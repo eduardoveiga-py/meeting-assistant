@@ -1,5 +1,12 @@
 # Roteiro de conclusão — 21/09/2026
 
+Retorno após `e072427`: falha externa persiste, agora sem posicionamento no
+Salão. Nova candidata confirma restauração assíncrona e não reaplica flags
+min/max salvos; teste nativo Windows passa a usar HWNDs próprios. Mensagens
+distintas e exportação local devem orientar a próxima investigação se persistir.
+Aceite físico continua aberto, com Chrome normal/minimizado e 30 s, popup/Parar,
+retorno JWL e automação pausada/ativa. [Roteiro](external-media.md).
+
 Retorno seguinte de 08/10: `7a5f7db` falhou fisicamente; player não manteve a
 frente e o app retornou ao JWL. Novo candidato cede explicitamente a saída
 secundária JWL, acompanha toda a apresentação e oferece popup independente
