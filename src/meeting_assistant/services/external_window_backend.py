@@ -2,11 +2,31 @@
 
 import ctypes
 import time
+from ctypes import wintypes
 from dataclasses import replace
 
 from meeting_assistant.services.jwl_secondary_window import JwlSecondaryWindowInfo, WindowRect
 from meeting_assistant.services.native_window import activate_window, show_window_async
 from meeting_assistant.services.window_inventory import WindowBackend, is_jwl
+
+
+def set_frame_style(hwnd, index, value):
+    """Use typed WinDLL calls which release the GIL during cross-thread messages.
+
+    pywin32's custom SetWindowLong wrapper holds the GIL while calling user32.
+    A window procedure needing Python can deadlock; even another process may
+    stall Qt while its synchronous style notifications are processed. Preserve
+    pointer width and distinguish a valid zero previous value from API failure.
+    """
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    setter = user32.SetWindowLongPtrW
+    setter.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_ssize_t]
+    setter.restype = ctypes.c_ssize_t
+    ctypes.set_last_error(0)
+    previous = setter(hwnd, index, value)
+    error = ctypes.get_last_error()
+    if previous == 0 and error:
+        raise ctypes.WinError(error)
 
 
 def cloak_state(hwnd):
@@ -55,13 +75,15 @@ def operator_placement(window, monitors):
 
 
 class ExternalWindowBackend(WindowBackend):
-    def __init__(self, hall_window_provider=None, *, clock=time.monotonic, pause=time.sleep):
+    def __init__(self, hall_window_provider=None, *, clock=time.monotonic, pause=time.sleep,
+                 style_writer=set_frame_style):
         self._hall_window_provider = hall_window_provider or (lambda: None)
         self._hall_original = None
         self._clock, self._pause = clock, pause
         self.last_snapshot = {}
         self.cancelled = lambda: False
         self.return_candidate = None
+        self._write_style = style_writer
 
     @staticmethod
     def _win32():
@@ -237,10 +259,10 @@ class ExternalWindowBackend(WindowBackend):
         self.last_snapshot["stage"] = "jwl_handoff"
         self._release_hall(rect)
         self.last_snapshot["stage"] = "player_frame"
-        gui.SetWindowLong(window.hwnd, con.GWL_STYLE,
+        self._write_style(window.hwnd, con.GWL_STYLE,
                           gui.GetWindowLong(window.hwnd, con.GWL_STYLE)
                           & ~(con.WS_CAPTION | con.WS_THICKFRAME))
-        gui.SetWindowLong(window.hwnd, con.GWL_EXSTYLE,
+        self._write_style(window.hwnd, con.GWL_EXSTYLE,
                           gui.GetWindowLong(window.hwnd, con.GWL_EXSTYLE)
                           & ~(con.WS_EX_CLIENTEDGE | con.WS_EX_WINDOWEDGE))
         self.last_snapshot["stage"] = "player_position"
@@ -305,10 +327,10 @@ class ExternalWindowBackend(WindowBackend):
                 return  # Never alter a reused HWND or reopen a closed player.
             frame_mask = con.WS_CAPTION | con.WS_THICKFRAME
             edge_mask = con.WS_EX_CLIENTEDGE | con.WS_EX_WINDOWEDGE
-            gui.SetWindowLong(window.hwnd, con.GWL_STYLE,
+            self._write_style(window.hwnd, con.GWL_STYLE,
                               (gui.GetWindowLong(window.hwnd, con.GWL_STYLE) & ~frame_mask)
                               | (window.style & frame_mask))
-            gui.SetWindowLong(window.hwnd, con.GWL_EXSTYLE,
+            self._write_style(window.hwnd, con.GWL_EXSTYLE,
                               (gui.GetWindowLong(window.hwnd, con.GWL_EXSTYLE) & ~edge_mask)
                               | (window.extended_style & edge_mask))
             desired = operator_placement(window, self.monitors())

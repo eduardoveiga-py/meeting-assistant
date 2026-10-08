@@ -34,6 +34,9 @@ salvo do player reaplicava WS_MINIMIZE/WS_MAXIMIZE após pedir restauração.
 A nova candidata espera o estado normal/visível antes de ceder JWL; lê o estilo
 atual e altera somente a borda. Snapshot original permanece reservado ao retorno.
 O CI também exercita Win32 real com janelas de teste, em processo separado.
+Essa prova inclui uma thread GUI e worker no mesmo processo isolado para
+detectar bloqueio de callback Python: escrita de estilo usa WinDLL tipado,
+libera o GIL e verifica erro nativo. Não controla aplicativos pessoais no CI.
 
 O retorno físico de `7a5f7db` falhou: o player chegou à frente brevemente e o
 app abortou por não confirmar sua exposição. Demover TOPMOST uma vez não

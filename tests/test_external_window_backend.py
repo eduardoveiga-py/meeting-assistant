@@ -145,7 +145,8 @@ def make_backend(monkeypatch, *, activate=True, restore_reads=0, minimized=True)
                                                      (520, 40, 1200, 720)))
     hall = replace(window(51, rect=HALL_RECT), topmost=True, extended_style=CON.WS_EX_TOPMOST)
     gui, clock = Win32(player, hall, activate=activate, restore_reads=restore_reads), Clock()
-    backend = ExternalWindowBackend(lambda: hall, clock=clock, pause=clock.pause)
+    backend = ExternalWindowBackend(lambda: hall, clock=clock, pause=clock.pause,
+                                    style_writer=lambda *args: gui.SetWindowLong(*args))
     backend.windows = lambda: [*gui.current.values(), *gui.others]
     backend.same_window = lambda w: w.hwnd in gui.current and (
         gui.current[w.hwnd].pid, gui.current[w.hwnd].created) == (w.pid, w.created)
@@ -229,6 +230,35 @@ def test_failure_identifies_the_actual_unconfirmed_stage(field, code):
                 "geometry_ok": True, "hall_hidden": True, "exposed": True}
     snapshot[field] = field in {"minimized", "cloaked"}
     assert code in ExternalWindowBackend._presentation_failure(snapshot)
+
+
+@pytest.mark.parametrize("previous,error", [(0, 0), (4, 0), (0, 5)])
+def test_typed_style_writer_preserves_pointer_width_and_reports_native_failure(monkeypatch, previous, error):
+    import ctypes
+    from ctypes import wintypes
+
+    calls, errors = [], []
+
+    class Setter:
+        def __call__(self, *args):
+            calls.append(args)
+            return previous
+
+    setter = Setter()
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *args, **kwargs:
+                        SimpleNamespace(SetWindowLongPtrW=setter), raising=False)
+    monkeypatch.setattr(ctypes, "set_last_error", errors.append, raising=False)
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: error, raising=False)
+    monkeypatch.setattr(ctypes, "WinError", lambda code: OSError(code, "Native style failure"), raising=False)
+    args = (0x200000001, CON.GWL_STYLE, -2147483648)
+    if error:
+        with pytest.raises(OSError):
+            module.set_frame_style(*args)
+    else:
+        module.set_frame_style(*args)
+    assert calls == [args] and errors == [0]
+    assert setter.argtypes == [wintypes.HWND, ctypes.c_int, ctypes.c_ssize_t]
+    assert setter.restype is ctypes.c_ssize_t
 
 
 def test_old_geometry_confirmation_accepts_player_behind_fullscreen_jwl(monkeypatch):

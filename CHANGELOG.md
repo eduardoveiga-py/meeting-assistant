@@ -9,6 +9,8 @@
   JWL só cede o monitor depois dessa confirmação; disposição original preservada.
 - Falhas distinguem restauração, posição, cessão JWL, cloaking e exposição;
   exceções nativas indicam etapa/tipo/código sem texto privado.
+- Escrita de estilo usa WinDLL tipado, liberando o GIL e verificando erro nativo;
+  a primeira prova Windows detectou travamento no wrapper Python anterior.
 - Regressões modelam flags reais e fila de mensagens; prova nativa Windows usa
   HWNDs de teste próprios, em processo separado, para estados normal/min/max.
 

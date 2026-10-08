@@ -149,6 +149,14 @@ falhar, em vez de inferir outra causa pela mensagem genérica.
 fila reais. Snapshot pertence à restauração final, não à escrita integral no
 início. Validar chamadas reais do Windows além de integrar UI/serviço em mocks.
 
+**Resultado do primeiro CI nativo (`3a0273f`):** normal/min/max travaram; 649
+regressões restantes passaram. Não promovido para main. O wrapper upstream
+SetWindowLong retém o GIL durante a chamada que pode notificar a thread GUI;
+esta prova usa callback Python, tornando o bloqueio observável. Escrita de
+estilo externa passa a usar WinDLL tipado, que libera GIL e verifica código
+Windows. O subprocesso de prova preserva esse cenário e fornece tracebacks
+em timeout. Apenas o novo ensaio deve confirmar a correção do bloqueio.
+
 **Reabertura após `7a5f7db`.** O operador viu o player à frente por um momento,
 mas não permaneceu. A imagem confirma a mensagem “Player não ficou visível à
 frente do JWL no Salão” seguida do retorno confirmado ao JWL. A candidata

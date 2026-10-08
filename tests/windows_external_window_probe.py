@@ -1,5 +1,6 @@
 """Real HWND/API probe in an isolated Windows process; no operator apps touched."""
 
+import faulthandler
 import json
 import os
 import sys
@@ -107,4 +108,6 @@ def probe(initial_state):
 
 
 if __name__ == "__main__":
+    faulthandler.dump_traceback_later(10)
     print(json.dumps(probe(sys.argv[1])))
+    faulthandler.cancel_dump_traceback_later()

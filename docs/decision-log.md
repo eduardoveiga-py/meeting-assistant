@@ -30,8 +30,23 @@ Chrome, VLC ou JWL reais nem comprova duas telas. Ensaio físico ainda pendente
 em [external-media.md](external-media.md). Núcleo protegido, áudio, DLLs,
 versões e distribuição preservados.
 
+**Ensaio nativo inicial:** a prova Windows com janelas Python na thread GUI e
+escrita de estilo no worker travou nos três estados. O código upstream pywin32
+mostra que sua implementação especial de SetWindowLong mantém o GIL durante
+SetWindowLongPtr. A chamada pode esperar WM_STYLECHANGING na thread GUI que
+também precisa desse GIL. As demais regressões passaram; a candidata intermediária
+`3a0273f` ficou somente na branch de teste, sem promoção para main.
+
+**Ajuste da candidata:** o backend externo usa WinDLL SetWindowLongPtrW tipado,
+liberando o GIL durante a chamada e conferindo GetLastError (zero anterior pode
+ser legítimo). Mantida a prova no mesmo processo, como regressão desse bloqueio;
+o executável de ensaio é o próprio Python num subprocesso isolado. Não há
+compilação nem interação com janelas pessoais. Deadline externo mata a prova
+em falha e inclui tracebacks das threads no CI. Isso não amplia o aceite físico.
+
 Fontes primárias: [ShowWindowAsync](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindowasync)
-e [estados/estilos de janela](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features).
+e [estados/estilos de janela](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features),
+[wrapper pywin32](https://github.com/mhammond/pywin32/blob/main/win32/src/win32gui.i).
 
 ## 2026-10-08 — cessão explícita da saída e popup de mídia
 
