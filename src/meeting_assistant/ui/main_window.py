@@ -346,7 +346,7 @@ class MainWindow(QMainWindow):
         self.automation_status.setWordWrap(True)
         controls.addWidget(self.automation_status)
 
-        panic = QPushButton("🚨 Emergência (Tela Preta)")
+        panic = QPushButton("🚨 Emergência (Texto do Ano)")
         panic.setObjectName("DangerButton")
         panic.setToolTip("Corta o vídeo para o Texto do Ano. Usa-se em caso de pânico ou erro inesperado.")
         panic.clicked.connect(self._activate_safe_scene)
