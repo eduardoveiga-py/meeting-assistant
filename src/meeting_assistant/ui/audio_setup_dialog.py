@@ -372,6 +372,23 @@ class AudioSetupDialog(QDialog):
             blockers.append(("marque a confirmação do roteamento", self.route_confirmation))
         return blockers
 
+
+    def _filter_changes(self):
+        all_filters = self._data()["extra_filters"]
+        return {
+            name: filters
+            for name, filters in all_filters.items()
+            if self._source_states.get(name, {}).get("gain_ready")
+            and filters != self._saved_filters.get(
+                name,
+                {
+                    "noise_gate": False,
+                    "compressor": False,
+                    "noise_suppression": False,
+                    }
+            )
+        }
+
     def _sync_changes(self):
         return {
             name: sync.value()
@@ -465,8 +482,7 @@ class AudioSetupDialog(QDialog):
                     "noise_suppression": self.suppressions[name].isChecked()
                     if name in self.suppressions
                     else False,
-                    "auto_ducking": self.settings.auto_mute_mic_for_jwl_media,
-                }
+                    }
                 for name in self.gains
             },  # noqa: E501
             "microphone": self.microphone.currentData(),
@@ -495,18 +511,16 @@ class AudioSetupDialog(QDialog):
         if action == "gains":
             data = {"gains_db": self._gain_changes(), "sync_offsets_ms": self._sync_changes()}
 
-            # Since extra_filters are now sent, we should include them
-            extra = self._data()["extra_filters"]
+            extra = self._filter_changes()
 
-            # We want to know if ONLY filters changed or volume or sync changed
-            if not self._gain_changes() and not self._sync_changes():
-                if extra == self._saved_filters:
-                    self.status.setText("Altere um volume, atraso ou filtro antes de salvar.")
-                    return
+            if not data["gains_db"] and not data["sync_offsets_ms"] and not extra:
+                self.status.setText("Altere um volume, atraso ou filtro antes de salvar.")
+                return
 
-            data["extra_filters"] = extra
+            if extra:
+                data["extra_filters"] = extra
             # Sync/filter-only changes still validate the same source/filters, preserving gain.
-            for name in list(data["sync_offsets_ms"]) + list(data["extra_filters"]):
+            for name in list(data["sync_offsets_ms"]) + list(data.get("extra_filters", {})):
                 data["gains_db"].setdefault(name, self._saved_gains[name])
         else:
             data = self._data()
