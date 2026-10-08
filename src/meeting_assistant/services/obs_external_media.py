@@ -88,6 +88,14 @@ def show_external(client, prior, selector=None):
             raise ValueError("A captura externa mudou durante a preparação. A cena anterior foi preservada.")
         if display_capture_items(client, SCENE):
             raise ValueError("Captura de monitor ativa na cena Mídia Externa. Program foi preservado.")
+    try:
+        transitions = call(client, "GetSceneTransitionList").get("transitions", [])
+        fade = next((t["transitionName"] for t in transitions if t["transitionKind"] == "fade_transition"), None)
+        if fade:
+            call(client, "SetSceneSceneTransitionOverride", sceneName=SCENE, transitionName=fade, transitionDuration=500)
+    except Exception:
+        pass
+
     call(client, "SetCurrentProgramScene", sceneName=SCENE)
     if call(client, "GetCurrentProgramScene")["currentProgramSceneName"] != SCENE:
         restore_external(client, prior)
@@ -97,7 +105,35 @@ def show_external(client, prior, selector=None):
 
 def restore_external(client, prior):
     if call(client, "GetCurrentProgramScene")["currentProgramSceneName"] == SCENE and prior:
+        fade = None
+        old_override = None
+        try:
+            transitions = call(client, "GetSceneTransitionList").get("transitions", [])
+            fade = next((t["transitionName"] for t in transitions if t["transitionKind"] == "fade_transition"), None)
+            if fade:
+                try:
+                    old_override = call(client, "GetSceneSceneTransitionOverride", sceneName=prior)
+                except Exception:
+                    pass
+                call(client, "SetSceneSceneTransitionOverride", sceneName=prior, transitionName=fade, transitionDuration=500)
+        except Exception:
+            pass
+
         call(client, "SetCurrentProgramScene", sceneName=prior)
+        
+        if fade:
+            import time
+            time.sleep(0.6)
+            try:
+                if old_override and old_override.get("transitionName"):
+                    call(client, "SetSceneSceneTransitionOverride", sceneName=prior, 
+                         transitionName=old_override["transitionName"], 
+                         transitionDuration=old_override.get("transitionDuration", 300))
+                else:
+                    call(client, "SetSceneSceneTransitionOverride", sceneName=prior)
+            except Exception:
+                pass
+
         if call(client, "GetCurrentProgramScene")["currentProgramSceneName"] != prior:
             raise ValueError("OBS não confirmou a cena anterior.")
     return {"message": "Program anterior restaurado quando ainda controlado pela mídia externa."}

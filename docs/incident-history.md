@@ -291,7 +291,7 @@ chamada com a geometria exata do monitor (1920x828), o gerenciador de janelas do
 Windows aplicou a regra de maximização, estendendo as bordas invisíveis (DWM
 extended frame bounds) em -7 pixels, resultando em uma diferença de tamanho que falhou na validação de geometria estrita (`abs(a - b) <= 12`).
 
-**Correção.** A flag `WS_MAXIMIZE` agora é removida junto com `WS_CAPTION` e
+**Correção da geometria.** A flag `WS_MAXIMIZE` agora é removida junto com `WS_CAPTION` e
 `WS_THICKFRAME` no momento exato em que a janela está sendo posicionada no
 Salão (`present()`). Isso permite que o Windows aplique as coordenadas exatas
 solicitadas. No retorno (`restore_presentation()`), a flag `WS_MAXIMIZE` foi
@@ -299,6 +299,20 @@ adicionada à máscara de bordas para que a verificação de integridade confirm
 estado do player restaurado perfeitamente, aproveitando que a chamada
 `SetWindowPlacement` (já existente no fluxo) é a responsável correta por restaurar
 o estado maximizado de forma limpa, não precisando de manipulação de estilo prévia para desmaximização.
+
+**Ajuste de transição e atraso de retorno (08/10/2026).** Após sucesso na segunda tentativa,
+foi observado um atraso incômodo e uma mudança brusca ("corte seco") na restauração
+do Texto do Ano. O corte brusco foi solucionado inserindo um `override` dinâmico na cena
+`Meeting Assistant - Mídia Externa` (e na cena original durante o retorno) dentro
+do `obs_external_media.py` utilizando o efeito `Fade` (`esmaecer`), preservando
+a configuração global do usuário. O atraso na exibição do JWL foi resolvido em
+`external_media_service.py`: a janela nativa do JWL agora é tornada visível
+antes da transição do OBS, garantindo que a tela preta seja evitada e o corte aconteça de forma imperceptível e suave.
+
+**Sucesso e Aprendizado final.** 
+- **Erro**: Manipular janelas maximizadas via Win32 `SetWindowPos` requer atenção explícita às bordas estendidas invisíveis (DWM). Não tratar a máscara `WS_MAXIMIZE` corretamente gerou rejeições contínuas de segurança. 
+- **Erro 2**: A ordem de restauração ditava a percepção visual. Retornar no OBS para uma cena que apontava a uma janela ocultada criava o atraso relatado.
+- **Aprendizado**: As capacidades de manipulação de transição via OBS WebSocket 5.0 (usando `SetSceneSceneTransitionOverride`) permitiram adicionar polimento (Fade In/Out) sem corromper as preferências globais da operação.
 
 Fontes primárias verificadas: [lista do OBS 31.0.3](https://github.com/obsproject/obs-studio/blob/31.0.3/plugins/win-capture/window-capture.c)
 e [visibilidade/comparação dos títulos](https://github.com/obsproject/obs-studio/blob/31.0.3/libobs/util/windows/window-helpers.c).

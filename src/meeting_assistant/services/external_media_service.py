@@ -335,6 +335,14 @@ class ExternalMediaService(QObject):
                 self.controls.command(self.window, action, self._control_cancel)
             except ValueError as exc:
                 errors.append(str(exc))
+        
+        try:
+            if hasattr(self.backend, "_restore_hall_order"):
+                self.backend._restore_hall_order()
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("Falha ao restaurar JWL antecipadamente: %s", exc)
+            
         if errors:
             raise ValueError("Retorno solicitado; confira a mídia no aplicativo: " + "; ".join(errors))
 
