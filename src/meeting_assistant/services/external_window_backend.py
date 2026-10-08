@@ -100,18 +100,24 @@ class ExternalWindowBackend(WindowBackend):
             raise ValueError("Saída JWL não identificada. Use Forçar JWL antes de apresentar mídia externa.")
         con, gui = self._win32()
         root = int(gui.GetAncestor(identified.hwnd, con.GA_ROOT) or identified.hwnd)
-        import win32process, psutil
+        import psutil
+        import win32process
+
         from meeting_assistant.services.window_inventory import NativeWindow
         if not gui.IsWindow(root) or not gui.IsWindowVisible(root):
-            raise ValueError(f"A saída JWL desapareceu. Confirme o JWL antes de apresentar mídia externa. Root: {root}")
+            raise ValueError(
+                f"A saída JWL desapareceu. Confirme o JWL antes de apresentar mídia externa. Root: {root}"
+            )
             
         matches = [w for w in self.windows() if w.hwnd == root]
         if matches:
             hall = matches[0]
         else:
             _, pid = win32process.GetWindowThreadProcessId(root)
-            try: created = psutil.Process(pid).create_time()
-            except psutil.Error: created = 0
+            try:
+                created = psutil.Process(pid).create_time()
+            except psutil.Error:
+                created = 0
             hall = NativeWindow(
                 hwnd=root, pid=pid, created=created, process="jwlibrary.exe",
                 title=gui.GetWindowText(root), class_name=gui.GetClassName(root),
@@ -197,18 +203,16 @@ class ExternalWindowBackend(WindowBackend):
         A saved GWL_STYLE includes live WS_MINIMIZE/WS_MAXIMIZE bits. Writing
         that saved style immediately after ShowWindowAsync can undo restoration.
         The original snapshot belongs only to the later rollback.
+
+        We only need visible + non-minimized here. WS_MAXIMIZE is acceptable
+        because present() will immediately strip the frame and call SetWindowPos
+        with explicit coordinates, which overrides the maximized layout.
         """
         con, gui = self._win32()
         deadline = self._clock() + 2.5 if deadline is None else deadline
         self.last_snapshot = {"stage": "player_restore", "hwnd": window.hwnd,
                               "original_minimized": window.minimized, "ready": False}
         show_window_async(window.hwnd, con.SW_RESTORE)
-        
-        # Some players (e.g. Chrome) may ignore ShowWindowAsync(SW_RESTORE) if already visible but maximized.
-        # If it doesn't naturally restore within 500ms, strip the WS_MAXIMIZE bit manually.
-        force_unmaximize_deadline = self._clock() + 0.5
-        force_applied = False
-
         while not self.cancelled():
             if not self.same_window(window):
                 raise ValueError("[PLAYER_RESTORE] Player mudou durante a restauração.")
@@ -216,15 +220,11 @@ class ExternalWindowBackend(WindowBackend):
             minimized = bool(gui.IsIconic(window.hwnd))
             visible = bool(gui.IsWindowVisible(window.hwnd))
             self.last_snapshot.update(style=style, minimized=minimized, visible=visible)
-            if visible and not minimized and not style & (con.WS_MINIMIZE | con.WS_MAXIMIZE):
+            if visible and not minimized and not style & con.WS_MINIMIZE:
                 return
-            if not force_applied and not minimized and (style & con.WS_MAXIMIZE) and self._clock() > force_unmaximize_deadline:
-                self._write_style(window.hwnd, con.GWL_STYLE, style & ~con.WS_MAXIMIZE)
-                win32gui.SetWindowPos(window.hwnd, 0, 0, 0, 0, 0, con.SWP_NOMOVE | con.SWP_NOSIZE | con.SWP_NOZORDER | con.SWP_FRAMECHANGED)
-                force_applied = True
             if self._clock() >= deadline:
                 raise ValueError(
-                    "[PLAYER_RESTORE] O player não saiu do estado minimizado/maximizado em 2,5 s."
+                    "[PLAYER_RESTORE] O player não saiu do estado minimizado em 2,5 s."
                 )
             self._pause(0.05)
         raise ValueError("[PLAYER_RESTORE] Restauração cancelada.")
