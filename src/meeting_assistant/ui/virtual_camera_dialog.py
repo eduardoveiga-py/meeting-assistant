@@ -27,6 +27,7 @@ class VirtualCameraDialog(QDialog):
             "Fechar esta tela mantém a câmera ativa. Para encerrar, use Parar câmera ou saia do app."
         )
         title.setWordWrap(True)
+        title.setMinimumHeight(75)
         root.addWidget(title)
         self.preview = ProgramPreview(self, self.monitor)
         root.addWidget(self.preview, 1)
