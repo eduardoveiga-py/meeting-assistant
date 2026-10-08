@@ -906,3 +906,9 @@ A busca do botão de microfone do Zoom foi otimizada para pesquisar apenas dentr
 **Causa:** A nova atualização do Zoom (Zoom Workplace) mudou as classes das janelas. A janela principal do operador não é mais ZPPTopWndClass e sim ConfMultiTabContentWndClass.
 **Solução:** Adicionamos ConfMultiTabContentWndClass à lista de janelas permitidas no zoom_hall_service.py e ao arquivo de base validado.
 **Aprendizado:** Atualizações de aplicativos de terceiros como o Zoom podem alterar secretamente as classes Win32, quebrando integrações antigas. Deve-se analisar logs de telemetria e o inventory de janelas para encontrar as novas classes.
+
+### 2026-10-08: Loop de exibição e verificação de geometria no Zoom
+**Sintoma:** O recurso Zoom - Salão aceitava a janela, mas ficava alternando (piscando) entre JWL e Zoom a cada 5 segundos até o operador clicar novamente.
+**Causa:** Ao encontrar a janela principal, o aplicativo a maximizava na segunda tela, porém o Windows aplica bordas invisíveis em janelas maximizadas. Isso fazia com que a janela ficasse com o tamanho (1912, -8, 4288, 1600) em vez do tamanho estrito do monitor (1920, 0, 4280, 1640). Como a geometria não batia com tolerância de 8px, o _poll_show esgotava o timeout de 5 segundos e comandava a reversão (restore_jwl).
+**Solução:** A tolerância na verificação da geometria foi ampliada para 60px para acomodar essas margens invisíveis introduzidas pelo Windows em janelas maximizadas, permitindo que a apresentação seja confirmada.
+**Aprendizado:** Janelas tradicionais maximizadas nunca coincidem milimetricamente com as bordas do monitor devido aos enfeites invisíveis do Windows, ao contrário de janelas sem bordas como o JW Library. Deve-se manter uma tolerância maior nas verificações visuais.
