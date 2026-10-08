@@ -250,7 +250,12 @@ def main() -> int:
     window.external_media.control_changed.connect(window._external_control_status)
     window.external_media.operator_layout_requested.connect(window._external_operator_layout)
     window.external_media.diagnostic.connect(
-        lambda details: telemetry.event("external_media_task", **details)
+        lambda details: telemetry.event(
+            "external_media_task",
+            panel_minimized=window.isMinimized(),
+            panel_visible=window.isVisible(),
+            **details
+        )
     )
 
     from meeting_assistant.services.window_layout import WindowLayoutService

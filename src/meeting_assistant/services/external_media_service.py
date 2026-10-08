@@ -203,6 +203,10 @@ class ExternalMediaService(QObject):
         )
         if rect is None:
             raise ValueError("Monitor desconectado durante a preparação.")
+        if not display.primary:
+            for m in self.backend.monitors():
+                if m["primary"] and WindowRect(*m["rect"]) == rect:
+                    raise ValueError("Monitor do Salão ausente no Windows; apresentação protegida.")
         self._target_rect = (rect.left, rect.top, rect.right, rect.bottom)
         if self._cancel.is_set():
             raise ValueError("Apresentação cancelada antes de mover a janela.")
@@ -273,6 +277,7 @@ class ExternalMediaService(QObject):
                     payload.get("message", "Player não confirmou a disposição anterior")
                 )
             if not self.zoom_hall.restore_jwl() and self.phase == "returning":
+                self.operator_layout_requested.emit()
                 self._state("return_failed", "Retorno do JWL não confirmado. Confira a tela do salão.")
         elif action == "monitor" and self.phase == "presenting":
             if not ok:
@@ -425,6 +430,7 @@ class ExternalMediaService(QObject):
             self.operator_layout_requested.emit()
             self._state("return_failed", message + "; pendências: " + "; ".join(self._restore_errors))
         else:
+            self.operator_layout_requested.emit()
             self._state("return_failed", "Retorno JWL não confirmado: " + message)
 
     def stop(self):
