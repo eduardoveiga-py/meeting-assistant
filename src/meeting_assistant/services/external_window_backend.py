@@ -203,6 +203,12 @@ class ExternalWindowBackend(WindowBackend):
         self.last_snapshot = {"stage": "player_restore", "hwnd": window.hwnd,
                               "original_minimized": window.minimized, "ready": False}
         show_window_async(window.hwnd, con.SW_RESTORE)
+        
+        # Some players (e.g. Chrome) may ignore ShowWindowAsync(SW_RESTORE) if already visible but maximized.
+        # If it doesn't naturally restore within 500ms, strip the WS_MAXIMIZE bit manually.
+        force_unmaximize_deadline = self._clock() + 0.5
+        force_applied = False
+
         while not self.cancelled():
             if not self.same_window(window):
                 raise ValueError("[PLAYER_RESTORE] Player mudou durante a restauração.")
@@ -212,6 +218,10 @@ class ExternalWindowBackend(WindowBackend):
             self.last_snapshot.update(style=style, minimized=minimized, visible=visible)
             if visible and not minimized and not style & (con.WS_MINIMIZE | con.WS_MAXIMIZE):
                 return
+            if not force_applied and not minimized and (style & con.WS_MAXIMIZE) and self._clock() > force_unmaximize_deadline:
+                self._write_style(window.hwnd, con.GWL_STYLE, style & ~con.WS_MAXIMIZE)
+                win32gui.SetWindowPos(window.hwnd, 0, 0, 0, 0, 0, con.SWP_NOMOVE | con.SWP_NOSIZE | con.SWP_NOZORDER | con.SWP_FRAMECHANGED)
+                force_applied = True
             if self._clock() >= deadline:
                 raise ValueError(
                     "[PLAYER_RESTORE] O player não saiu do estado minimizado/maximizado em 2,5 s."
