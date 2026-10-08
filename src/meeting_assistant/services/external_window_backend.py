@@ -289,7 +289,7 @@ class ExternalWindowBackend(WindowBackend):
         self.last_snapshot["stage"] = "player_frame"
         self._write_style(window.hwnd, con.GWL_STYLE,
                           gui.GetWindowLong(window.hwnd, con.GWL_STYLE)
-                          & ~(con.WS_CAPTION | con.WS_THICKFRAME))
+                          & ~(con.WS_CAPTION | con.WS_THICKFRAME | con.WS_MAXIMIZE))
         self._write_style(window.hwnd, con.GWL_EXSTYLE,
                           gui.GetWindowLong(window.hwnd, con.GWL_EXSTYLE)
                           & ~(con.WS_EX_CLIENTEDGE | con.WS_EX_WINDOWEDGE))
@@ -353,7 +353,7 @@ class ExternalWindowBackend(WindowBackend):
             if not self.same_window(window):
                 self.last_snapshot = {"hwnd": window.hwnd, "closed_or_replaced": True}
                 return  # Never alter a reused HWND or reopen a closed player.
-            frame_mask = con.WS_CAPTION | con.WS_THICKFRAME
+            frame_mask = con.WS_CAPTION | con.WS_THICKFRAME | con.WS_MAXIMIZE
             edge_mask = con.WS_EX_CLIENTEDGE | con.WS_EX_WINDOWEDGE
             self._write_style(window.hwnd, con.GWL_STYLE,
                               (gui.GetWindowLong(window.hwnd, con.GWL_STYLE) & ~frame_mask)

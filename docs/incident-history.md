@@ -280,6 +280,26 @@ redimensionamento subsequentes sobrescrevem o estado maximizado nativo com as
 coordenadas exatas fornecidas por `SetWindowPos` na etapa seguinte. Os testes da
 camada Win32 foram validados.
 
+**Reabertura com erro de posicionamento (08/10/2026).** Na segunda tentativa de
+08/10, a telemetria indicou: `[PLAYER_POSITION] O player não confirmou o tamanho/posição no monitor do Salão`. O Chrome foi para a segunda tela e logo retornou.
+A geometria registrada mostrava: `target_rect=[1920,0,3712,828]`,
+`rect=[1913,-7,3719,787]`.
+
+**Causa demonstrada.** A correção anterior permitiu a continuação do Chrome maximizado, mas
+não retirou a flag nativa `WS_MAXIMIZE`. Quando a função `SetWindowPos` foi
+chamada com a geometria exata do monitor (1920x828), o gerenciador de janelas do
+Windows aplicou a regra de maximização, estendendo as bordas invisíveis (DWM
+extended frame bounds) em -7 pixels, resultando em uma diferença de tamanho que falhou na validação de geometria estrita (`abs(a - b) <= 12`).
+
+**Correção.** A flag `WS_MAXIMIZE` agora é removida junto com `WS_CAPTION` e
+`WS_THICKFRAME` no momento exato em que a janela está sendo posicionada no
+Salão (`present()`). Isso permite que o Windows aplique as coordenadas exatas
+solicitadas. No retorno (`restore_presentation()`), a flag `WS_MAXIMIZE` foi
+adicionada à máscara de bordas para que a verificação de integridade confirme o
+estado do player restaurado perfeitamente, aproveitando que a chamada
+`SetWindowPlacement` (já existente no fluxo) é a responsável correta por restaurar
+o estado maximizado de forma limpa, não precisando de manipulação de estilo prévia para desmaximização.
+
 Fontes primárias verificadas: [lista do OBS 31.0.3](https://github.com/obsproject/obs-studio/blob/31.0.3/plugins/win-capture/window-capture.c)
 e [visibilidade/comparação dos títulos](https://github.com/obsproject/obs-studio/blob/31.0.3/libobs/util/windows/window-helpers.c).
 
