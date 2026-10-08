@@ -189,7 +189,17 @@ def find_control(*, windows=None, pids=None, diagnostic=None):
             continue
         window_class = window.class_name()
         details["window_classes"].append(window_class)
-        for button in window.descendants(control_type="Button"):
+        
+        buttons = []
+        if window_class in {"ZPFloatVideoWndClass", "ZPMiniVideoWndClass"}:
+            buttons = window.descendants(control_type="Button")
+        else:
+            for container in window.descendants(control_type="ToolBar"):
+                buttons.extend(container.descendants(control_type="Button"))
+            for container in window.descendants(class_name="ZPControlPanelClass"):
+                buttons.extend(container.descendants(control_type="Button"))
+                
+        for button in buttons:
             details["controls_examined"] += 1
             if not button.is_enabled():
                 continue

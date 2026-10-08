@@ -474,13 +474,13 @@ class ZoomHallService(QObject):
                         "has_controls": controls,
                     }
                 )
-                if class_name not in (_ZOOM_WINDOW_CLASS, "ZPPTopWndClass") or controls:
+                if class_name not in (_ZOOM_WINDOW_CLASS, "ZPPTopWndClass"):
                     return True
                 # A previous app instance may have hidden this window. Its
                 # process/class/controls identify it even without our HWND cache.
                 if rect.width < 300 or rect.height < 180:
                     return True
-                candidates.append(ZoomHallWindow(int(hwnd), int(pid), rect))
+                candidates.append((controls, ZoomHallWindow(int(hwnd), int(pid), rect)))
             except (OSError, RuntimeError):
                 pass
             return True
@@ -491,8 +491,15 @@ class ZoomHallService(QObject):
             self.discovery_changed.emit({"windows": inventory, "result": "enumeration_failed"})
             return None
 
-        # Ambiguous candidates must never be resolved by moving the largest window.
-        selected = candidates[0] if len(candidates) == 1 else None
+        if not candidates:
+            selected = None
+        else:
+            candidates.sort(key=lambda x: x[0])  # False (no controls) comes before True
+            
+            selected = candidates[0][1] if len(candidates) == 1 or (len(candidates) > 1 and candidates[0][0] != candidates[1][0]) else None
+            
+            if len(candidates) > 1 and candidates[0][0] == candidates[1][0]:
+                selected = None
         self.discovery_changed.emit(
             {
                 "windows": inventory,

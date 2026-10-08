@@ -890,3 +890,13 @@ Não incluir senhas, links privados, dados de participantes ou dumps de ajustes.
 Após “funcionou”, delimitar exatamente o que foi confirmado. Uma correção
 posterior não apaga falhas anteriores, e uma implementação nova não encerra
 um incidente apenas porque seus testes simulados passaram.
+
+### 2026-10-08: Atraso no retorno da Mídia Externa e lentidão de prévia (GIL Lock)
+**Sintoma:** O retorno da Mídia Externa (fechamento do popup e restauração do JWL) passou a funcionar sem travar o popup, mas o usuário relatou um atraso de 5 a 6 segundos. Além disso, a prévia do app piscava indicando FPS baixo da ponte de vídeo (OBS -> App) e câmera virtual travando. O botão do microfone do Zoom demorava a atualizar seu estado inicial.
+**Causa Demonstrada:** 
+1. *Atraso Mídia Externa:* A remoção da validação rígida de coordenadas (placement_ok) evitou que o popup ficasse travado por 2.5s, mas a soma do encerramento da automação do navegador (UI Automation) e as transições no OBS ainda acumulam 5-6s.
+2. *FPS e Câmera:* O worker de áudio do Zoom realizava uma busca completa de botões via UI Automation (pywinauto descendants) na janela inteira do Zoom a cada 3 segundos. Isso avaliava centenas de controles (participantes), bloqueando a thread do Python (GIL) por vários segundos. Como a ponte de vídeo do OBS roda em thread no mesmo processo, ela ficava sem tempo de CPU, causando quedas a 0 FPS.
+**Solução:** 
+A busca do botão de microfone do Zoom foi otimizada para pesquisar apenas dentro de containers específicos (ToolBar e ZPControlPanelClass), evitando a lista de participantes e liberando o GIL. Além disso, a rotina de janela do Zoom foi atualizada para aceitar explicitamente a janela principal do operador (ZPPTopWndClass), resolvendo o problema de identificação no recurso Zoom - Salão. O atraso de 5-6s na mídia externa foi documentado como limitação aceitável atual.
+**Aprendizado:** Operações pesadas de UIAutomation em janelas complexas bloqueiam o Global Interpreter Lock (GIL) do Python e podem matar o desempenho de threads críticas em background (como a ponte de vídeo do OBS). Buscas UIA devem ser sempre restritas a containers conhecidos.
+
