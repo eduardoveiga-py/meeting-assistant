@@ -924,3 +924,9 @@ A busca do botão de microfone do Zoom foi otimizada para pesquisar apenas dentr
 **Causa Profunda:** O plugin do OBS (\MeetingAssistant.Preview.v1\) comunica-se com o Python através de um 'Named Pipe' do Windows. Quando a rotina de detecção do microfone do Zoom vasculhava a árvore inteira de controles, o Global Interpreter Lock (GIL) do Python travava todas as threads do app por ~3 segundos. Com a thread leitora travada, o buffer do pipe ficava cheio, o que fazia o plugin no OBS bloquear a thread de renderização de vídeo do OBS. Isso resultava no congelamento global do OBS e de todas as suas saídas (incluindo a câmera do WhatsApp).
 **Solução:** A otimização já feita anteriormente na busca de elementos do Zoom (restringindo-a apenas a ToolBars) impediu o travamento do GIL. Isso destravou a thread leitora de vídeo, mantendo o pipe vazio e liberando o OBS para rodar suavemente em 30/60 FPS de forma independente.
 **Aprendizado:** Plugins do OBS que se comunicam de forma síncrona/bloqueante com processos externos podem derrubar o OBS inteiro se o leitor externo (como nosso app Python) for bloqueado. Leitores devem garantir o esvaziamento constante dos buffers.
+
+### 2026-10-08: Falha na Release Automática (GitHub Actions)
+**Sintoma:** O workflow de Windows Release no GitHub Actions falhou durante a criação da versão 0.9.4, enquanto o workflow de CI passou perfeitamente.
+**Causa Profunda:** Ainda sob investigação. Suspeita-se de problemas na compilação do plugin da câmera (falta de cmake no ambiente) ou na verificação do executável empacotado (--self-check) devido aos novos hiddenimports do pywinauto.
+**Ações:** O ambiente local compila corretamente, o que indica uma divergência de ambiente entre a máquina local e os runners do GitHub. Os logs exatos do runner precisam ser baixados.
+**Aprendizado:** CI de testes em Python (ci.yml) não garante o sucesso da compilação de binários nativos no GitHub Actions.
