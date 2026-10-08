@@ -263,6 +263,23 @@ diferentes de visibilidade. Confirmar a conexão não confirma captura. Uma aç�
 cancelada precisa consumir seu resultado antes de desfazer; estado antigo não
 é um rollback confiável. Distinguir erro de mídia externa de erro da captura JWL.
 
+**Reabertura com telemetria (08/10/2026).** O operador relatou a mesma falha: o
+app esconde a tela principal e a janela do Chrome não vai para a segunda tela.
+A mensagem registrada na telemetria foi: `"message":"Posicionamento não confirmado [WINDOW_API:player_restore]: NameError"`.
+
+**Causa demonstrada.** A tentativa anterior de remover o estado maximizado do
+Chrome introduziu um `NameError` (chamada `win32gui.SetWindowPos(...)` num escopo
+onde apenas o alias `gui` estava definido e o módulo `win32gui` não estava
+importado globalmente). Esse erro impedia a continuação do código, interrompendo
+a exibição e disparando a reversão de segurança.
+
+**Correção.** Removida a tentativa de forçar a remoção do estado maximizado do
+player via API antes do reposicionamento. O player maximizado já cumpre as
+condições necessárias (visível e não minimizado). A remoção das bordas e o
+redimensionamento subsequentes sobrescrevem o estado maximizado nativo com as
+coordenadas exatas fornecidas por `SetWindowPos` na etapa seguinte. Os testes da
+camada Win32 foram validados.
+
 Fontes primárias verificadas: [lista do OBS 31.0.3](https://github.com/obsproject/obs-studio/blob/31.0.3/plugins/win-capture/window-capture.c)
 e [visibilidade/comparação dos títulos](https://github.com/obsproject/obs-studio/blob/31.0.3/libobs/util/windows/window-helpers.c).
 
