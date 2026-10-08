@@ -900,3 +900,9 @@ um incidente apenas porque seus testes simulados passaram.
 A busca do botão de microfone do Zoom foi otimizada para pesquisar apenas dentro de containers específicos (ToolBar e ZPControlPanelClass), evitando a lista de participantes e liberando o GIL. Além disso, a rotina de janela do Zoom foi atualizada para aceitar explicitamente a janela principal do operador (ZPPTopWndClass), resolvendo o problema de identificação no recurso Zoom - Salão. O atraso de 5-6s na mídia externa foi documentado como limitação aceitável atual.
 **Aprendizado:** Operações pesadas de UIAutomation em janelas complexas bloqueiam o Global Interpreter Lock (GIL) do Python e podem matar o desempenho de threads críticas em background (como a ponte de vídeo do OBS). Buscas UIA devem ser sempre restritas a containers conhecidos.
 
+
+### 2026-10-08: Atualização do Zoom Workplace e classe ConfMultiTabContentWndClass
+**Sintoma:** O recurso Zoom - Salão voltou a dar erro 'Não foi possível identificar com segurança a janela secundária do Zoom' mesmo após aceitar ZPPTopWndClass.
+**Causa:** A nova atualização do Zoom (Zoom Workplace) mudou as classes das janelas. A janela principal do operador não é mais ZPPTopWndClass e sim ConfMultiTabContentWndClass.
+**Solução:** Adicionamos ConfMultiTabContentWndClass à lista de janelas permitidas no zoom_hall_service.py e ao arquivo de base validado.
+**Aprendizado:** Atualizações de aplicativos de terceiros como o Zoom podem alterar secretamente as classes Win32, quebrando integrações antigas. Deve-se analisar logs de telemetria e o inventory de janelas para encontrar as novas classes.
