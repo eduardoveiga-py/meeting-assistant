@@ -80,9 +80,13 @@ class WindowBackend:
 
                     win32gui.EnumChildWindows(hwnd, child_identity, None)
                     unique = {p.pid: p for p in identities}
-                    if len(unique) != 1:
+                    jwl_procs = [p for p in unique.values() if p.name().casefold() == "jwlibrary.exe"]
+                    if jwl_procs:
+                        process = jwl_procs[0]
+                    elif len(unique) == 1:
+                        process = next(iter(unique.values()))
+                    else:
                         return
-                    process = next(iter(unique.values()))
                     pid, name = process.pid, process.name().casefold()
                 if pid == os.getpid():
                     return
