@@ -169,7 +169,7 @@ class SetupAssistantDialog(QDialog):
             "Volumes não alteram o som do Salão.",
         )
         # The same checkbox is saved by the editor, with no duplicate audio setting.
-        self.audio.advanced_content.layout().insertWidget(0, self.editor.auto_mute_mic_for_jwl_media)
+        self.audio.volume_body.insertWidget(2, self.editor.auto_mute_mic_for_jwl_media)
 
         self.installation_scroll = QScrollArea()
         self.installation_scroll.setWidgetResizable(True)

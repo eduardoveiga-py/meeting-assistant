@@ -122,6 +122,7 @@ class AudioSetupDialog(QDialog):
         body.addStretch()
 
         self.volume_scroll, volume_body = self._page("Volumes")
+        self.volume_body = volume_body
         self._label(volume_body, "Som enviado ao Zoom e WhatsApp.")
         self.volume_hint = self._label(volume_body, "")
         self.gains, self.gain_notes, self.gain_groups = {}, {}, {}
