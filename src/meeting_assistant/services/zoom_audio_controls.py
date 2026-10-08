@@ -6,7 +6,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from operator import index
 
-_MEETING_CLASSES = {"ConfMultiTabContentWndClass", "ZPContentViewWndClass", "ZPPTopWndClass", "ZPFloatVideoWndClass", "ZPMiniVideoWndClass"}
+_MEETING_CLASSES = {
+    "ConfMultiTabContentWndClass",
+    "ZPContentViewWndClass",
+    "ZPPTopWndClass",
+    "ZPFloatVideoWndClass",
+    "ZPMiniVideoWndClass",
+}
 _FORBIDDEN = re.compile(
     r"\b(all|todos|todas|participants?|participantes?|video|camera|legendas?|captions?|"
     r"settings|configuracoes|original|speaker|altofalante|join|ingressar|conectar)\b"
@@ -79,8 +85,7 @@ def self_control_scope(button, fields, window_class):
     if _FORBIDDEN.search(text):
         return False
     explicit = bool(
-        re.search(r"\b(?:my|your|meu|seu)\s+" + _AUDIO + r"\b", text)
-        or re.search(r"\balt\s*\+\s*a\b", text)
+        re.search(r"\b(?:my|your|meu|seu)\s+" + _AUDIO + r"\b", text) or re.search(r"\balt\s*\+\s*a\b", text)
     )
     toolbar = False
     parent = button
@@ -98,7 +103,7 @@ def self_control_scope(button, fields, window_class):
             toolbar = True
         if kind == "Window":
             break
-    
+
     is_popup = window_class in {"ZPFloatVideoWndClass", "ZPMiniVideoWndClass"}
     return explicit or (toolbar and window_class in _MEETING_CLASSES) or is_popup
 
@@ -161,16 +166,23 @@ def find_control(*, windows=None, pids=None, diagnostic=None):
                 process_errors += 1
     details = diagnostic if diagnostic is not None else {}
     details.update(
-        zoom_processes=len(pids), window_classes=[], controls_examined=0,
-        audio_controls_without_state=0, property_errors=0, candidates=0,
-        runtime_ids_available=0, runtime_ids_unavailable=0, runtime_id_errors=0,
+        zoom_processes=len(pids),
+        window_classes=[],
+        controls_examined=0,
+        audio_controls_without_state=0,
+        property_errors=0,
+        candidates=0,
+        runtime_ids_available=0,
+        runtime_ids_unavailable=0,
+        runtime_id_errors=0,
         process_identity_errors=process_errors,
         identity_method="meeting_window_self_microphone",
     )
     if not pids:
         if process_errors:
             raise MicrophoneError(
-                "process_identity_unavailable", "Não foi possível verificar o processo do Zoom. "
+                "process_identity_unavailable",
+                "Não foi possível verificar o processo do Zoom. "
                 "Abra Zoom e Meeting Assistant com o mesmo nível de permissão.",
             )
         raise MicrophoneError(
@@ -189,7 +201,7 @@ def find_control(*, windows=None, pids=None, diagnostic=None):
             continue
         window_class = window.class_name()
         details["window_classes"].append(window_class)
-        
+
         buttons = []
         if window_class in {"ZPFloatVideoWndClass", "ZPMiniVideoWndClass"}:
             buttons = window.descendants(control_type="Button")
@@ -198,7 +210,7 @@ def find_control(*, windows=None, pids=None, diagnostic=None):
                 buttons.extend(container.descendants(control_type="Button"))
             for container in window.descendants(class_name="ZPControlPanelClass"):
                 buttons.extend(container.descendants(control_type="Button"))
-                
+
         for button in buttons:
             details["controls_examined"] += 1
             if not button.is_enabled():
@@ -229,8 +241,8 @@ def find_control(*, windows=None, pids=None, diagnostic=None):
                 handle = 0
             if handle <= 0:
                 raise MicrophoneError(
-                    "identity_unavailable", "Não foi possível identificar a janela da reunião. "
-                    "Nenhuma ação enviada.",
+                    "identity_unavailable",
+                    "Não foi possível identificar a janela da reunião. Nenhuma ação enviada.",
                 )
             birth = pids.get(pid) if isinstance(pids, Mapping) else None
             identity = (pid, birth, handle, window_class, "own_microphone")
@@ -245,8 +257,8 @@ def find_control(*, windows=None, pids=None, diagnostic=None):
                 if key in enumerated:
                     if enumerated[key] != state:
                         raise MicrophoneError(
-                            "state_unavailable", "O estado do microfone mudou durante a consulta. "
-                            "Tente novamente.",
+                            "state_unavailable",
+                            "O estado do microfone mudou durante a consulta. Tente novamente.",
                         )
                     continue
                 enumerated[key] = state

@@ -65,9 +65,7 @@ def has_descendant_class(hwnd: int, class_name: str, max_depth: int = 3) -> bool
 def hall_runtime_flags(enabled, zoom_active, returning, switching_to_zoom=False, *, external_active=False):
     from meeting_assistant.services.hall_policy import hall_runtime_flags as runtime_policy
 
-    return runtime_policy(
-        enabled, zoom_active, returning, switching_to_zoom, external_active=external_active
-    )
+    return runtime_policy(enabled, zoom_active, returning, switching_to_zoom, external_active=external_active)
 
 
 class ZoomHallService(QObject):
@@ -496,9 +494,13 @@ class ZoomHallService(QObject):
             selected = None
         else:
             candidates.sort(key=lambda x: x[0])  # False (no controls) comes before True
-            
-            selected = candidates[0][1] if len(candidates) == 1 or (len(candidates) > 1 and candidates[0][0] != candidates[1][0]) else None
-            
+
+            selected = (
+                candidates[0][1]
+                if len(candidates) == 1 or (len(candidates) > 1 and candidates[0][0] != candidates[1][0])
+                else None
+            )
+
             if len(candidates) > 1 and candidates[0][0] == candidates[1][0]:
                 selected = None
         self.discovery_changed.emit(

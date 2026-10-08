@@ -4,7 +4,7 @@
   "validation": "physical_pending",
   "scope": "Policy adapter only; native JWL/Zoom switch commands unchanged. Historical baseline preserved.",
   "sha256": {
-    "src/meeting_assistant/services/zoom_hall_service.py": "8edef12595125356bd2288da68666dbb186898990a383b528406b5f38ff48053",
+    "src/meeting_assistant/services/zoom_hall_service.py": "5a77975a7913f73221cb71d26857d82adb432ef1c6857479dceb9f9f1e076d50",
     "tests/test_zoom_hall_discovery.py": "5eba8bc28164b1721825e6455400b78cd35c9c2580263d99e38cafbb91b1e922"
   }
 }

@@ -56,11 +56,18 @@ def prepare_external(client, selector, audio_bus="Meeting Assistant - Áudio", *
         raise ValueError("Program mudou durante a preparação; a cena escolhida no OBS foi preservada.")
     prior = current
     item_id = ensure_source(client, SCENE, SOURCE, "window_capture", {})
-    options = call(client, "GetInputPropertiesListPropertyItems", inputName=SOURCE,
-                   propertyName="window")["propertyItems"]
+    options = call(client, "GetInputPropertiesListPropertyItems", inputName=SOURCE, propertyName="window")[
+        "propertyItems"
+    ]
     exact = select_external_window(options, selector)
-    settings = {"window": exact, "priority": 0, "method": 2, "cursor": False,
-                "client_area": True, "capture_audio": False}
+    settings = {
+        "window": exact,
+        "priority": 0,
+        "method": 2,
+        "cursor": False,
+        "client_area": True,
+        "capture_audio": False,
+    }
     call(client, "SetInputSettings", inputName=SOURCE, inputSettings=settings, overlay=True)
     actual = call(client, "GetInputSettings", inputName=SOURCE)["inputSettings"]
     if any(actual.get(k) != v for k, v in settings.items()):
@@ -80,8 +87,9 @@ def show_external(client, prior, selector=None):
     if call(client, "GetCurrentProgramScene")["currentProgramSceneName"] != prior:
         raise ValueError("Operador mudou Program durante a preparação; apresentação cancelada.")
     if selector is not None:
-        options = call(client, "GetInputPropertiesListPropertyItems", inputName=SOURCE,
-                       propertyName="window")["propertyItems"]
+        options = call(
+            client, "GetInputPropertiesListPropertyItems", inputName=SOURCE, propertyName="window"
+        )["propertyItems"]
         exact = select_external_window(options, selector)
         settings = call(client, "GetInputSettings", inputName=SOURCE)["inputSettings"]
         if settings.get("window") != exact or settings.get("capture_audio") is not False:
@@ -90,9 +98,17 @@ def show_external(client, prior, selector=None):
             raise ValueError("Captura de monitor ativa na cena Mídia Externa. Program foi preservado.")
     try:
         transitions = call(client, "GetSceneTransitionList").get("transitions", [])
-        fade = next((t["transitionName"] for t in transitions if t["transitionKind"] == "fade_transition"), None)
+        fade = next(
+            (t["transitionName"] for t in transitions if t["transitionKind"] == "fade_transition"), None
+        )
         if fade:
-            call(client, "SetSceneSceneTransitionOverride", sceneName=SCENE, transitionName=fade, transitionDuration=500)
+            call(
+                client,
+                "SetSceneSceneTransitionOverride",
+                sceneName=SCENE,
+                transitionName=fade,
+                transitionDuration=500,
+            )
     except Exception:
         pass
 
@@ -109,26 +125,39 @@ def restore_external(client, prior):
         old_override = None
         try:
             transitions = call(client, "GetSceneTransitionList").get("transitions", [])
-            fade = next((t["transitionName"] for t in transitions if t["transitionKind"] == "fade_transition"), None)
+            fade = next(
+                (t["transitionName"] for t in transitions if t["transitionKind"] == "fade_transition"), None
+            )
             if fade:
                 try:
                     old_override = call(client, "GetSceneSceneTransitionOverride", sceneName=prior)
                 except Exception:
                     pass
-                call(client, "SetSceneSceneTransitionOverride", sceneName=prior, transitionName=fade, transitionDuration=500)
+                call(
+                    client,
+                    "SetSceneSceneTransitionOverride",
+                    sceneName=prior,
+                    transitionName=fade,
+                    transitionDuration=500,
+                )
         except Exception:
             pass
 
         call(client, "SetCurrentProgramScene", sceneName=prior)
-        
+
         if fade:
             import time
+
             time.sleep(0.6)
             try:
                 if old_override and old_override.get("transitionName"):
-                    call(client, "SetSceneSceneTransitionOverride", sceneName=prior, 
-                         transitionName=old_override["transitionName"], 
-                         transitionDuration=old_override.get("transitionDuration", 300))
+                    call(
+                        client,
+                        "SetSceneSceneTransitionOverride",
+                        sceneName=prior,
+                        transitionName=old_override["transitionName"],
+                        transitionDuration=old_override.get("transitionDuration", 300),
+                    )
                 else:
                     call(client, "SetSceneSceneTransitionOverride", sceneName=prior)
             except Exception:
