@@ -155,7 +155,15 @@ class AudioSetupDialog(QDialog):
                 suppression.stateChanged.connect(self.refresh_enabled)
                 layout.addWidget(suppression)
 
-                self._label(layout, "Atraso da mesa (ms)")
+                self._label(layout, "Sincronização com a Câmera (Atraso da mesa)")
+                sync_hint = self._label(
+                    layout,
+                    "Se o vídeo da câmera chega atrasado nas chamadas, aumente (positivo, ex: +300 ms)\n"
+                    "para atrasar o áudio junto com o vídeo.",
+                )
+                font = sync_hint.font()
+                font.setPointSize(font.pointSize() - 1)
+                sync_hint.setFont(font)
                 sync_row = QHBoxLayout()
                 sync = QSlider(Qt.Orientation.Horizontal, group)
                 sync.setRange(-5000, 5000)
@@ -171,7 +179,15 @@ class AudioSetupDialog(QDialog):
                 self.sync_offsets[name] = sync
 
             gate = QCheckBox("Corte de ruído (Noise Gate)")
+            gate.setToolTip(
+                "Muta o áudio automaticamente quando há silêncio, cortando chiados de fundo.\n"
+                "Abre novamente assim que alguém falar."
+            )
             compressor = QCheckBox("Compressor")
+            compressor.setToolTip(
+                "Equilibra os volumes: reduz os picos (vozes altas ou gritos)\n"
+                "e ajuda a nivelar comentários mais baixos."
+            )
             gate.stateChanged.connect(self.refresh_enabled)
             compressor.stateChanged.connect(self.refresh_enabled)
 
