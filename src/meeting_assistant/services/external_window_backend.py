@@ -7,7 +7,7 @@ from dataclasses import replace
 
 from meeting_assistant.services.jwl_secondary_window import JwlSecondaryWindowInfo, WindowRect
 from meeting_assistant.services.native_window import activate_window, show_window_async
-from meeting_assistant.services.window_inventory import WindowBackend, is_jwl
+from meeting_assistant.services.window_inventory import WindowBackend
 
 
 def set_frame_style(hwnd, index, value):

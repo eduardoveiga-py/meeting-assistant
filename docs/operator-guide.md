@@ -1,6 +1,6 @@
 # Guia do operador — Meeting Assistant
 
-Atualizado em 07/10/2026. Operação em Windows 11 x64, com OBS, JW Library,
+Atualizado em 08/10/2026. Operação em Windows 11 x64, com OBS, JW Library,
 Zoom e WhatsApp. O [histórico de incidentes](incident-history.md) registra
 quais testes foram confirmados e o que permanece pendente.
 
@@ -86,8 +86,8 @@ ou retorno, eles respeitam a escolha do operador e aguardam a troca finalizar.
 | Texto do Ano / Palco / Mídia | Seleção manual da cena correspondente no OBS |
 | Zoom → Salão | Exibir janela secundária Zoom no Salão; clicar novamente solicita retorno ao JWL |
 | Ativar / Pausar | Controlar automação e proteção periódica do JWL |
-| Emergência (Tela Preta) | Solicitar cena segura configurada e pausar automação; conferir a saída real |
-| Forçar JWL Telão | Solicitar retorno ao JWL, encerrando primeiro mídia externa/Zoom local; preservar automação ativa ou pausada e aguardar confirmação |
+| Emergência (Texto do Ano) | Solicitar cena segura configurada e pausar automação; conferir a saída real |
+| JW na 2ª Tela | Solicitar retorno ao JWL, encerrando primeiro mídia externa/Zoom local; preservar automação ativa ou pausada e aguardar confirmação |
 | Câmera | Iniciar/parar a câmera nativa usada no WhatsApp |
 | Mic Zoom | Alternar seu próprio microfone; não controla microfones dos participantes |
 | WhatsApp | Silenciar/liberar somente o áudio recebido do WhatsApp nas caixas |
