@@ -1,10 +1,12 @@
 """Explicit window selection and coordinated OBS/Win32 presentation lifecycle."""
 
 import threading
+import time
 import uuid
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QCoreApplication, QObject, QTimer, Signal
 
+from meeting_assistant.services.external_player_controls import PlayerControlBackend
 from meeting_assistant.services.external_window_backend import ExternalWindowBackend
 from meeting_assistant.services.hall_capture import obs_window_key
 from meeting_assistant.services.jwl_secondary_window import WindowRect
@@ -26,6 +28,11 @@ def same_identity(left, right):
     )
 
 
+def jwl_return_candidate(current, external):
+    """A hidden output can temporarily disappear from UIA's visible inventory."""
+    return current or (external.return_candidate if external is not None and external.active else None)
+
+
 class PlacementError(ValueError):
     def __init__(self, message, window):
         super().__init__(message)
@@ -36,14 +43,18 @@ class ExternalMediaService(QObject):
     state_changed = Signal(bool, str)
     candidates_ready = Signal(object)
     diagnostic = Signal(object)
+    control_changed = Signal(bool, str)
+    operator_layout_requested = Signal()
     _native_finished = Signal(str, str, bool, object)
 
-    def __init__(self, display_provider, controller, zoom_hall, *, backend=None, hall_window_provider=None):
+    def __init__(self, display_provider, controller, zoom_hall, *, backend=None,
+                 hall_window_provider=None, controls=None):
         super().__init__()
         self._display_provider = display_provider
         self.obs = controller
         self.zoom_hall = zoom_hall
         self.backend = backend or ExternalWindowBackend(hall_window_provider)
+        self.controls = controls or PlayerControlBackend()
         self.phase = "idle"
         self.window = None
         self._display = None
@@ -58,6 +69,14 @@ class ExternalMediaService(QObject):
         self._native_busy = False
         self._stop_after_show = False
         self._restore_errors = []
+        self._media_warning = ""
+        self._has_presented = False
+        self._control_cancel = threading.Event()
+        self._watch = QTimer(self)
+        self._watch.setInterval(350)
+        self._watch.timeout.connect(self._monitor)
+        if isinstance(self.backend, ExternalWindowBackend):
+            self.backend.cancelled = self._cancel.is_set
         self._native_finished.connect(self._native_event)
         controller.external_task_finished.connect(self._obs_result)
         zoom_hall.status_changed.connect(self._return_status)
@@ -66,8 +85,16 @@ class ExternalMediaService(QObject):
     def active(self):
         return self.phase != "idle"
 
+    @property
+    def return_candidate(self):
+        return getattr(self.backend, "return_candidate", None) if self.active else None
+
     def _state(self, phase, message):
         self.phase = phase
+        if phase == "presenting" and QCoreApplication.instance() is not None:
+            self._watch.start()
+        else:
+            self._watch.stop()
         suspend = getattr(self.obs, "set_external_media_active", None)
         if callable(suspend):
             suspend(self.active)
@@ -84,6 +111,7 @@ class ExternalMediaService(QObject):
         token = self._token
 
         def work():
+            started = time.monotonic()
             try:
                 value, ok = callback(), True
             except ValueError as exc:
@@ -92,6 +120,8 @@ class ExternalMediaService(QObject):
                 value, ok = {"message": "Operação da janela não confirmada."}, False
             finally:
                 self._native_busy = False
+            if isinstance(value, dict):
+                value = {**value, "elapsed_ms": round((time.monotonic() - started) * 1000)}
             if not self._cancel.is_set():
                 self._native_finished.emit(token, action, ok, value)
 
@@ -101,9 +131,15 @@ class ExternalMediaService(QObject):
     def _native_event(self, token, action, ok, payload):
         if token == self._token:
             snapshot = getattr(self.backend, "last_snapshot", {})
-            self.diagnostic.emit({"action": "native_" + action, "ok": ok, "phase": self.phase,
-                                  "snapshot": dict(snapshot) if isinstance(snapshot, dict) else {},
-                                  "message": payload.get("message", "") if isinstance(payload, dict) else ""})
+            if not isinstance(snapshot, dict):
+                snapshot = {}
+            if action != "monitor" or not ok or snapshot.get("repaired"):
+                details = payload if isinstance(payload, dict) else {}
+                self.diagnostic.emit({
+                    "action": "native_" + action, "ok": ok, "phase": self.phase,
+                    "snapshot": dict(snapshot), "elapsed_ms": details.get("elapsed_ms"),
+                    "message": details.get("message", ""),
+                })
             self._native_result(action, ok, payload)
 
     def start_external_media(self):
@@ -126,12 +162,18 @@ class ExternalMediaService(QObject):
             self.state_changed.emit(False, "Monitor do salão ausente.")
             return False
         self._cancel.clear()
+        if isinstance(self.backend, ExternalWindowBackend):
+            self.backend.return_candidate = None
         self._token = uuid.uuid4().hex
         self.window, self._prior, self._selector = None, "", ""
         self._target_rect = None
         self._pending_obs = self._failure = ""
         self._stop_after_show = False
         self._restore_errors.clear()
+        self._media_warning = ""
+        self._has_presented = False
+        self._control_cancel.clear()
+        self.controls.fullscreen_owned = False
         self._state("choosing", "Selecione a janela que deseja apresentar.")
         self._work("discover", lambda: media_candidates(self.backend.windows()))
         return True
@@ -146,6 +188,7 @@ class ExternalMediaService(QObject):
             self._state("idle", "Aplicativo não permitido para mídia externa.")
             return
         self.window = window
+        self.operator_layout_requested.emit()
         self._state("checking", "Conferindo o OBS antes de apresentar a janela…")
         self._request_obs("begin", {})
 
@@ -220,11 +263,64 @@ class ExternalMediaService(QObject):
                 )
             if not self.zoom_hall.restore_jwl() and self.phase == "returning":
                 self._state("return_failed", "Retorno do JWL não confirmado. Confira a tela do salão.")
+        elif action == "monitor" and self.phase == "presenting":
+            if not ok:
+                self._failure = payload.get("message", "Player perdeu a exibição no Salão.")
+            if not ok or self._stop_after_show:
+                self._stop_after_show = False
+                self.stop_external_media()
+        elif action.startswith("control:") and self.phase == "presenting":
+            message = ("Comando confirmado no vídeo." if ok else
+                       payload.get("message", "Controle de vídeo não confirmado."))
+            self.control_changed.emit(False, message)
+            if self._stop_after_show:
+                self._stop_after_show = False
+                self.stop_external_media()
+        elif action == "stop_media" and self.phase == "stopping_media":
+            if not ok:
+                self._media_warning = payload.get("message", "Confira se a mídia parou no aplicativo.")
+            self._state("stopping", "Retornando Program e disposição do player…")
+            self._request_obs("restore", {"prior": self._prior})
 
     def _confirm(self):
-        # Read-only exposure check in the native worker after OBS preparation.
-        # Never recapture the original placement or activate the player here.
+        # Preserve the original snapshot and explicit handoff throughout this
+        # cycle. Repair z-order without repeated foreground activation.
         return self.backend.confirm_presentation(self.window, self._target_rect)
+
+    def _monitor(self):
+        if self.phase == "presenting" and not self._native_busy:
+            self._work("monitor", self._confirm)
+
+    def command(self, action):
+        if self.phase != "presenting" or self._native_busy:
+            return False
+        if action not in {"play", "pause", "fullscreen", "maximize"}:
+            return False
+        self._control_cancel.clear()
+        self.control_changed.emit(True, "Controlando o vídeo escolhido…")
+
+        def run():
+            if action != "maximize":
+                self.controls.command(self.window, action, self._control_cancel)
+            return self._confirm()
+
+        self._work("control:" + action, run)
+        return True
+
+    def _stop_media(self):
+        errors = []
+        # A failed/cancelled Play must finish before Pause; never dispatch a late
+        # command after return. Only stop content which was actually presented.
+        self._control_cancel.clear()
+        for action in ("stop", "exit_fullscreen"):
+            if action == "exit_fullscreen" and not self.controls.fullscreen_owned:
+                continue
+            try:
+                self.controls.command(self.window, action, self._control_cancel)
+            except ValueError as exc:
+                errors.append(str(exc))
+        if errors:
+            raise ValueError("Retorno solicitado; confira a mídia no aplicativo: " + "; ".join(errors))
 
     def _obs_result(self, action, ok, payload):
         if payload.get("token", "") != self._token:
@@ -263,6 +359,7 @@ class ExternalMediaService(QObject):
                 self._stop_after_show = False
                 self.stop_external_media()
             else:
+                self._has_presented = True
                 self._state("presenting", payload["message"])
         elif action == "restore" and self.phase == "stopping":
             if not ok:
@@ -272,7 +369,7 @@ class ExternalMediaService(QObject):
             )
 
     def stop_external_media(self):
-        if not self.active or self.phase in {"stopping", "returning"}:
+        if not self.active or self.phase in {"stopping_media", "stopping", "returning"}:
             return
         if self.phase == "choosing":
             self._cancel.set()
@@ -288,7 +385,17 @@ class ExternalMediaService(QObject):
         if self.phase == "showing" and self._native_busy:
             self._stop_after_show = True
             return
+        if self.phase == "presenting" and self._native_busy:
+            self._watch.stop()
+            self._stop_after_show = True
+            self._control_cancel.set()
+            self.state_changed.emit(True, "Retorno solicitado; concluindo o comando em andamento…")
+            return
         self._restore_errors.clear()
+        if self._has_presented and self.phase != "return_failed":
+            self._state("stopping_media", "Parando a mídia antes de retornar ao JWL…")
+            self._work("stop_media", self._stop_media)
+            return
         self._state("stopping", "Retornando Program e disposição do player…")
         self._request_obs("restore", {"prior": self._prior})
 
@@ -298,15 +405,42 @@ class ExternalMediaService(QObject):
         if ok and not self._restore_errors:
             if self._failure:
                 message = f"Falha na mídia externa: {self._failure} {message}"
+            if self._media_warning:
+                message += " Aviso: " + self._media_warning
+            self.operator_layout_requested.emit()
             self._state("idle", message)
             self.window, self._prior, self._selector = None, "", ""
         elif ok:
+            self.operator_layout_requested.emit()
             self._state("return_failed", message + "; pendências: " + "; ".join(self._restore_errors))
         else:
             self._state("return_failed", "Retorno JWL não confirmado: " + message)
 
     def stop(self):
+        original = self.window if self.active else None
+        pending = self._thread
+        self._watch.stop()
         self._cancel.set()
+        self._control_cancel.set()
+        self.controls.close()
+        if original is not None:
+            backend = self.backend
+
+            def cleanup():
+                if pending is not None and pending.is_alive():
+                    pending.join(timeout=1.0)
+                try:
+                    backend.restore_presentation(original)
+                except Exception:
+                    # This path is process teardown, after Qt owners may have
+                    # gone. Preserve an explicit native failure for local logs.
+                    import logging
+
+                    logging.getLogger(__name__).exception("External window cleanup failed")
+
+            # Do not leave the secondary JWL hidden at process exit. Native
+            # restoration is bounded by its backend deadline and runs off GUI.
+            threading.Thread(target=cleanup, name="External window cleanup").start()
         self._token = uuid.uuid4().hex  # Ignore queued replies from the previous cycle.
         if self._prior:
             self._request_obs("restore", {"prior": self._prior})

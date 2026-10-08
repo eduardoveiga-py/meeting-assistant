@@ -8,7 +8,7 @@ import pytest
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QDialogButtonBox
-from test_review_capture_external import VisualObs, Zoom
+from test_review_capture_external import Controls, VisualObs, Zoom
 from test_review_ui import make_window
 from test_review_windows import window
 
@@ -85,7 +85,7 @@ def make_service(*, inline=True):
     controller.local_connection = True
     zoom = Zoom()
     display = DisplayInfo("hall", "hall", "", "", "", 1920, 0, 1920, 1080, False, 1)
-    service = ExternalMediaService(lambda: display, controller, zoom, backend=backend)
+    service = ExternalMediaService(lambda: display, controller, zoom, backend=backend, controls=Controls())
     if inline:
         service._work = lambda action, callback: service._native_result(action, True, callback())
     service.candidates_ready.connect(lambda candidates: service.select(candidates[0]))

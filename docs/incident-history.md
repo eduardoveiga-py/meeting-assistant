@@ -37,7 +37,7 @@ operador foi coletada novamente nesta tarefa.
 | --- | --- | --- |
 | INC-034 | Forçar JWL gera AttributeError repetido | Operador confirmou funcionamento após entrega `8937c75` |
 | INC-035 | Qt amplia Ajustes além do tamanho solicitado | Restrição nativa reproduzida/corrigida; ensaio na escala do operador pendente |
-| INC-033 | Mídia externa falha após escolher a janela | Reaberto: JWL cobre player e retorno falha; candidata pendente |
+| INC-033 | Mídia externa falha após escolher a janela | Reaberto após 7a5f7db: cessão persistente/popup candidatos, ensaio pendente |
 | INC-032 | Ajustes fragmentados e manutenção de fontes frágil | Organização aprovada em 07/10; manutenção/instalação com ensaio próprio |
 | INC-030 | OBS escolhia o JWL do operador entre títulos iguais | Captura por HWND confirmada em 07/10 |
 | INC-031 | Git bloqueava atualização por alterações locais | Atualização e execução confirmadas em 07/10 |
@@ -125,6 +125,37 @@ e troca de categorias, quatro escalas e recusa de setGeometry em stderr.
 A ausência do aviso no equipamento/escala do operador exige novo ensaio.
 
 ## INC-033 — Mídia externa falha depois da seleção
+
+**Reabertura após `7a5f7db`.** O operador viu o player à frente por um momento,
+mas não permaneceu. A imagem confirma a mensagem “Player não ficou visível à
+frente do JWL no Salão” seguida do retorno confirmado ao JWL. A candidata
+anterior não foi aceita. Sem telemetria atual desse ensaio: não atribuir a
+causa real exclusivamente ao guardião ou ao Windows.
+
+**Candidata seguinte.** Cessão explícita: só a saída secundária JWL identificada
+é ocultada temporariamente, mantendo processo/HWND e geometria. Resolve frame
+UIA/filho CoreWindow e valida PID host/filho; ausência ou identidade divergente
+aborta sem escolher pelo título. Observação durante toda apresentação refaz
+cessão/exposição sem ativação repetida. Retorno e encerramento liberam JWL.
+
+Popup modeless no primeiro monitor fornece controles de reprodução e retorno.
+Chrome/Edge usam controles acessíveis da aba visível; VLC usa seus próprios
+botões, sem teclas globais. Parar serializa comando pendente, interrupção da
+mídia, retorno de Program, player ao monitor principal e confirmação JWL.
+UIA com processo isolado/prazo evita deixar um comando pendente na GUI;
+pausa não confirmada fica como aviso, sem bloquear a recuperação do Salão.
+
+**Evidência/limite.** Regressões reproduzem reaparecimento tardio, PID UWP,
+HWND filho, inventário UIA temporariamente vazio e retorno pelo frame retido, clique/cancelamento do popup, estado já desejado, ambiguidade e
+provider travado. Renderização em quatro escalas; núcleo protegido mantido.
+Isso não comprova vídeo/controles reais no Chrome/VLC. Novo ensaio de 30 s e
+ciclos pausados/ativos pendente em [external-media.md](external-media.md).
+
+**Aprendizado novo.** Cessão e exposição precisam durar o ciclo inteiro. Uma
+identidade UIA e sua representação Win32 podem diferir legitimamente; não
+ignorar a operação em silêncio. Ler estado do player evita alternâncias por
+Espaço; atalhos de site não são comandos genéricos de navegador.
+
 
 **Reabertura após entrega `8937c75`.** Seleção/posicionamento funcionam, mas
 JWL fica à frente e Parar mídia não retorna. Sem telemetria sincronizada desse

@@ -1,5 +1,20 @@
 # Histórico de alterações
 
+## Não lançado — cessão persistente e controles externos — 08/10/2026
+
+- Reaberto INC-033 após falha física de `7a5f7db`. Só a saída secundária JWL
+  cede o monitor durante mídia externa; frame/PID UWP revalidados, posição e
+  borda JWL preservadas. Acompanhamento contínuo confirma a apresentação.
+- Popup no primeiro monitor: Reproduzir, Pausar, Maximizar e Parar mídia;
+  Chrome/Edge também têm Tela cheia do vídeo por controle acessível da página.
+  Comandos respeitam estado e janela escolhida, sem F/Espaço/teclas globais.
+- Parar/X coordena mídia, Program, player ao primeiro monitor e confirmação JWL.
+  Cancelamento/prazo do processo UIA e limpeza de encerramento preservam a saída.
+  Falha de pausa/parada fica explícita mesmo depois de recuperar as janelas.
+
+Núcleo protegido, áudio, DLLs e versões preservados. Código Python candidato;
+sem compilação ou release. [Teste físico e limites](docs/external-media.md).
+
 ## Não lançado — prioridade e retorno da Mídia Externa — 08/10/2026
 
 - Player externo confirma exposição no Salão, além da geometria. A saída JWL

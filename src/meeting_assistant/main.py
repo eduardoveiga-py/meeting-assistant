@@ -58,6 +58,9 @@ def _load_app_icon() -> QIcon:
 
 
 def main() -> int:
+    import multiprocessing
+
+    multiprocessing.freeze_support()
     _set_windows_app_id()
     _configure_qt_logging()
 
@@ -177,9 +180,14 @@ def main() -> int:
         sample_interval_seconds=0.18,
     )
     meeting_launcher = MeetingLauncherService(lambda: settings)
+    from meeting_assistant.services.external_media_service import ExternalMediaService, jwl_return_candidate
+
+    external_services = {}
     zoom_hall = ZoomHallService(
         display_provider=current_hall_display,
-        jwl_window_provider=lambda: jwl_secondary.current or jwl_fast_guard.cached_candidate,
+        jwl_window_provider=lambda: jwl_return_candidate(
+            jwl_secondary.current or jwl_fast_guard.cached_candidate, external_services.get("media")
+        ),
     )
     whatsapp_audio_guard = WhatsAppAudioGuard()
     whatsapp_camera_session = camera_session()
@@ -232,14 +240,15 @@ def main() -> int:
         lambda details: telemetry.event("zoom_microphone", **details)
     )
 
-    from meeting_assistant.services.external_media_service import ExternalMediaService
-
     window.external_media = ExternalMediaService(
         current_hall_display, obs_controller, zoom_hall,
         hall_window_provider=lambda: jwl_secondary.current or jwl_fast_guard.cached_candidate,
     )
+    external_services["media"] = window.external_media
     window.external_media.state_changed.connect(window._external_state)
     window.external_media.candidates_ready.connect(window._choose_external_media)
+    window.external_media.control_changed.connect(window._external_control_status)
+    window.external_media.operator_layout_requested.connect(window._external_operator_layout)
     window.external_media.diagnostic.connect(
         lambda details: telemetry.event("external_media_task", **details)
     )

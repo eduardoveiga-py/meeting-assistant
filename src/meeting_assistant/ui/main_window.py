@@ -122,6 +122,7 @@ class MainWindow(QMainWindow):
         self._meeting_ending = False
         self.layout_service = None
         self.external_media = None
+        self._external_popup = None
         self._close_after_external = False
         self._layout_save_pending = False
 
@@ -1032,7 +1033,8 @@ class MainWindow(QMainWindow):
         self.ext_media_button.setChecked(active)
         self.ext_media_button.blockSignals(False)
         phase = self.external_media.phase if self.external_media else "idle"
-        returning = phase in {"stopping", "returning"}
+        stop_pending = bool(getattr(self.external_media, "_stop_after_show", False))
+        returning = phase in {"stopping_media", "stopping", "returning"} or stop_pending
         self.ext_media_button.setEnabled(not returning)
         if not active:
             title = "🎬 Mídia Externa"
@@ -1046,11 +1048,35 @@ class MainWindow(QMainWindow):
             title = "✕ Cancelar mídia"
         self.ext_media_button.setText(title)
         self.mode_label.setText(message)
+        if active and self.external_media.window is not None:
+            if self._external_popup is None:
+                from meeting_assistant.ui.external_media_controls import ExternalMediaControls
+
+                self._external_popup = ExternalMediaControls(self.external_media.window.process, self)
+                self._external_popup.command_requested.connect(self.external_media.command)
+                self._external_popup.stop_requested.connect(self.external_media.stop_external_media)
+                self._external_popup.show_on_operator_monitor()
+            self._external_popup.update_phase("stopping_media" if stop_pending else phase, message)
+        elif self._external_popup is not None:
+            self._external_popup.finish()
+            self._external_popup = None
         if not active and self._close_after_external:
             self._close_after_external = False
             QTimer.singleShot(0, self.close)
         if not active and self._meeting_ending:
             self._request_end_programs()
+
+    def _external_control_status(self, busy, message):
+        if self._external_popup is not None:
+            self._external_popup.control_status(busy, message)
+
+    def _external_operator_layout(self):
+        if self._close_after_external or self._meeting_ending:
+            return
+        from meeting_assistant.ui.app_layout import restore_app
+
+        self.showNormal()
+        restore_app(self, self.settings.window_layouts)
 
     def _update_blocked(self):
         return bool(

@@ -4,6 +4,49 @@ O [histórico de incidentes](incident-history.md) reúne sintomas, soluções,
 confirmações e aprendizados desta conversa. Este arquivo registra as decisões
 técnicas; os roteiros específicos mantêm os detalhes de teste.
 
+## 2026-10-08 — cessão explícita da saída e popup de mídia
+
+**Novo retorno:** candidata `7a5f7db` não manteve a janela externa; captura mostra
+“Player não ficou visível à frente do JWL no Salão” e retorno ao JWL. Não tratar
+os testes anteriores como aceite físico. Telemetria sincronizada consultada
+continua em 02/10; não confirma o motivo nativo desse ensaio.
+
+**Problemas do código demonstrados:** cessão por demover TOPMOST não é durável;
+não havia acompanhamento após Program. Comparação estrita entre PID UIA e PID
+resolvido do inventário pode ignorar ApplicationFrameHost/filho JWLibrary; HWND
+UIA filho pode exigir seu frame. Testes antigos não modelavam esses casos nem
+reaparecimento depois da confirmação. São riscos reproduzidos, não uma causa
+única atribuída ao PC sem diagnóstico atual.
+
+**Decisão:** resolver/revalidar somente a saída identificada, guardar original
+uma vez e ocultar temporariamente sua janela secundária durante a projeção
+externa, sem fechamento nem mudança de bordas/posição JWL. Conferir a cessão
+junto com exposição do player; referência validada de retorno retida só durante o ciclo, caso UIA deixe de listar a saída oculta; acompanhamento em worker a cada 350 ms,
+recuperação sem foreground periódico. Restaurar player/visibilidade JWL no
+retorno e na limpeza de encerramento. Disposição normal do player é preservada
+se couber no primeiro monitor; fora dele, ajustar coordenadas de workspace à
+área útil principal, preservando estado e snapshot original.
+
+**Controles independentes:** popup modeless apenas depois da seleção, sempre no
+primeiro monitor. Serviço serializa controles/monitoramento e Parar; janela
+principal/popup não fazem Win32/UIA. Chrome/Edge usam o documento da aba visível;
+VLC usa seus botões acessíveis. Reproduzir/Pausar leem ação atual, invocam uma
+vez e confirmam a inversa. Parar pausa navegador ou aciona Stop do player;
+falha de áudio fica como aviso mesmo após restaurar JWL. Maximizar conserva
+HWND da captura; tela cheia de vídeo usa botão acessível no navegador. Não
+adotar fullscreen separado do VLC nem enviar F/Espaço/teclas globais por palpite.
+
+UIA roda em processo Python isolado (COM próprio), terminado em cancelamento
+ou prazo total de 5 s. O resultado só chega à GUI por sinal; não se mantém
+wrapper COM no Qt. Usa dependências existentes e Python 3.12, sem compilação,
+DLL, versão, instalador ou release novos. Núcleo protegido/política de automação,
+fontes JWL e roteamento de áudio preservados.
+
+**Validação:** regressões de cliques, processos/timeout, estado de reprodução,
+ambiguidade de controles, PID/frame UWP, reaparecimento tardio, retorno/limpeza
+e layout em escalas 100/125/150/200%. Ensaio físico continua pendente;
+[roteiro e limites](external-media.md), INC-033.
+
 ## 2026-10-08 — exposição e retorno externo independentes do guardião
 
 **Retorno do operador:** guardião e Forçar JWL funcionam. O seletor externo move

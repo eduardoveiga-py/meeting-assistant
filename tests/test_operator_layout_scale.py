@@ -115,7 +115,7 @@ try:
             ), (button.text(), result)
     for phase in ("choosing", "placing", "confirming", "presenting", "stopping", "return_failed", "idle"):
         active = phase != "idle"
-        window.external_media = SimpleNamespace(phase=phase, active=active)
+        window.external_media = SimpleNamespace(phase=phase, active=active, window=None)
         window._external_state(active, "Estado da apresentação externa.")
         app.processEvents()
         button = window.ext_media_button
@@ -131,6 +131,27 @@ try:
             base = Path(sys.argv[3])
             assert window.grab().save(str(base.with_name(base.stem + "-external-" + phase + base.suffix)))
     window.external_media = None
+    from meeting_assistant.ui.external_media_controls import ExternalMediaControls
+    for process in ("chrome.exe", "vlc.exe"):
+        popup = ExternalMediaControls(process, window)
+        popup.show()
+        app.processEvents()
+        popup.resize(400, 300)
+        fit_window(popup, work_area)
+        for phase in ("checking", "presenting", "stopping_media", "return_failed"):
+            popup.update_phase(phase, "Parar retorna o player ao primeiro monitor e confirma o JWL no Salão.")
+            app.processEvents()
+            fit_window(popup, work_area)
+            assert work_area.contains(popup.frameGeometry()), (process, phase, popup.frameGeometry(), result)
+            for control in (*popup.buttons.values(), popup.stop_button):
+                if control.isVisible():
+                    assert control.sizeHint().width() <= control.width(), (process, control.text(), result)
+                    assert popup.rect().contains(control.mapTo(popup, control.rect().bottomRight())), result
+            if len(sys.argv) > 3:
+                base = Path(sys.argv[3])
+                target = base.with_name(base.stem + "-popup-" + process + "-" + phase + ".png")
+                assert popup.grab().save(str(target))
+        popup.finish()
     print(json.dumps(result))
 finally:
     window.external_media = None

@@ -1,5 +1,14 @@
 # Roteiro de conclusão — 21/09/2026
 
+Retorno seguinte de 08/10: `7a5f7db` falhou fisicamente; player não manteve a
+frente e o app retornou ao JWL. Novo candidato cede explicitamente a saída
+secundária JWL, acompanha toda a apresentação e oferece popup independente
+no monitor principal com reprodução/retorno. PID/frame UWP, cancelamento e
+restauração têm regressões. Próximo aceite: Chrome por 30 s, controles/áudio,
+Parar/primeiro monitor/JWL, dois ciclos pausados e ativos; depois VLC/Edge.
+Não confundir essa candidata com etapa concluída. [Roteiro](external-media.md).
+
+
 Atualização de 08/10/2026: guardião e Forçar JWL confirmados após entrega
 `8937c75` (hash local não enviado). Seletor externo move o aplicativo, mas JWL
 fica à frente e Parar não conclui o retorno. Backend externo passa a confirmar

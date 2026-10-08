@@ -4,6 +4,16 @@ Atualizado em 07/10/2026. Operação em Windows 11 x64, com OBS, JW Library,
 Zoom e WhatsApp. O [histórico de incidentes](incident-history.md) registra
 quais testes foram confirmados e o que permanece pendente.
 
+## Mídia externa e popup de controle
+
+Use **Mídia Externa** para selecionar a janela já aberta. Depois da seleção,
+o popup fica no monitor principal: **Reproduzir**, **Pausar**, **Maximizar** e
+**Parar mídia**. Chrome/Edge também oferecem **Tela cheia do vídeo** quando a
+página expõe esse controle. A saída JWL cede o segundo monitor durante o ciclo;
+o guardião/sensor aguardam retorno confirmado. Parar ou X interrompe a mídia,
+restaura player/Program e JWL, sem fechar aplicativos. Leia um eventual aviso
+de pausa/parada e confira a reprodução. [Operação, limites e testes](external-media.md).
+
 ## Preparar fora da reunião
 
 1. Atualize pelo [fluxo Git/Python](test-python-update.md). Para instalar a nova

@@ -17,6 +17,25 @@ from meeting_assistant.services.obs_external_media import (
 from meeting_assistant.services.obs_hall_setup import MEDIA_SOURCE, prepare_media
 
 
+class Controls:
+    fullscreen_owned = False
+
+    def __init__(self):
+        self.commands = []
+
+    def command(self, window, action, cancel):
+        self.commands.append((window.hwnd, action))
+        assert not cancel.is_set()
+        if action == "fullscreen":
+            self.fullscreen_owned = True
+        elif action == "exit_fullscreen":
+            self.fullscreen_owned = False
+        return {"confirmed": True}
+
+    def close(self):
+        pass
+
+
 class VisualObs(FakeObs):
     def __init__(self):
         super().__init__()
@@ -132,7 +151,8 @@ class Zoom(QObject):
 def service():
     controller, zoom = Controller(), Zoom()
     backend = Mock()
-    return ExternalMediaService(lambda: None, controller, zoom, backend=backend), controller, zoom, backend
+    service = ExternalMediaService(lambda: None, controller, zoom, backend=backend, controls=Controls())
+    return service, controller, zoom, backend
 
 
 def test_manual_external_return_restores_jwl_even_without_automation():

@@ -2,7 +2,9 @@
 
 import ctypes
 import time
+from dataclasses import replace
 
+from meeting_assistant.services.jwl_secondary_window import JwlSecondaryWindowInfo, WindowRect
 from meeting_assistant.services.native_window import activate_window, show_window_async
 from meeting_assistant.services.window_inventory import WindowBackend, is_jwl
 
@@ -17,12 +19,49 @@ def cloak_state(hwnd):
     return value.value
 
 
+def operator_placement(window, monitors):
+    """Preserve the saved layout, clamping its normal rect to primary if needed.
+
+    WINDOWPLACEMENT is workspace-relative (screen-relative for tool windows).
+    Its normal rect remains useful even when GetWindowRect reports -32000 for
+    a minimized player. Do not overwrite the original cycle snapshot.
+    """
+    primary = [monitor for monitor in monitors if monitor["primary"]]
+    if len(primary) != 1:
+        return window.placement
+    normal = window.placement[4]
+
+    def overlap(monitor):
+        left, top, right, bottom = monitor["rect"]
+        return max(0, min(right, normal[2]) - max(left, normal[0])) * max(
+            0, min(bottom, normal[3]) - max(top, normal[1])
+        )
+
+    old = max(monitors, key=overlap)
+    tool = bool(window.extended_style & 0x80)  # WS_EX_TOOLWINDOW
+    dx, dy = (0, 0) if tool else (old["work"][0] - old["rect"][0],
+                                  old["work"][1] - old["rect"][1])
+    screen = (normal[0] + dx, normal[1] + dy, normal[2] + dx, normal[3] + dy)
+    target = primary[0]
+    left, top, right, bottom = target["work"]
+    if left <= screen[0] and top <= screen[1] and screen[2] <= right and screen[3] <= bottom:
+        return window.placement
+    width = min(right - left, max(360, screen[2] - screen[0]))
+    height = min(bottom - top, max(240, screen[3] - screen[1]))
+    x = max(left, min(screen[0], right - width))
+    y = max(top, min(screen[1], bottom - height))
+    dx, dy = (0, 0) if tool else (left - target["rect"][0], top - target["rect"][1])
+    return (*window.placement[:4], (x - dx, y - dy, x + width - dx, y + height - dy))
+
+
 class ExternalWindowBackend(WindowBackend):
     def __init__(self, hall_window_provider=None, *, clock=time.monotonic, pause=time.sleep):
         self._hall_window_provider = hall_window_provider or (lambda: None)
         self._hall_original = None
         self._clock, self._pause = clock, pause
         self.last_snapshot = {}
+        self.cancelled = lambda: False
+        self.return_candidate = None
 
     @staticmethod
     def _win32():
@@ -36,21 +75,53 @@ class ExternalWindowBackend(WindowBackend):
         # demote the operator's JWL by guessing among identical window titles.
         identified = self._hall_window_provider()
         if identified is None:
-            return
-        matches = [w for w in self.windows() if is_jwl(w) and w.hwnd == identified.hwnd
-                   and w.pid == identified.pid and w.class_name == identified.class_name]
+            raise ValueError("Saída JWL não identificada. Use Forçar JWL antes de apresentar mídia externa.")
+        con, gui = self._win32()
+        root = int(gui.GetAncestor(identified.hwnd, con.GA_ROOT) or identified.hwnd)
+        matches = [w for w in self.windows() if is_jwl(w) and w.hwnd == root]
         if len(matches) != 1 or not self.same_window(matches[0]):
-            return
+            raise ValueError("A saída JWL mudou. Confirme o JWL antes de apresentar mídia externa.")
         hall = matches[0]
+        actual_class = hall.class_name if root == identified.hwnd else gui.GetClassName(identified.hwnd)
+        if actual_class != identified.class_name:
+            raise ValueError("A classe da saída JWL mudou; apresentação cancelada.")
+        # UIA may identify the ApplicationFrameHost PID, while inventory resolves
+        # its JWLibrary child PID. Validate both identities, never guess by title.
+        if identified.pid not in {hall.pid, self._native_pid(identified.hwnd)}:
+            raise ValueError("A identidade da saída JWL não foi confirmada.")
         left, top, right, bottom = rect
         x1, y1, x2, y2 = hall.rect
         if min(right, x2) <= max(left, x1) or min(bottom, y2) <= max(top, y1):
-            return
+            raise ValueError("A saída JWL não está no monitor do Salão.")
         self._hall_original = hall
-        con, gui = self._win32()
+        if isinstance(identified, JwlSecondaryWindowInfo):
+            self.return_candidate = replace(
+                identified, hwnd=hall.hwnd, pid=hall.pid, process_name=hall.process,
+                class_name=hall.class_name, rect=WindowRect(*hall.rect),
+            )
         gui.SetWindowPos(hall.hwnd, con.HWND_NOTOPMOST, 0, 0, 0, 0,
                          con.SWP_NOACTIVATE | con.SWP_NOMOVE | con.SWP_NOSIZE
                          | con.SWP_ASYNCWINDOWPOS)
+        # Explicit ownership handoff. A UWP fullscreen view may reclaim z-order
+        # after demotion, even without our guardian. Hide ONLY this secondary
+        # window for this cycle; keep its HWND/process, styles and geometry alive.
+        show_window_async(hall.hwnd, con.SW_HIDE)
+
+    @staticmethod
+    def _native_pid(hwnd):
+        import win32process
+
+        return win32process.GetWindowThreadProcessId(hwnd)[1]
+
+    def _keep_hall_released(self):
+        hall = self._hall_original
+        if hall is None or not self.same_window(hall):
+            raise ValueError("Saída JWL mudou durante a mídia externa; retornando ao JWL.")
+        con, gui = self._win32()
+        if gui.IsWindowVisible(hall.hwnd):
+            show_window_async(hall.hwnd, con.SW_HIDE)
+            return True
+        return False
 
     def _restore_hall_order(self):
         hall = self._hall_original
@@ -58,9 +129,13 @@ class ExternalWindowBackend(WindowBackend):
             return
         if self.same_window(hall):
             con, gui = self._win32()
+            if hall.visible:
+                show_window_async(hall.hwnd, con.SW_SHOWNOACTIVATE)
             gui.SetWindowPos(hall.hwnd, con.HWND_TOPMOST if hall.topmost else con.HWND_NOTOPMOST,
                              0, 0, 0, 0, con.SWP_NOACTIVATE | con.SWP_NOMOVE | con.SWP_NOSIZE
                              | con.SWP_ASYNCWINDOWPOS)
+        else:
+            self.return_candidate = None
         self._hall_original = None
 
     def _position(self, window, rect, *, frame_changed=False):
@@ -93,9 +168,12 @@ class ExternalWindowBackend(WindowBackend):
                         minimized=bool(gui.IsIconic(window.hwnd)), cloaked=cloak_state(window.hwnd),
                         geometry_ok=all(abs(a - b) <= 12 for a, b in zip(actual, rect, strict=True)),
                         exposed=all(hit == root for hit in covers), cover_hwnd=covers[0])
+        hall = self._hall_original
+        snapshot["hall_hidden"] = bool(hall and self.same_window(hall)
+                                       and not gui.IsWindowVisible(hall.hwnd))
         snapshot["ready"] = (snapshot["visible"] and not snapshot["minimized"]
                              and not snapshot["cloaked"] and snapshot["geometry_ok"]
-                             and snapshot["exposed"])
+                             and snapshot["exposed"] and snapshot["hall_hidden"])
         self.last_snapshot = snapshot
         return snapshot
 
@@ -104,6 +182,7 @@ class ExternalWindowBackend(WindowBackend):
         if not self.same_window(window):
             raise ValueError("Player mudou de processo.")
         self._hall_original = None
+        self.return_candidate = None
         self._release_hall(rect)
         show_window_async(window.hwnd, con.SW_RESTORE)
         gui.SetWindowLong(window.hwnd, con.GWL_STYLE,
@@ -115,6 +194,9 @@ class ExternalWindowBackend(WindowBackend):
         activation_attempted = False
         activation_accepted = None
         while True:
+            if self.cancelled():
+                raise ValueError("Apresentação cancelada durante o posicionamento.")
+            self._keep_hall_released()
             snapshot = self.presentation_snapshot(window, rect)
             snapshot.update(activation_attempted=activation_attempted,
                             activation_accepted=activation_accepted)
@@ -137,10 +219,29 @@ class ExternalWindowBackend(WindowBackend):
             self._position(window, rect)
 
     def confirm_presentation(self, window, rect):
-        snapshot = self.presentation_snapshot(window, rect)
-        if not snapshot["ready"]:
-            raise ValueError("Player deixou de estar visível no Salão; retornando ao JWL.")
-        return snapshot
+        return self.maintain_presentation(window, rect)
+
+    def maintain_presentation(self, window, rect):
+        """Bounded recovery without foreground activation or a new snapshot."""
+        deadline = self._clock() + 1.0
+        repaired = False
+        while not self.cancelled():
+            repaired = self._keep_hall_released() or repaired
+            snapshot = self.presentation_snapshot(window, rect)
+            snapshot["repaired"] = repaired
+            if snapshot["ready"]:
+                return snapshot
+            if not snapshot["valid"]:
+                raise ValueError("Player fechado ou substituído; retornando ao JWL.")
+            if self._clock() >= deadline:
+                raise ValueError("Player perdeu a exibição no Salão; retornando ao JWL.")
+            con, _ = self._win32()
+            if snapshot["minimized"]:
+                show_window_async(window.hwnd, con.SW_SHOWNOACTIVATE)
+            self._position(window, rect)
+            repaired = True
+            self._pause(0.05)
+        raise ValueError("Verificação da mídia externa cancelada.")
 
     def restore_presentation(self, window):
         con, gui = self._win32()
@@ -156,7 +257,8 @@ class ExternalWindowBackend(WindowBackend):
             gui.SetWindowLong(window.hwnd, con.GWL_EXSTYLE,
                               (gui.GetWindowLong(window.hwnd, con.GWL_EXSTYLE) & ~edge_mask)
                               | (window.extended_style & edge_mask))
-            placement = (window.placement[0] | 4, *window.placement[1:])  # WPF_ASYNCWINDOWPLACEMENT
+            desired = operator_placement(window, self.monitors())
+            placement = (desired[0] | 4, *desired[1:])  # WPF_ASYNCWINDOWPLACEMENT
             gui.SetWindowPlacement(window.hwnd, placement)
             gui.SetWindowPos(window.hwnd, con.HWND_TOPMOST if window.topmost else con.HWND_NOTOPMOST,
                              0, 0, 0, 0, con.SWP_NOMOVE | con.SWP_NOSIZE | con.SWP_NOACTIVATE
@@ -169,7 +271,7 @@ class ExternalWindowBackend(WindowBackend):
                 self.last_snapshot = {
                     "hwnd": window.hwnd,
                     "placement_ok": all(abs(a - b) <= 12 for a, b in
-                                        zip(actual[4], window.placement[4], strict=True)),
+                                        zip(actual[4], desired[4], strict=True)),
                     "show_state_ok": actual[1] == window.placement[1],
                     "minimized_ok": bool(gui.IsIconic(window.hwnd)) == window.minimized,
                     "topmost_ok": bool(gui.GetWindowLong(window.hwnd, con.GWL_EXSTYLE)
