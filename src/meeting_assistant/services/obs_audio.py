@@ -180,8 +180,8 @@ def discover(client):
     check_kinds(rows)
     present = {name for name in SOURCES if name in rows}
     selected = {
-        name: call(client, "GetInputSettings", inputName=name)["inputSettings"]
-        if name in present else {} for name in SOURCES
+        name: call(client, "GetInputSettings", inputName=name)["inputSettings"] if name in present else {}
+        for name in SOURCES
     }
     scenes = {s["sceneName"] for s in call(client, "GetSceneList")["scenes"]}
     if BUS in scenes:
@@ -201,7 +201,8 @@ def discover(client):
         extra_filters[name] = {
             key: bool(filters.get(filter_name, {}).get("filterEnabled"))
             for key, filter_name in (
-                ("noise_gate", NOISE_GATE), ("compressor", COMPRESSOR),
+                ("noise_gate", NOISE_GATE),
+                ("compressor", COMPRESSOR),
                 ("noise_suppression", NOISE_SUPPRESSION),
             )
         }
@@ -218,18 +219,19 @@ def discover(client):
         monitor_error = str(exc)
     return {
         "message": "Configuração lida do OBS. O envio atual foi preservado."
-        if len(present) == len(SOURCES) else "Clique em Criar fontes para preparar o áudio no OBS.",
+        if len(present) == len(SOURCES)
+        else "Clique em Criar fontes para preparar o áudio no OBS.",
         "microphones": physical_choices(client) if MIC in present else [],
         "applications": {
-            label: application_choices(client, label) if app_name(label) in present else []
-            for label in APPS
+            label: application_choices(client, label) if app_name(label) in present else [] for label in APPS
         },
         "outputs": virtual_outputs(),
         "selected": selected,
         "source_states": states,
         "extra_filters": extra_filters,
         "missing_sources": [name for name in SOURCES if name not in present],
-        "needs_prepare": len(present) != len(SOURCES) or BUS not in scenes
+        "needs_prepare": len(present) != len(SOURCES)
+        or BUS not in scenes
         or not set(SOURCES).issubset({r["sourceName"] for r in items(client, BUS)}),
         "monitor": monitor,
         "monitor_error": monitor_error,
@@ -309,7 +311,11 @@ def activate(client, data):
         extra = data.get("extra_filters", {})
         for name in selected:
             configure_filters(
-                client, name, gains.get(name, 0), whatsapp_device if profile == "whatsapp_zoom" else "", extra.get(name, {})  # noqa: E501
+                client,
+                name,
+                gains.get(name, 0),
+                whatsapp_device if profile == "whatsapp_zoom" else "",
+                extra.get(name, {}),  # noqa: E501
             )
             if name in syncs:
                 set_sync_verified(client, name, syncs[name])
@@ -346,8 +352,7 @@ def activate(client, data):
         else "a saída do primeiro cabo no Zoom e a saída de gravação do segundo cabo no WhatsApp"
     )
     return {
-        "message": f"OBS confirmou o envio. Use {microphones}. "
-        "Confira volumes durante uma chamada de teste.",
+        "message": f"OBS confirmou o envio. Use {microphones}. Confira volumes durante uma chamada de teste.",
         "profile": profile,
         "whatsapp_device": whatsapp_device,
         "gains_db": gains,
@@ -359,7 +364,13 @@ def run_audio_task(client, action, data):
     if action == "inspect":
         return discover(client)
     if action == "gains":
-        return apply_gains(client, data.get("gains_db"), SOURCES, sync_offsets=data.get("sync_offsets_ms"))
+        return apply_gains(
+            client,
+            data.get("gains_db"),
+            SOURCES,
+            sync_offsets=data.get("sync_offsets_ms"),
+            extra_filters=data.get("extra_filters"),
+        )
     if action == "prepare":
         return prepare(client)
     if action == "activate":

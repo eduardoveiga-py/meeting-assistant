@@ -23,16 +23,24 @@ def gain_state(client, source):
     valid_value = type(value) in (int, float) and math.isfinite(value) and -30 <= value <= 18
     names = [f["filterName"] for f in filters]
     ready = bool(
-        gain and limiter and valid_value
-        and gain["filterKind"] == "gain_filter" and gain.get("filterEnabled") is True
-        and limiter["filterKind"] == "limiter_filter" and limiter.get("filterEnabled") is True
+        gain
+        and limiter
+        and valid_value
+        and gain["filterKind"] == "gain_filter"
+        and gain.get("filterEnabled") is True
+        and limiter["filterKind"] == "limiter_filter"
+        and limiter.get("filterEnabled") is True
         and names.index(GAIN) < names.index(LIMITER)
         and (WHATSAPP_MONITOR not in names or names.index(LIMITER) < names.index(WHATSAPP_MONITOR))
     )
-    return {"gain_db": float(value) if valid_value else None, "gain_ready": ready, "sync_offset_ms": sync_offset}  # noqa: E501
+    return {
+        "gain_db": float(value) if valid_value else None,
+        "gain_ready": ready,
+        "sync_offset_ms": sync_offset,
+    }  # noqa: E501
 
 
-def apply_gains(client, gains, source_kinds, sync_offsets=None):
+def apply_gains(client, gains, source_kinds, sync_offsets=None, extra_filters=None):
     sync_offsets = {} if sync_offsets is None else sync_offsets
     if not isinstance(gains, dict) or not gains:
         raise ValueError("Altere o ganho de uma fonte antes de salvar os volumes.")
@@ -54,9 +62,9 @@ def apply_gains(client, gains, source_kinds, sync_offsets=None):
             raise ValueError(f"Configure o envio de {source} antes de ajustar seu volume.")
         previous[source] = state["gain_db"]
         if source in sync_offsets:
-            previous_syncs[source] = call(
-                client, "GetInputAudioSyncOffset", inputName=source
-            )["inputAudioSyncOffset"]
+            previous_syncs[source] = call(client, "GetInputAudioSyncOffset", inputName=source)[
+                "inputAudioSyncOffset"
+            ]
     attempted = []
     try:
         for source, value in gains.items():
@@ -83,8 +91,30 @@ def apply_gains(client, gains, source_kinds, sync_offsets=None):
         raise ValueError(
             "OBS não confirmou o volume. Ganhos anteriores restaurados; tente novamente."
         ) from exc
+    extra_filters = extra_filters or {}
+    from meeting_assistant.services.audio_routes import COMPRESSOR, NOISE_GATE, NOISE_SUPPRESSION
+
+    for source, filters in extra_filters.items():
+        if source not in gains:
+            continue
+        for key, filter_name in [
+            ("noise_gate", NOISE_GATE),
+            ("compressor", COMPRESSOR),
+            ("noise_suppression", NOISE_SUPPRESSION),
+        ]:
+            if key in filters:
+                try:
+                    call(
+                        client,
+                        "SetSourceFilterEnabled",
+                        sourceName=source,
+                        filterName=filter_name,
+                        filterEnabled=bool(filters[key]),
+                    )
+                except Exception:
+                    pass
     return {
-        "message": "OBS confirmou os volumes. O envio e os dispositivos foram preservados.",
+        "message": "OBS confirmou os volumes, atrasos e filtros.",
         "gains_db": {source: float(value) for source, value in gains.items()},
         "sync_offsets_ms": sync_offsets,
     }
@@ -92,12 +122,17 @@ def apply_gains(client, gains, source_kinds, sync_offsets=None):
 
 def _set_verified(client, source, value):
     call(
-        client, "SetSourceFilterSettings", sourceName=source, filterName=GAIN,
-        filterSettings={"db": float(value)}, overlay=True,
+        client,
+        "SetSourceFilterSettings",
+        sourceName=source,
+        filterName=GAIN,
+        filterSettings={"db": float(value)},
+        overlay=True,
     )
     actual = call(client, "GetSourceFilter", sourceName=source, filterName=GAIN)
     if (
-        actual.get("filterKind") != "gain_filter" or actual.get("filterEnabled") is not True
+        actual.get("filterKind") != "gain_filter"
+        or actual.get("filterEnabled") is not True
         or actual.get("filterSettings", {}).get("db") != float(value)
     ):
         raise ValueError("OBS não confirmou o ganho.")

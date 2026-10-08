@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSlider,
-    QSpinBox,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -26,8 +25,14 @@ from meeting_assistant.ui.window_geometry import ScreenFitController
 
 class AudioSetupDialog(QDialog):
     def __init__(
-        self, controller, settings, parent=None, *, settings_service=None,
-        embedded=False, before_route=None,
+        self,
+        controller,
+        settings,
+        parent=None,
+        *,
+        settings_service=None,
+        embedded=False,
+        before_route=None,
     ):
         super().__init__(parent)
         self.controller, self.settings = controller, settings
@@ -62,8 +67,9 @@ class AudioSetupDialog(QDialog):
         self.refresh_button.setToolTip("Consulta o OBS sem silenciar nem alterar o envio.")
         self.refresh_button.clicked.connect(lambda: self.request("inspect"))
         self.prepare_button = QPushButton("Completar fontes de áudio")
-        self.prepare_button.setToolTip("Cria somente o que falta. "
-            "Preserva fontes, volumes e envio existentes.")
+        self.prepare_button.setToolTip(
+            "Cria somente o que falta. Preserva fontes, volumes e envio existentes."
+        )
         self.prepare_button.clicked.connect(lambda: self.request("prepare"))
         row.addWidget(self.refresh_button)
         row.addWidget(self.prepare_button)
@@ -116,27 +122,10 @@ class AudioSetupDialog(QDialog):
         body.addStretch()
 
         self.volume_scroll, volume_body = self._page("Volumes")
-        self._label(
-            volume_body, "Som enviado ao Zoom e WhatsApp."
-        )
+        self._label(volume_body, "Som enviado ao Zoom e WhatsApp.")
         self.volume_hint = self._label(volume_body, "")
         self.gains, self.gain_notes, self.gain_groups = {}, {}, {}
         self.noise_gates, self.compressors, self.suppressions, self.sync_offsets = {}, {}, {}, {}
-        self.advanced_sources = QGroupBox("Filtros e sincronização")
-        self.advanced_sources.setCheckable(True)
-        self.advanced_sources.setChecked(False)
-        advanced_layout = QVBoxLayout(self.advanced_sources)
-        self.advanced_content = QWidget()
-        advanced_body = QVBoxLayout(self.advanced_content)
-        advanced_layout.addWidget(self.advanced_content)
-        self.advanced_content.hide()
-        self.advanced_sources.toggled.connect(self.advanced_content.setVisible)
-        self._label(
-            advanced_body, "Filtros são aplicados ao ativar o envio. "
-            "Aplicar volumes altera somente os ganhos e o atraso da mesa."
-        )
-        # Put filters with route configuration, not among routine volume controls.
-        body.insertWidget(body.count() - 1, self.advanced_sources)
         for name in SOURCES:
             label = "Mesa de som" if name == MIC else name.removeprefix("Meeting Assistant - Áudio ")
             group = QGroupBox(label)
@@ -158,31 +147,40 @@ class AudioSetupDialog(QDialog):
             gain.valueChanged.connect(self.refresh_enabled)
             volume_body.addWidget(group)
 
-            advanced = QGroupBox(label)
-            advanced_form = QVBoxLayout(advanced)
             if name == MIC:
                 suppression = QCheckBox("Redução de ruído da mesa")
                 suppression.setToolTip("Use somente se necessário; pode afetar música captada pela mesa.")
                 self.suppressions[name] = suppression
-                advanced_form.addWidget(suppression)
-                self._label(advanced_form, "Atraso da mesa (ms)")
-                sync = QSpinBox()
-                sync.setRange(-950, 20000)
-                sync.setSuffix(" ms")
+                suppression.stateChanged.connect(self.refresh_enabled)
+                layout.addWidget(suppression)
+
+                self._label(layout, "Atraso da mesa (ms)")
+                sync_row = QHBoxLayout()
+                sync = QSlider(Qt.Orientation.Horizontal, group)
+                sync.setRange(-5000, 5000)
                 sync.setValue(int(self._saved_syncs.get(name, 0)))
                 sync.setAccessibleName("Atraso da mesa em milissegundos")
+                sync_label = QLabel(f"{sync.value():+d} ms")
+                sync_label.setMinimumWidth(sync_label.fontMetrics().horizontalAdvance("+5000 ms") + 12)
+                sync.valueChanged.connect(lambda value, sn=sync_label: sn.setText(f"{value:+d} ms"))
                 sync.valueChanged.connect(self.refresh_enabled)
+                sync_row.addWidget(sync, 1)
+                sync_row.addWidget(sync_label)
+                layout.addLayout(sync_row)
                 self.sync_offsets[name] = sync
-                advanced_form.addWidget(sync)
+
             gate = QCheckBox("Corte de ruído (Noise Gate)")
             compressor = QCheckBox("Compressor")
+            gate.stateChanged.connect(self.refresh_enabled)
+            compressor.stateChanged.connect(self.refresh_enabled)
+
             self.noise_gates[name], self.compressors[name] = gate, compressor
-            advanced_form.addWidget(gate)
-            advanced_form.addWidget(compressor)
-            advanced_body.addWidget(advanced)
+            layout.addWidget(gate)
+            layout.addWidget(compressor)
         self._label(
-            volume_body, "O limitador protege picos do envio, mas não remove distorção "
-            "já presente na entrada. Os volumes das caixas do Salão não são alterados."
+            volume_body,
+            "O limitador protege picos do envio, mas não remove distorção "
+            "já presente na entrada. Os volumes das caixas do Salão não são alterados.",
         )
         volume_body.addStretch()
 
@@ -193,7 +191,7 @@ class AudioSetupDialog(QDialog):
             "OBS → Configurações → Áudio → Avançado → Monitoramento: "
             "CABLE-A Input (ou CABLE Input).<br>"
             "Zoom → Microfone: CABLE-A Output (ou CABLE Output). "
-            "No perfil comum, use a mesma saída no WhatsApp."
+            "No perfil comum, use a mesma saída no WhatsApp.",
         )
         self._label(
             help_body,
@@ -205,7 +203,7 @@ class AudioSetupDialog(QDialog):
             'Plugin: <a href="https://github.com/exeldro/obs-audio-monitor/releases/tag/0.10.1">'
             "Audio Monitor 0.10.1</a><br>"
             "Reinicie conforme o instalador e depois clique em Atualizar lista. "
-            "Instalar o plugin sozinho não instala o segundo cabo."
+            "Instalar o plugin sozinho não instala o segundo cabo.",
         )
         self._label(
             help_body,
@@ -215,7 +213,7 @@ class AudioSetupDialog(QDialog):
             "A mesa que retorna ao notebook deve excluir o som recebido do Zoom e não "
             "duplicar as mídias capturadas pelo app. No OBS, deixe outras fontes sem monitoramento. "
             "O app não verifica os microfones escolhidos dentro das chamadas nem o cabo físico.<br>"
-            "Confira esses pontos, marque a confirmação na aba Envio e clique em Ativar envio."
+            "Confira esses pontos, marque a confirmação na aba Envio e clique em Ativar envio.",
         )
         self._label(
             help_body,
@@ -224,7 +222,7 @@ class AudioSetupDialog(QDialog):
             "preservam o envio. "
             "Fontes novas começam silenciadas até você ativá-las. "
             "O botão Silenciar envio interrompe o mix enviado "
-            "às chamadas. O botão WhatsApp da tela principal controla somente seu alto-falante."
+            "às chamadas. O botão WhatsApp da tela principal controla somente seu alto-falante.",
         )
         help_body.addStretch()
 
@@ -325,8 +323,13 @@ class AudioSetupDialog(QDialog):
         advanced = self.profile.currentData() == "whatsapp_zoom"
         if not advanced:
             self.applications["Zoom"].setCurrentIndex(0)
-        for widget in (self.zoom_label, self.applications["Zoom"],
-                       self.whatsapp_label, self.whatsapp_device, self.second_hint):
+        for widget in (
+            self.zoom_label,
+            self.applications["Zoom"],
+            self.whatsapp_label,
+            self.whatsapp_device,
+            self.second_hint,
+        ):
             widget.setVisible(advanced)
         self._selection_changed()
 
@@ -354,14 +357,16 @@ class AudioSetupDialog(QDialog):
 
     def _sync_changes(self):
         return {
-            name: sync.value() for name, sync in self.sync_offsets.items()
+            name: sync.value()
+            for name, sync in self.sync_offsets.items()
             if self._source_states.get(name, {}).get("gain_ready")
             and sync.value() != self._saved_syncs.get(name, 0)
         }
 
     def _gain_changes(self):
         return {
-            name: gain.value() for name, gain in self.gains.items()
+            name: gain.value()
+            for name, gain in self.gains.items()
             if self._source_states.get(name, {}).get("gain_ready")
             and gain.value() != self._saved_gains.get(name, 0.0)
         }
@@ -373,12 +378,26 @@ class AudioSetupDialog(QDialog):
         self.activate_button.setVisible(on_routing)
         self.gain_button.setVisible(self.tabs.currentIndex() == 1)
         # A usable click explains missing fields and focuses them instead of a silent disabled button.
-        for button in (self.refresh_button, self.prepare_button, self.mute_button,
-                       self.close_button, self.activate_button):
+        for button in (
+            self.refresh_button,
+            self.prepare_button,
+            self.mute_button,
+            self.close_button,
+            self.activate_button,
+        ):
             button.setEnabled(not self.busy)
-        self.gain_button.setEnabled(not self.busy and (bool(self._gain_changes()) or bool(self._sync_changes())))  # noqa: E501
-        for widget in (self.profile, self.microphone, self.whatsapp_device,
-                       self.route_confirmation, self.other_sources, *self.applications.values()):
+        self.gain_button.setEnabled(
+            not self.busy
+            and (bool(self._gain_changes()) or bool(self._sync_changes()) or self.has_pending_changes())
+        )  # noqa: E501
+        for widget in (
+            self.profile,
+            self.microphone,
+            self.whatsapp_device,
+            self.route_confirmation,
+            self.other_sources,
+            *self.applications.values(),
+        ):
             widget.setEnabled(not self.busy)
         advanced = self.profile.currentData() == "whatsapp_zoom"
         self.applications["Zoom"].setEnabled(not self.busy and advanced)
@@ -398,7 +417,8 @@ class AudioSetupDialog(QDialog):
                 widget.setEnabled(not self.busy)
         self.volume_hint.setText(
             "0 dB mantém o som original."
-            if any_gain_ready else "Nenhuma fonte com ganho pronta. Configure e ative na aba Envio primeiro."
+            if any_gain_ready
+            else "Nenhuma fonte com ganho pronta. Configure e ative na aba Envio primeiro."
         )
         blockers = self._activation_blockers()
         self.readiness.setText("Falta: " + blockers[0][0] + "." if blockers else "")
@@ -421,12 +441,24 @@ class AudioSetupDialog(QDialog):
             "whatsapp_device": self.whatsapp_device.currentData(),
             "gains_db": {name: gain.value() for name, gain in self.gains.items()},
             "sync_offsets_ms": {name: sync.value() for name, sync in self.sync_offsets.items()},
-            "extra_filters": {name: {"noise_gate": self.noise_gates[name].isChecked(), "compressor": self.compressors[name].isChecked(), "noise_suppression": self.suppressions[name].isChecked() if name in self.suppressions else False, "auto_ducking": self.settings.auto_mute_mic_for_jwl_media} for name in self.gains},  # noqa: E501
+            "extra_filters": {
+                name: {
+                    "noise_gate": self.noise_gates[name].isChecked(),
+                    "compressor": self.compressors[name].isChecked(),
+                    "noise_suppression": self.suppressions[name].isChecked()
+                    if name in self.suppressions
+                    else False,
+                    "auto_ducking": self.settings.auto_mute_mic_for_jwl_media,
+                }
+                for name in self.gains
+            },  # noqa: E501
             "microphone": self.microphone.currentData(),
             "applications": {k: v.currentData() for k, v in self.applications.items()},
             "routing_confirmed": self.route_confirmation.isChecked(),
             "scenes": [
-                self.settings.scene_background, self.settings.scene_speaker, self.settings.scene_media
+                self.settings.scene_background,
+                self.settings.scene_speaker,
+                self.settings.scene_media,
             ],
         }
 
@@ -445,11 +477,19 @@ class AudioSetupDialog(QDialog):
             return
         if action == "gains":
             data = {"gains_db": self._gain_changes(), "sync_offsets_ms": self._sync_changes()}
+
+            # Since extra_filters are now sent, we should include them
+            extra = self._data()["extra_filters"]
+
+            # We want to know if ONLY filters changed or volume or sync changed
             if not self._gain_changes() and not self._sync_changes():
-                self.status.setText("Altere um volume ou atraso antes de salvar.")
-                return
-            # Sync-only changes still validate the same source/filters, preserving gain.
-            for name in data["sync_offsets_ms"]:
+                if extra == self._saved_filters:
+                    self.status.setText("Altere um volume, atraso ou filtro antes de salvar.")
+                    return
+
+            data["extra_filters"] = extra
+            # Sync/filter-only changes still validate the same source/filters, preserving gain.
+            for name in list(data["sync_offsets_ms"]) + list(data["extra_filters"]):
                 data["gains_db"].setdefault(name, self._saved_gains[name])
         else:
             data = self._data()
@@ -507,21 +547,27 @@ class AudioSetupDialog(QDialog):
         self._monitor_name = result.get("monitor", {}).get("monitorDeviceName", "")
         self._monitor_error = result.get("monitor_error", "")
         wanted = (
-            prior["whatsapp_device"] if prior is not None
+            prior["whatsapp_device"]
+            if prior is not None
             else self.settings.whatsapp_audio_device or result.get("whatsapp_device", "")
         )
         outputs = [x for x in result.get("outputs", []) if x["itemValue"] != self._monitor_id]
         self.populate(self.whatsapp_device, outputs, wanted)
         self.populate(
-            self.microphone, result["microphones"],
-            prior["microphone"] if prior is not None
+            self.microphone,
+            result["microphones"],
+            prior["microphone"]
+            if prior is not None
             else result["selected"].get(MIC, {}).get("device_id", ""),
         )
         for label, combo in self.applications.items():
             self.populate(
-                combo, result["applications"][label],
-                prior["applications"][label] if prior is not None
-                else result["selected"].get(app_name(label), {}).get("window", ""), allow_offline=True
+                combo,
+                result["applications"][label],
+                prior["applications"][label]
+                if prior is not None
+                else result["selected"].get(app_name(label), {}).get("window", ""),
+                allow_offline=True,
             )
         for name, state in self._source_states.items():
             actual = state.get("gain_db")
@@ -530,10 +576,9 @@ class AudioSetupDialog(QDialog):
             edited = prior is not None and prior["gains_db"][name] != self._saved_gains.get(name, 0.0)
             self._saved_gains[name] = actual
             sync_actual = state.get("sync_offset_ms", 0)
-            sync_edited = (
-                prior is not None
-                and prior["sync_offsets_ms"].get(name, 0) != self._saved_syncs.get(name, 0)
-            )
+            sync_edited = prior is not None and prior["sync_offsets_ms"].get(
+                name, 0
+            ) != self._saved_syncs.get(name, 0)
             self._saved_syncs[name] = sync_actual
             if name in self.sync_offsets and not sync_edited:
                 self.sync_offsets[name].setValue(sync_actual)
@@ -543,15 +588,15 @@ class AudioSetupDialog(QDialog):
                 self._saved_gains[name] = self.gains[name].value()
         for name, actual in result.get("extra_filters", {}).items():
             for key, widgets in (
-                ("noise_gate", self.noise_gates), ("compressor", self.compressors),
+                ("noise_gate", self.noise_gates),
+                ("compressor", self.compressors),
                 ("noise_suppression", self.suppressions),
             ):
                 if name not in widgets:
                     continue
-                edited = (
-                    prior is not None
-                    and prior["extra_filters"][name][key] != self._saved_filters.get(name, {}).get(key, False)
-                )
+                edited = prior is not None and prior["extra_filters"][name][key] != self._saved_filters.get(
+                    name, {}
+                ).get(key, False)
                 if not edited:
                     widgets[name].setChecked(bool(actual.get(key)))
             self._saved_filters[name] = dict(actual)
@@ -575,7 +620,8 @@ class AudioSetupDialog(QDialog):
         filters = self._data()["extra_filters"]
         edited_filters = any(
             filters[name][key] != self._saved_filters.get(name, {}).get(key, False)
-            for name in self.gains for key in ("noise_gate", "compressor", "noise_suppression")
+            for name in self.gains
+            for key in ("noise_gate", "compressor", "noise_suppression")
         )
         return bool(self._gain_changes() or self._sync_changes() or self._route_changed() or edited_filters)
 
