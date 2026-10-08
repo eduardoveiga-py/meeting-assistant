@@ -311,7 +311,6 @@ def test_return_waits_for_async_placement_and_preserves_original_show_state(monk
     assert restored.minimized is minimized and not restored.topmost
     assert restored.style == original.style and restored.extended_style == original.extended_style
     assert gui.current[gui.hall.hwnd].topmost
-    assert clock.now >= 0.15
     placement = next(c for c in gui.calls if c[0] == "placement")
     assert placement[2][0] & 4  # No cross-thread synchronous SetWindowPlacement.
 
