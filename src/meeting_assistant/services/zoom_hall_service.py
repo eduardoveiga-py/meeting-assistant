@@ -339,7 +339,7 @@ class ZoomHallService(QObject):
         cloaked = JwlFastWindowGuard._cloak_state(hwnd)
         exposed = JwlFastWindowGuard._is_exposed_at_center(hwnd, rect)
         geometry_ok = all(
-            abs(a - b) <= 8
+            abs(a - b) <= 60
             for a, b in zip(
                 (actual.left, actual.top, actual.width, actual.height),
                 (rect.left, rect.top, rect.width, rect.height),
