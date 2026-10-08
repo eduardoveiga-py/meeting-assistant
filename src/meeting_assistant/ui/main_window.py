@@ -385,7 +385,7 @@ class MainWindow(QMainWindow):
         self.power_button.clicked.connect(self._toggle_meeting)
         system_grid.addWidget(self.power_button, 0, 0)
 
-        self.force_jwl_button = QPushButton("🛡️ Forçar JWL Telão")
+        self.force_jwl_button = QPushButton("🛡️ JW na 2ª Tela")
         self.force_jwl_button.setToolTip(
             "Solicita o retorno ao JW Library sem ativar a automação. "
             "Encerra primeiro a mídia externa ou o modo Zoom local, se ativo."

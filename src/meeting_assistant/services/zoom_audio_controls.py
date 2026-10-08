@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from operator import index
 
-_MEETING_CLASSES = {"ConfMultiTabContentWndClass", "ZPContentViewWndClass", "ZPPTopWndClass"}
+_MEETING_CLASSES = {"ConfMultiTabContentWndClass", "ZPContentViewWndClass", "ZPPTopWndClass", "ZPFloatVideoWndClass", "ZPMiniVideoWndClass"}
 _FORBIDDEN = re.compile(
     r"\b(all|todos|todas|participants?|participantes?|video|camera|legendas?|captions?|"
     r"settings|configuracoes|original|speaker|altofalante|join|ingressar|conectar)\b"
@@ -98,7 +98,9 @@ def self_control_scope(button, fields, window_class):
             toolbar = True
         if kind == "Window":
             break
-    return explicit or (toolbar and window_class in _MEETING_CLASSES)
+    
+    is_popup = window_class in {"ZPFloatVideoWndClass", "ZPMiniVideoWndClass"}
+    return explicit or (toolbar and window_class in _MEETING_CLASSES) or is_popup
 
 
 @dataclass

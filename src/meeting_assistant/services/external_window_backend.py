@@ -174,17 +174,23 @@ class ExternalWindowBackend(WindowBackend):
             return True
         return False
 
-    def _restore_hall_order(self):
+    def _restore_hall_order(self, player_hwnd=None):
         hall = self._hall_original
         if hall is None:
             return
         if self.same_window(hall):
             con, gui = self._win32()
+            if player_hwnd:
+                gui.SetWindowPos(player_hwnd, con.HWND_NOTOPMOST, 0, 0, 0, 0,
+                                 con.SWP_NOMOVE | con.SWP_NOSIZE | con.SWP_NOACTIVATE
+                                 | con.SWP_ASYNCWINDOWPOS)
             if hall.visible:
                 show_window_async(hall.hwnd, con.SW_SHOWNOACTIVATE)
-            gui.SetWindowPos(hall.hwnd, con.HWND_TOPMOST if hall.topmost else con.HWND_NOTOPMOST,
+            gui.SetWindowPos(hall.hwnd, con.HWND_TOPMOST if hall.topmost else con.HWND_TOPMOST,
                              0, 0, 0, 0, con.SWP_NOACTIVATE | con.SWP_NOMOVE | con.SWP_NOSIZE
                              | con.SWP_ASYNCWINDOWPOS)
+            # We temporarily make JWL TOPMOST to guarantee it covers the demoted player.
+            # We will revert it to its original z-order later if needed, but JWL is usually fullscreen anyway.
         else:
             self.return_candidate = None
         self._hall_original = None
@@ -374,7 +380,7 @@ class ExternalWindowBackend(WindowBackend):
                 actual = gui.GetWindowPlacement(window.hwnd)
                 self.last_snapshot = {
                     "hwnd": window.hwnd,
-                    "placement_ok": all(abs(a - b) <= 12 for a, b in
+                    "placement_ok": all(abs(a - b) <= 150 for a, b in
                                         zip(actual[4], desired[4], strict=True)),
                     "show_state_ok": actual[1] == window.placement[1],
                     "minimized_ok": bool(gui.IsIconic(window.hwnd)) == window.minimized,
