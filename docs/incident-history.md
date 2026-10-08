@@ -8,8 +8,11 @@ os documentos técnicos vinculados continuam descrevendo cada implementação.
 
 A organização de Ajustes de 07/10/2026 recebeu aceite limitado à interface
 na revisão `7a7697a` (INC-032). Mídia externa foi relatada com conflito
-na mesma sessão (INC-033); a correção candidata tem ensaio próprio pendente.
-Nenhum dos retornos estende o aceite físico dos incidentes anteriores.
+na mesma sessão (INC-033). Após a entrega `8937c75`, o operador confirmou guardião
+e Forçar JWL; seletor/posicionamento externo funcionam, mas apresentação e
+retorno continuam com defeito. Correção externa de 08/10 exige ensaio próprio.
+Hash exato do checkout local não enviado. Nenhum retorno estende o aceite
+a comportamentos não testados.
 
 ## Como interpretar o registro
 
@@ -32,9 +35,9 @@ operador foi coletada novamente nesta tarefa.
 
 | ID | Problema | Situação |
 | --- | --- | --- |
-| INC-034 | Forçar JWL gera AttributeError repetido | Clique reproduzido/corrigido; ensaio físico pendente |
+| INC-034 | Forçar JWL gera AttributeError repetido | Operador confirmou funcionamento após entrega `8937c75` |
 | INC-035 | Qt amplia Ajustes além do tamanho solicitado | Restrição nativa reproduzida/corrigida; ensaio na escala do operador pendente |
-| INC-033 | Mídia externa falha após escolher a janela | Falhas reproduzidas/corrigidas; novo ensaio pendente |
+| INC-033 | Mídia externa falha após escolher a janela | Reaberto: JWL cobre player e retorno falha; candidata pendente |
 | INC-032 | Ajustes fragmentados e manutenção de fontes frágil | Organização aprovada em 07/10; manutenção/instalação com ensaio próprio |
 | INC-030 | OBS escolhia o JWL do operador entre títulos iguais | Captura por HWND confirmada em 07/10 |
 | INC-031 | Git bloqueava atualização por alterações locais | Atualização e execução confirmadas em 07/10 |
@@ -90,7 +93,11 @@ de falha e informar recusa quando o serviço não inicia o retorno.
 **Aprendizado e limite.** Clique conectado e suíte verde não comprovam que todos
 os slots foram exercitados. Exceção num slot PySide pode ser impressa sem falhar
 o teste: verificar o caminho real e capturar essa exceção explicitamente.
-Serviços JWL/Zoom protegidos não mudaram. Ensaio físico novo permanece pendente.
+Serviços JWL/Zoom protegidos não mudaram.
+
+**Retorno seguinte.** Após entregar `8937c75`, o operador confirmou guardião e
+o botão que traz JWL à segunda tela. Hash local não enviado; aceite limitado
+às ações relatadas. O defeito externo posterior está separado no INC-033.
 
 ## INC-035 — Aviso QWindowsWindow::setGeometry nos Ajustes
 
@@ -118,6 +125,35 @@ e troca de categorias, quatro escalas e recusa de setGeometry em stderr.
 A ausência do aviso no equipamento/escala do operador exige novo ensaio.
 
 ## INC-033 — Mídia externa falha depois da seleção
+
+**Reabertura após entrega `8937c75`.** Seleção/posicionamento funcionam, mas
+JWL fica à frente e Parar mídia não retorna. Sem telemetria sincronizada desse
+ensaio. O modelo Win32 reproduz sucesso falso: player posicionado, coberto
+pela janela JWL em tela cheia. O botão decide pelo checked Qt, falhando quando
+diverge do serviço. O retorno também fazia leitura imediata após pedido nativo,
+sem confirmar minimização/exposição. São falhas demonstradas no código/testes;
+a causa única do episódio real não foi atribuída sem diagnóstico.
+
+**Correção candidata de 08/10.** Backend externo cede prioridade somente da
+saída JWL identificada, sem mexer em sua borda/tamanho. Confirma exposição,
+geometria e cloaking, com uma tentativa de ativação; confere novamente após
+preparar OBS. Parar/Cancelar usa o estado do ciclo; retorno restaura Program e
+disposição do player por pedido assíncrono com confirmação limitada. O retorno
+JWL existente confirma visibilidade antes de retomar guardião/sensor. Falha
+mantém motivo e botão Repetir retorno. Diagnóstico inclui resultados nativos,
+sem títulos/URLs. Worker que concluiu mas ainda emite o resultado não bloqueia
+outro ciclo; inventário cancelado ainda em execução continua bloqueando.
+
+**Evidência nova.** Backend Win32 real contra modelo de tela cheia, fila OBS,
+painel/seletor reais, workers e dois ciclos com automação pausada/ativa. Cobrem
+ativação recusada, retorno atrasado, HWND reutilizado, checked divergente,
+cancelamento na confirmação e repetição de retorno falho. São simulações de
+Windows/OBS; saída física e escuta exigem operador. Manifesto, núcleo protegido,
+DLLs e fontes de áudio permanecem preservados.
+
+**Aprendizado adicional.** Posicionar não comprova exibição. O comando pertence
+ao ciclo do serviço. Pedidos assíncronos precisam de leitura posterior; testar
+o clique Parar, além de selecionar ou chamar stop diretamente.
 
 **Relato.** Em 07/10/2026, o operador informou que a lista abre, mas a escolha
 da mídia externa gera conflitos. Não enviou a mensagem exata neste retorno.

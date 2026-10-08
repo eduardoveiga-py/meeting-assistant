@@ -416,7 +416,7 @@ class MainWindow(QMainWindow):
             "Apresenta o player ou navegador escolhido no Salão e nas chamadas. "
             "Clique novamente para voltar ao JWL."
         )
-        self.ext_media_button.toggled.connect(self._toggle_ext_media)
+        self.ext_media_button.clicked.connect(self._toggle_ext_media)
         system_grid.addWidget(self.ext_media_button, 2, 0)
 
         self.camera_button = QPushButton("📷 Câmera")
@@ -989,17 +989,19 @@ class MainWindow(QMainWindow):
         dialog.setDetailedText(report)
         dialog.exec()
 
-    def _toggle_ext_media(self, checked):
+    def _toggle_ext_media(self, _checked=False):
         if not self.external_media:
             self.ext_media_button.blockSignals(True)
             self.ext_media_button.setChecked(False)
             self.ext_media_button.blockSignals(False)
             self.mode_label.setText("Serviço de mídia externa indisponível.")
             return
-        if checked:
-            self.external_media.start_external_media()
-        else:
+        # The service owns the lifecycle; Qt's transient checked flag is only
+        # presentation. A click during an active cycle always means return.
+        if self.external_media.active:
             self.external_media.stop_external_media()
+        else:
+            self.external_media.start_external_media()
 
     def _choose_external_media(self, candidates):
         from meeting_assistant.ui.external_media_dialog import ExternalMediaDialog
@@ -1029,6 +1031,20 @@ class MainWindow(QMainWindow):
         self.ext_media_button.blockSignals(True)
         self.ext_media_button.setChecked(active)
         self.ext_media_button.blockSignals(False)
+        phase = self.external_media.phase if self.external_media else "idle"
+        returning = phase in {"stopping", "returning"}
+        self.ext_media_button.setEnabled(not returning)
+        if not active:
+            title = "🎬 Mídia Externa"
+        elif returning:
+            title = "Retornando…"
+        elif phase == "return_failed":
+            title = "Repetir retorno"
+        elif phase == "presenting":
+            title = "■ Parar mídia"
+        else:
+            title = "✕ Cancelar mídia"
+        self.ext_media_button.setText(title)
         self.mode_label.setText(message)
         if not active and self._close_after_external:
             self._close_after_external = False

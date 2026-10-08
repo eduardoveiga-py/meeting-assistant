@@ -4,6 +4,43 @@ O [histórico de incidentes](incident-history.md) reúne sintomas, soluções,
 confirmações e aprendizados desta conversa. Este arquivo registra as decisões
 técnicas; os roteiros específicos mantêm os detalhes de teste.
 
+## 2026-10-08 — exposição e retorno externo independentes do guardião
+
+**Retorno do operador:** guardião e Forçar JWL funcionam. O seletor externo move
+a janela escolhida, mas JWL fica à frente e Parar não conclui a troca. Entrega
+anterior `8937c75`; hash do checkout local não enviado. Telemetria disponível
+continua até 02/10, sem esse ensaio. Aceite limitado aos comportamentos relatados;
+manifesto/checkpoint histórico não são atualizados por essa confirmação.
+
+**Falhas demonstradas:** o backend anterior aceita geometria correta mesmo quando
+uma janela UWP de tela cheia cobre o player. O botão depende do checked Qt:
+quando diverge do ciclo, pede iniciar em vez de retornar. Restauração faz leitura
+imediata após SetWindowPlacement, sem aguardar posição/minimização. Esses riscos
+foram reproduzidos em testes; não atribuímos todos ao PC sem diagnóstico atual.
+
+**Decisão:** backend externo separado usa o HWND/PID/classe da saída JWL já
+identificada, com identidade/geração revalidadas no worker. Ceder prioridade
+temporariamente, sem alterar geometria/estilo JWL. Confirmar cinco pontos
+internos, posição, minimização e cloaking do player. Uma tentativa de ativação
+no pedido explícito, sem loop que roube foco. Conferir exposição novamente
+após preparar OBS, antes de pedir Program.
+
+Cancelar/Parar usa o estado do serviço. Restaurar posição/estado com pedido
+assíncrono e leitura limitada a 2,5 s; restaurar prioridade JWL mesmo em falha
+parcial. O retorno JWL existente confirma exposição antes de retomar guardião/
+sensor. A interface informa Retornando ou permite Repetir retorno. Mantidos
+fila OBS, tokens, captura sem monitor, fonte JWL por HWND, áudio e núcleo protegido.
+
+**Evidência:** backend real contra modelo Win32 de JWL em tela cheia, cliques
+do painel/seletor, workers e duas apresentações em cada estado de automação.
+Inclui retorno assíncrono/falho, repetição, HWND reutilizado, cancelamento na
+confirmação, cloaking/sobreposição e diagnóstico sem título. Ensaio físico
+externo pendente. [Roteiro](external-media.md).
+
+Fontes primárias: [SetWindowPos](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos),
+[ativação](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow)
+e [WINDOWPLACEMENT assíncrono/coordenadas](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-windowplacement).
+
 ## 2026-10-07 — Forçar JWL preserva automação; Ajustes respeitam o tamanho aceito pelo Qt
 
 O log do operador, enviado antes de executar a atualização anterior, mostrou
@@ -25,7 +62,8 @@ a conter a pilha num viewport Qt, sem outra barra de rolagem; as páginas
 existentes mantêm sua rolagem. Conferir dimensões/rodapé e a restrição nativa,
 além de falhar o teste de escala quando stderr contém setGeometry.
 
-Aceite físico das duas correções permanece pendente (INC-034/035).
+Retorno seguinte confirma Forçar JWL e guardião; geometria mantém ensaio próprio
+pendente (INC-034/035). Mídia Externa tem correção independente.
 
 ## 2026-10-07 — Ajustes unificados, manutenção incremental e volumes
 

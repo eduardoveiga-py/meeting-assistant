@@ -234,7 +234,10 @@ def main() -> int:
 
     from meeting_assistant.services.external_media_service import ExternalMediaService
 
-    window.external_media = ExternalMediaService(current_hall_display, obs_controller, zoom_hall)
+    window.external_media = ExternalMediaService(
+        current_hall_display, obs_controller, zoom_hall,
+        hall_window_provider=lambda: jwl_secondary.current or jwl_fast_guard.cached_candidate,
+    )
     window.external_media.state_changed.connect(window._external_state)
     window.external_media.candidates_ready.connect(window._choose_external_media)
     window.external_media.diagnostic.connect(

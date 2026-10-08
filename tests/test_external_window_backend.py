@@ -1,0 +1,308 @@
+"""Exercise real presentation commands against a fullscreen-aware Win32 model."""
+
+from dataclasses import replace
+from types import SimpleNamespace
+
+import pytest
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QDialogButtonBox
+from test_external_media_flow import PlayerObs, start_worker, wait_for_phase
+from test_review_capture_external import Zoom
+from test_review_ui import make_window
+from test_review_windows import window
+
+from meeting_assistant.services import external_window_backend as module
+from meeting_assistant.services.display_service import DisplayInfo
+from meeting_assistant.services.external_media_service import ExternalMediaService
+from meeting_assistant.services.external_window_backend import ExternalWindowBackend
+from meeting_assistant.services.hall_policy import hall_runtime_flags
+from meeting_assistant.services.obs_controller import ObsController
+from meeting_assistant.services.obs_external_media import SCENE
+from meeting_assistant.services.window_inventory import WindowBackend
+from meeting_assistant.ui.external_media_dialog import ExternalMediaDialog
+
+CON = SimpleNamespace(
+    SW_RESTORE=9, GWL_STYLE=-16, GWL_EXSTYLE=-20, HWND_TOPMOST=-1, HWND_NOTOPMOST=-2,
+    WS_CAPTION=0xC00000, WS_THICKFRAME=0x40000, WS_EX_CLIENTEDGE=0x200,
+    WS_EX_WINDOWEDGE=0x100, WS_EX_TOPMOST=8, SWP_NOSIZE=1, SWP_NOMOVE=2,
+    SWP_NOACTIVATE=16, SWP_SHOWWINDOW=64, SWP_FRAMECHANGED=32, SWP_ASYNCWINDOWPOS=0x4000,
+    GA_ROOT=2,
+)
+HALL_RECT = (1920, 0, 3840, 1080)
+
+
+class Clock:
+    def __init__(self):
+        self.now = 0
+
+    def __call__(self):
+        return self.now
+
+    def pause(self, seconds):
+        self.now += seconds
+
+
+class Win32:
+    def __init__(self, player, hall, *, activate=True, restore_reads=0):
+        self.player, self.hall = player, hall
+        self.current = {w.hwnd: w for w in (player, hall)}
+        self.others = []
+        self.calls = []
+        self.cover = hall.hwnd
+        self.activation_allowed = activate
+        self.restore_reads = restore_reads
+        self.pending_placement = None
+        self.cloaked = 0
+
+    def GetWindowRect(self, hwnd):
+        return self.current[hwnd].rect
+
+    def IsWindowVisible(self, hwnd):
+        return self.current[hwnd].visible
+
+    def IsIconic(self, hwnd):
+        return self.current[hwnd].minimized
+
+    def GetAncestor(self, hwnd, _kind):
+        return hwnd - 1000 if hwnd > 1000 else hwnd
+
+    def WindowFromPoint(self, _point):
+        return self.cover + 1000  # A child control must resolve to its root.
+
+    def GetWindowLong(self, hwnd, kind):
+        w = self.current[hwnd]
+        return w.style if kind == CON.GWL_STYLE else w.extended_style
+
+    def SetWindowLong(self, hwnd, kind, value):
+        self.calls.append(("style", hwnd, kind, value))
+        key = "style" if kind == CON.GWL_STYLE else "extended_style"
+        self.current[hwnd] = replace(self.current[hwnd], **{key: value})
+
+    def SetWindowPos(self, hwnd, order, left, top, width, height, flags):
+        self.calls.append(("position", hwnd, order, flags))
+        w = self.current[hwnd]
+        rect = w.rect if flags & CON.SWP_NOMOVE else (left, top, left + width, top + height)
+        topmost = order == CON.HWND_TOPMOST
+        style = w.extended_style & ~CON.WS_EX_TOPMOST
+        placement = w.placement if flags & CON.SWP_NOMOVE else (0, w.placement[1], *w.placement[2:4], rect)
+        self.current[hwnd] = replace(w, rect=rect, placement=placement, topmost=topmost,
+                                     extended_style=style | (CON.WS_EX_TOPMOST if topmost else 0))
+        # UWP full-screen stays exposed until foreground activation. Merely
+        # placing another TOPMOST window is deliberately insufficient here.
+
+    def SetWindowPlacement(self, hwnd, placement):
+        self.calls.append(("placement", hwnd, placement))
+        self.pending_placement = (hwnd, placement)
+
+    def GetWindowPlacement(self, hwnd):
+        if self.pending_placement and self.pending_placement[0] == hwnd:
+            if self.restore_reads:
+                self.restore_reads -= 1
+            else:
+                placement = self.pending_placement[1]
+                self.current[hwnd] = replace(self.current[hwnd], placement=(0, *placement[1:]),
+                                             rect=placement[4], minimized=placement[1] == 2)
+                self.pending_placement = None
+        return self.current[hwnd].placement
+
+    def show(self, hwnd, command):
+        self.calls.append(("show", hwnd, command))
+        w = self.current[hwnd]
+        self.current[hwnd] = replace(w, minimized=False, visible=True,
+                                     placement=(0, 1, *w.placement[2:]))
+
+    def activate(self, hwnd):
+        self.calls.append(("activate", hwnd))
+        if self.activation_allowed:
+            self.cover = hwnd
+        return self.activation_allowed
+
+
+def make_backend(monkeypatch, *, activate=True, restore_reads=0, minimized=True):
+    player = replace(window(41, process="vlc.exe", title="video"),
+                     style=CON.WS_CAPTION | CON.WS_THICKFRAME,
+                     extended_style=CON.WS_EX_CLIENTEDGE | CON.WS_EX_WINDOWEDGE,
+                     minimized=minimized, placement=(0, 2 if minimized else 1, (0, 0), (0, 0),
+                                                     (520, 40, 1200, 720)))
+    hall = replace(window(51, rect=HALL_RECT), topmost=True, extended_style=CON.WS_EX_TOPMOST)
+    gui, clock = Win32(player, hall, activate=activate, restore_reads=restore_reads), Clock()
+    backend = ExternalWindowBackend(lambda: hall, clock=clock, pause=clock.pause)
+    backend.windows = lambda: [*gui.current.values(), *gui.others]
+    backend.same_window = lambda w: w.hwnd in gui.current and (
+        gui.current[w.hwnd].pid, gui.current[w.hwnd].created) == (w.pid, w.created)
+    backend._win32 = lambda: (CON, gui)
+    monkeypatch.setattr(module, "cloak_state", lambda _hwnd: gui.cloaked)
+    monkeypatch.setattr(module, "activate_window", gui.activate)
+    monkeypatch.setattr(module, "show_window_async", gui.show)
+    return backend, gui, clock
+
+
+def test_old_geometry_confirmation_accepts_player_behind_fullscreen_jwl(monkeypatch):
+    backend, gui, _ = make_backend(monkeypatch)
+    # Reproduce the published implementation, including its geometry-only exit.
+    monkeypatch.setitem(__import__("sys").modules, "win32con", CON)
+    monkeypatch.setitem(__import__("sys").modules, "win32gui", gui)
+    monkeypatch.setattr("meeting_assistant.services.native_window.show_window_async", gui.show)
+    assert WindowBackend.present(backend, gui.player, HALL_RECT)
+    assert gui.cover == gui.hall.hwnd
+    assert not backend.presentation_snapshot(gui.player, HALL_RECT)["ready"]
+
+
+def test_external_player_demotes_only_secondary_jwl_and_activates_once(monkeypatch):
+    backend, gui, _ = make_backend(monkeypatch)
+    operator = replace(window(61), topmost=True)
+    gui.others.append(operator)
+    assert backend.present(gui.player, HALL_RECT)
+    assert gui.cover == gui.player.hwnd and backend.last_snapshot["exposed"]
+    assert ("activate", gui.player.hwnd) in gui.calls
+    assert len([c for c in gui.calls if c[0] == "activate"]) == 1
+    assert not gui.current[gui.hall.hwnd].topmost
+    assert gui.current[gui.hall.hwnd].rect == HALL_RECT
+    assert all(c[1] != operator.hwnd for c in gui.calls)
+    assert all(c[0] == "position" for c in gui.calls if c[1] == gui.hall.hwnd)
+
+
+def test_denied_foreground_is_not_success_even_with_correct_geometry(monkeypatch):
+    backend, gui, clock = make_backend(monkeypatch, activate=False)
+    with pytest.raises(ValueError, match="visível à frente"):
+        backend.present(gui.player, HALL_RECT)
+    assert gui.current[gui.player.hwnd].rect == HALL_RECT
+    assert not backend.last_snapshot["exposed"] and clock.now <= 2.6
+    assert len([c for c in gui.calls if c[0] == "activate"]) == 1
+    backend.restore_presentation(gui.player)
+    assert gui.current[gui.hall.hwnd].topmost
+
+
+@pytest.mark.parametrize("minimized", [False, True])
+def test_return_waits_for_async_placement_and_preserves_original_show_state(monkeypatch, minimized):
+    backend, gui, clock = make_backend(monkeypatch, minimized=minimized, restore_reads=3)
+    original = gui.player
+    assert backend.present(original, HALL_RECT)
+    backend.restore_presentation(original)
+    restored = gui.current[original.hwnd]
+    assert restored.placement[4] == original.placement[4]
+    assert restored.minimized is minimized and not restored.topmost
+    assert restored.style == original.style and restored.extended_style == original.extended_style
+    assert gui.current[gui.hall.hwnd].topmost
+    assert clock.now >= 0.15
+    placement = next(c for c in gui.calls if c[0] == "placement")
+    assert placement[2][0] & 4  # No cross-thread synchronous SetWindowPlacement.
+
+
+def test_post_preparation_exposure_check_never_steals_focus_again(monkeypatch):
+    backend, gui, _ = make_backend(monkeypatch)
+    backend.present(gui.player, HALL_RECT)
+    gui.cover = gui.hall.hwnd
+    with pytest.raises(ValueError, match="deixou de estar visível"):
+        backend.confirm_presentation(gui.player, HALL_RECT)
+    assert len([c for c in gui.calls if c[0] == "activate"]) == 1
+
+
+def test_cloaked_or_partially_covered_player_is_not_presented(monkeypatch):
+    backend, gui, _ = make_backend(monkeypatch)
+    backend.present(gui.player, HALL_RECT)
+    gui.cloaked = 1
+    assert not backend.presentation_snapshot(gui.player, HALL_RECT)["ready"]
+    gui.cloaked = 0
+    center = (2880, 540)
+    gui.WindowFromPoint = lambda point: gui.player.hwnd if point == center else gui.hall.hwnd
+    snapshot = backend.presentation_snapshot(gui.player, HALL_RECT)
+    assert snapshot["geometry_ok"] and not snapshot["exposed"] and not snapshot["ready"]
+
+
+def test_restore_timeout_keeps_failure_and_restores_hall_order(monkeypatch):
+    backend, gui, clock = make_backend(monkeypatch, restore_reads=1000)
+    backend.present(gui.player, HALL_RECT)
+    with pytest.raises(ValueError, match="disposição anterior"):
+        backend.restore_presentation(gui.player)
+    assert clock.now <= 2.7 and gui.current[gui.hall.hwnd].topmost
+    assert not backend.last_snapshot["show_state_ok"]
+
+
+def test_reused_player_and_jwl_handles_are_never_modified_on_return(monkeypatch):
+    backend, gui, _ = make_backend(monkeypatch)
+    backend.present(gui.player, HALL_RECT)
+    for hwnd, w in list(gui.current.items()):
+        gui.current[hwnd] = replace(w, created=2.0)
+    gui.calls.clear()
+    backend.restore_presentation(gui.player)
+    assert not gui.calls
+    assert backend.last_snapshot["closed_or_replaced"]
+
+
+@pytest.mark.parametrize("automation", [False, True])
+def test_ui_selector_player_priority_obs_and_stop_run_as_one_lifecycle(tmp_path, monkeypatch, automation):
+    import threading
+
+    backend, gui, _ = make_backend(monkeypatch, restore_reads=3)
+    backend.monitors = lambda: [{"primary": False, "rect": HALL_RECT}]
+
+    class CurrentPlayer:
+        @property
+        def current(self):
+            return gui.current[gui.player.hwnd]
+
+    client = PlayerObs(CurrentPlayer())
+    controller = ObsController()
+    controller._client, controller.local_connection = client, True
+    zoom = Zoom()
+    display = DisplayInfo("hall", "hall", "", "", "", 1920, 0, 1920, 1080, False, 1)
+    service = ExternalMediaService(lambda: display, controller, zoom, backend=backend)
+    owner = make_window(tmp_path)
+    owner.external_media = service
+    owner.state.automation_enabled = automation
+    service.state_changed.connect(owner._external_state)
+    policies, diagnostics, threads = [], [], []
+    service.state_changed.connect(lambda active, _: policies.append(
+        hall_runtime_flags(automation, False, zoom.returning, external_active=active)
+    ))
+    service.diagnostic.connect(diagnostics.append)
+    original_windows = backend.windows
+
+    def inventory():
+        threads.append(threading.get_ident())
+        return original_windows()
+
+    backend.windows = inventory
+
+    def select_player():
+        dialog = QApplication.activeModalWidget()
+        assert isinstance(dialog, ExternalMediaDialog)
+        dialog.windows.setCurrentRow(0)
+        QTest.mouseClick(dialog.buttons.button(QDialogButtonBox.StandardButton.Ok), Qt.LeftButton)
+
+    service.candidates_ready.connect(lambda _candidates: QTimer.singleShot(0, select_player))
+    service.candidates_ready.connect(owner._choose_external_media)
+    owner.show()
+    start_worker(controller)
+    try:
+        for _ in range(2):
+            QTest.mouseClick(owner.ext_media_button, Qt.LeftButton)
+            wait_for_phase(service, "presenting")
+            assert client.program == SCENE and gui.cover == gui.player.hwnd
+            assert not gui.current[gui.hall.hwnd].topmost
+            assert owner.ext_media_button.isChecked() and "Parar" in owner.ext_media_button.text()
+            assert policies and all(flags == (False, False) for flags in policies)
+            QTest.mouseClick(owner.ext_media_button, Qt.LeftButton)
+            assert not owner.ext_media_button.isEnabled()
+            wait_for_phase(service, "returning")
+            assert client.program == "Palco" and gui.current[gui.player.hwnd].minimized
+            assert gui.current[gui.player.hwnd].placement[4] == gui.player.placement[4]
+            assert gui.current[gui.hall.hwnd].topmost and service.active
+            # Model the existing verified JWL return, without modifying that service.
+            gui.activate(gui.hall.hwnd)
+            zoom.status_changed.emit(True, "JWL confirmado visível")
+            assert gui.cover == gui.hall.hwnd and not service.active
+            assert owner.ext_media_button.isEnabled() and not owner.ext_media_button.isChecked()
+            assert policies.pop() == (automation, automation)
+        assert threading.get_ident() not in threads
+        confirms = [d for d in diagnostics if d["action"] == "native_confirm"]
+        assert len(confirms) == 2 and all(d["ok"] and d["snapshot"]["exposed"] for d in confirms)
+        restored = [d for d in diagnostics if d["action"] == "native_restore"]
+        assert len(restored) == 2 and all(d["snapshot"]["minimized_ok"] for d in restored)
+        assert all("title" not in d.get("snapshot", {}) for d in diagnostics)
+    finally:
+        service.stop()
+        controller.stop()
+        owner.close()

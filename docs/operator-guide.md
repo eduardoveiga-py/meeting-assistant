@@ -81,14 +81,15 @@ ou retorno, eles respeitam a escolha do operador e aguardam a troca finalizar.
 | Câmera | Iniciar/parar a câmera nativa usada no WhatsApp |
 | Mic Zoom | Alternar seu próprio microfone; não controla microfones dos participantes |
 | WhatsApp | Silenciar/liberar somente o áudio recebido do WhatsApp nas caixas |
-| Mídia Externa | Escolher uma janela permitida e retornar explicitamente ao JWL após a apresentação |
+| Mídia Externa / Parar mídia | Escolher janela permitida; retornar Program/player/JWL e aguardar confirmação |
 | Volumes | Abrir diretamente os ganhos por fonte na categoria Áudio |
 | Ajustes | Reunião/janelas, OBS/vídeo, áudio, instalação/plugins e diagnóstico |
 
 Volumes e Ajustes têm ícones próprios, mantendo seus nomes e a mesma posição.
 Para VLC/navegador, consulte o [passo a passo de Mídia Externa](external-media.md).
-Players minimizados são restaurados antes da captura; aguarde a confirmação no
-retorno ao JWL. Títulos duplicados continuam bloqueados para evitar seleção
+Players minimizados são restaurados antes da captura e sua exposição é conferida.
+Use **Parar mídia** e aguarde **Retornando…** concluir; em falha, **Repetir retorno**
+permite outra tentativa. Títulos duplicados continuam bloqueados para evitar seleção
 incorreta no OBS.
 
 O rótulo de Emergência não garante imagem preta: o resultado depende da cena

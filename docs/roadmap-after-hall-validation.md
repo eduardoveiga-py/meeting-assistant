@@ -1,5 +1,14 @@
 # Roteiro de conclusão — 21/09/2026
 
+Atualização de 08/10/2026: guardião e Forçar JWL confirmados após entrega
+`8937c75` (hash local não enviado). Seletor externo move o aplicativo, mas JWL
+fica à frente e Parar não conclui o retorno. Backend externo passa a confirmar
+exposição e ceder prioridade da saída JWL identificada; retorno confirma
+posição/estado do player e visibilidade JWL. Botão acompanha o ciclo e permite
+repetir falhas. Próximo aceite: dois ciclos de apresentação/retorno em VLC e
+navegador com automação pausada/ativa. Núcleo protegido, fontes JWL/áudio e
+componentes nativos preservados. [Roteiro](external-media.md).
+
 Atualização de 07/10/2026 — organização de Ajustes: categorias unificadas, acesso
 direto a Volumes e verificação/conclusão incremental OBS implementados. Plugins
 ficam na mesma janela, com instalação explícita, OBS fechado e componentes
@@ -34,7 +43,9 @@ cobrem os dois perfis e o envio Zoom somente ao segundo cabo; validação físic
 revisão permanece pendente. [Roteiro de áudio](audio-routing.md).
 
 Requisitos ampliados pelo operador. O checkpoint JWL ↔ Zoom é preservado conforme o [contrato](validated-hall-contract.md).
-A política atual de guardião só com automação ligada tem candidato separado, pendente de ensaio físico. Novas funções usarão módulos separados e interfaces existentes.
+A política atual de guardião recebeu confirmação limitada no retorno após
+`8937c75`; o contrato completo de telas exige seus cenários individuais.
+Novas funções usam módulos separados e interfaces existentes.
 
 ## Situação após os testes 1, 2 e 3 aprovados
 

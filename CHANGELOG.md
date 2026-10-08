@@ -1,5 +1,23 @@
 # Histórico de alterações
 
+## Não lançado — prioridade e retorno da Mídia Externa — 08/10/2026
+
+- Player externo confirma exposição no Salão, além da geometria. A saída JWL
+  identificada cede prioridade sem alterar bordas/tamanho. Uma tentativa de
+  ativação explícita; recusa não é anunciada como sucesso.
+- Visibilidade conferida novamente após preparar OBS, antes de pedir Program.
+  Retorno restaura Program/posição/estado do player com confirmação assíncrona
+  e só libera a automação após confirmar JWL.
+- Botão usa o estado do serviço e mostra Cancelar mídia, Parar mídia,
+  Retornando ou Repetir retorno. Diagnóstico inclui exposição e retorno nativo,
+  sem títulos/URLs. Worker que concluiu sua operação não bloqueia novo ciclo
+  apenas por ainda estar terminando a emissão do resultado.
+
+Guardião e Forçar JWL confirmados no retorno após entrega `8937c75` (hash local
+não enviado). Núcleo protegido preservado. Este ajuste externo exige ensaio
+físico próprio. Sem compilação, DLL, versão ou instalador novos.
+[Roteiro](docs/external-media.md), INC-033/034.
+
 ## Não lançado — retorno manual JWL e geometria dos Ajustes — 07/10/2026
 
 - Forçar JWL Telão usa o retorno confirmado existente, preservando o estado
@@ -12,8 +30,9 @@
 - Regressões verificam cliques reais, exceções nos slots, tamanho aceito pelo
   Qt e ausência de avisos de geometria no ensaio nativo de quatro escalas.
 
-Sem compilação, DLL ou instalador novo. Ensaio físico da correção pendente;
-INC-034/035 registram causas demonstradas e os limites.
+Sem compilação, DLL ou instalador novo. Forçar JWL confirmado no retorno seguinte;
+geometria dos Ajustes mantém ensaio específico pendente. INC-034/035 registram
+causas demonstradas e os limites.
 
 ## Não lançado — ícones e mídia externa — 07/10/2026
 

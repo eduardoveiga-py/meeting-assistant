@@ -55,6 +55,10 @@ class PlayerBackend:
         self.restores.append(candidate)
         self.current = candidate
 
+    def confirm_presentation(self, candidate, rect):
+        assert self.same_window(candidate) and self.current.rect == rect
+        return {"ready": True}
+
 
 class PlayerObs(VisualObs):
     def __init__(self, backend):
@@ -478,4 +482,138 @@ def test_cancel_during_native_placement_does_not_overlap_restore_or_commit_progr
         release.set()
         service.stop()
         controller.stop()
+
+
+@pytest.mark.parametrize("automation", [False, True])
+def test_actual_stop_button_returns_two_cycles_even_with_a_stale_checked_flag(tmp_path, automation):
+    owner = make_window(tmp_path)
+    service, controller, client, backend, zoom = make_service()
+    owner.external_media = service
+    owner.state.automation_enabled = automation
+    service.state_changed.connect(owner._external_state)
+    policies = []
+    service.state_changed.connect(lambda active, _: policies.append(
+        hall_runtime_flags(automation, False, zoom.returning, external_active=active)
+    ))
+    owner.show()
+    try:
+        for _ in range(2):
+            QTest.mouseClick(owner.ext_media_button, Qt.LeftButton)
+            drain(controller)
+            assert service.phase == "presenting" and client.program == SCENE
+            assert "Parar" in owner.ext_media_button.text()
+            assert all(flags == (False, False) for flags in policies)
+            # A UI repaint/state update must not decide which operation runs.
+            owner.ext_media_button.blockSignals(True)
+            owner.ext_media_button.setChecked(False)
+            owner.ext_media_button.blockSignals(False)
+            QTest.mouseClick(owner.ext_media_button, Qt.LeftButton)
+            assert service.phase == "stopping" and not owner.ext_media_button.isEnabled()
+            assert owner.ext_media_button.text() == "Retornando…"
+            drain(controller)
+            assert client.program == "Palco" and backend.current == backend.original
+            assert service.phase == "returning" and service.active
+            assert owner.state.automation_enabled is automation
+            zoom.status_changed.emit(True, "JWL confirmado visível")
+            assert not service.active and owner.ext_media_button.isEnabled()
+            assert not owner.ext_media_button.isChecked()
+            assert owner.ext_media_button.text() == "🎬 Mídia Externa"
+            assert policies.pop() == (automation, automation)
+        assert len(backend.restores) == 2 and len(backend.placements) == 2
+    finally:
+        service.stop()
+        owner.close()
+
+
+def test_program_is_not_committed_if_player_is_covered_after_obs_preparation():
+    service, controller, client, backend, zoom = make_service(inline=False)
+    backend.confirm_presentation = Mock(side_effect=ValueError("Player coberto pelo JWL"))
+    messages = []
+    service.state_changed.connect(lambda _, message: messages.append(message))
+    start_worker(controller)
+    try:
+        service.start_external_media()
+        wait_for_phase(service, "returning")
+        assert client.program == "Palco" and backend.restores == [backend.original]
+        assert not any(request == "SetCurrentProgramScene" and data["sceneName"] == SCENE
+                       for request, data in client.calls)
+        zoom.status_changed.emit(True, "JWL confirmado visível")
+        assert not service.active and "Player coberto" in messages[-1]
+    finally:
+        service.stop()
+        controller.stop()
+
+
+def test_cancel_during_exposure_confirmation_waits_and_restores_once():
+    import threading
+    service, controller, client, backend, zoom = make_service(inline=False)
+    entered, release = threading.Event(), threading.Event()
+    original = backend.confirm_presentation
+
+    def wait_then_confirm(*args):
+        entered.set()
+        assert release.wait(2)
+        return original(*args)
+
+    backend.confirm_presentation = wait_then_confirm
+    start_worker(controller)
+    try:
+        service.start_external_media()
+        wait_for_phase(service, "confirming")
+        assert entered.wait(1)
+        service.stop_external_media()
+        assert not backend.restores and client.program == "Palco"
+        release.set()
+        wait_for_phase(service, "returning")
+        assert backend.restores == [backend.original] and client.program == "Palco"
+        zoom.status_changed.emit(True, "JWL confirmado visível")
+        assert not service.active
+    finally:
+        release.set()
+        service.stop()
+        controller.stop()
+
+
+def test_return_failure_keeps_diagnostics_and_button_retries_instead_of_starting(tmp_path):
+    owner = make_window(tmp_path)
+    service, controller, client, backend, zoom = make_service()
+    owner.external_media = service
+    service.state_changed.connect(owner._external_state)
+    owner.show()
+    try:
+        QTest.mouseClick(owner.ext_media_button, Qt.LeftButton)
+        drain(controller)
+        QTest.mouseClick(owner.ext_media_button, Qt.LeftButton)
+        drain(controller)
+        zoom.status_changed.emit(False, "JWL não confirmou retorno em 5 s")
+        assert service.phase == "return_failed" and service.active
+        assert owner.ext_media_button.isEnabled() and owner.ext_media_button.text() == "Repetir retorno"
+        QTest.mouseClick(owner.ext_media_button, Qt.LeftButton)
+        drain(controller)
+        assert service.phase == "returning" and client.program == "Palco"
+        zoom.status_changed.emit(True, "JWL confirmado visível")
+        assert not service.active and backend.current == backend.original
+        assert len(backend.placements) == 1
+    finally:
+        service.stop()
+        owner.close()
+
+
+def test_completed_worker_emission_does_not_block_an_immediate_next_cycle():
+    service, controller, client, backend, _ = make_service()
+    service._thread = Mock()
+    service._thread.is_alive.return_value = True
+    service._native_busy = False
+    assert service.start_external_media()
+    assert service.phase == "checking" and not backend.placements and client.program == "Palco"
+    service.stop_external_media()
+    drain(controller)
+
+
+def test_cancelled_inventory_must_finish_before_a_new_cycle_can_start():
+    service, controller, client, backend, _ = make_service()
+    service._native_busy = True
+    assert not service.start_external_media()
+    assert not service.active and controller._commands.empty()
+    assert not backend.placements and client.program == "Palco"
 

@@ -13,6 +13,7 @@ PROBE = r'''
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from PySide6.QtCore import QObject, QRect, Signal
@@ -112,8 +113,27 @@ try:
             assert scroll.viewport().rect().contains(
                 button.mapTo(scroll.viewport(), button.rect().bottomRight())
             ), (button.text(), result)
+    for phase in ("choosing", "placing", "confirming", "presenting", "stopping", "return_failed", "idle"):
+        active = phase != "idle"
+        window.external_media = SimpleNamespace(phase=phase, active=active)
+        window._external_state(active, "Estado da apresentação externa.")
+        app.processEvents()
+        button = window.ext_media_button
+        assert button.sizeHint().width() <= button.width(), (phase, button.text(), result)
+        assert scroll.horizontalScrollBar().maximum() == 0, (phase, result)
+        assert work_area.contains(window.frameGeometry()), (phase, result)
+        assert scroll.viewport().rect().contains(
+            button.mapTo(scroll.viewport(), button.rect().bottomRight())
+        ), (phase, result)
+        assert button.isEnabled() == (phase != "stopping"), (phase, result)
+        if len(sys.argv) > 3:
+            from pathlib import Path
+            base = Path(sys.argv[3])
+            assert window.grab().save(str(base.with_name(base.stem + "-external-" + phase + base.suffix)))
+    window.external_media = None
     print(json.dumps(result))
 finally:
+    window.external_media = None
     window.close()
 '''
 
