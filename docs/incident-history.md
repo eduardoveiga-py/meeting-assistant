@@ -917,7 +917,8 @@ A busca do botão de microfone do Zoom foi otimizada para pesquisar apenas dentr
 **Sintoma:** Ao retornar a janela do Zoom do Salão (Tela 2) para a Tela 1, ela ficava parcialmente cortada ou invadindo a Tela 2.
 **Causa:** Quando a janela do Zoom era enviada para a Tela 2, forçávamos sua posição com \SetWindowPos\ mas ela mantinha o estado interno \SW_MAXIMIZE\. Ao restaurá-la para a Tela 1, a função \SetWindowPlacement\ se baseava nas coordenadas atuais e se confundia entre os monitores (DWM bug) e a restaurava transbordando bordas.
 **Solução:** Adicionamos um passo na restauração: antes de aplicar o \SetWindowPlacement\, forçamos as coordenadas da janela (usando as coordenadas normais originais salvas) de volta à Tela 1. Em seguida, chamamos o \SetWindowPlacement\ de forma assíncrona (\WPF_ASYNCWINDOWPLACEMENT\) para aplicar os estados de maximização corretamente na tela certa.
-**Aprendizado:** Mover uma janela maximizada entre telas no Windows sem redefinir explicitamente seu \cNormalPosition\ quebra as regras do Desktop Window Manager, causando falhas de layout no retorno.
+**Aprendizado:** Mover uma janela maximizada entre telas no Windows sem redefinir explicitamente seu \
+cNormalPosition\ quebra as regras do Desktop Window Manager, causando falhas de layout no retorno.
 
 ### 2026-10-08: Revisão Arquitetural: Queda de FPS geral do OBS e Câmera Virtual
 **Sintoma:** O preview do Meeting Assistant, o próprio OBS Studio, e a Câmera Virtual do WhatsApp apresentavam quedas de frames drásticas (congelamentos) periodicamente.
@@ -925,8 +926,16 @@ A busca do botão de microfone do Zoom foi otimizada para pesquisar apenas dentr
 **Solução:** A otimização já feita anteriormente na busca de elementos do Zoom (restringindo-a apenas a ToolBars) impediu o travamento do GIL. Isso destravou a thread leitora de vídeo, mantendo o pipe vazio e liberando o OBS para rodar suavemente em 30/60 FPS de forma independente.
 **Aprendizado:** Plugins do OBS que se comunicam de forma síncrona/bloqueante com processos externos podem derrubar o OBS inteiro se o leitor externo (como nosso app Python) for bloqueado. Leitores devem garantir o esvaziamento constante dos buffers.
 
-### 2026-10-08: Falha na Release Automática (GitHub Actions)
-**Sintoma:** O workflow de Windows Release no GitHub Actions falhou durante a criação da versão 0.9.4, enquanto o workflow de CI passou perfeitamente.
-**Causa Profunda:** Ainda sob investigação. Suspeita-se de problemas na compilação do plugin da câmera (falta de cmake no ambiente) ou na verificação do executável empacotado (--self-check) devido aos novos hiddenimports do pywinauto.
-**Ações:** O ambiente local compila corretamente, o que indica uma divergência de ambiente entre a máquina local e os runners do GitHub. Os logs exatos do runner precisam ser baixados.
-**Aprendizado:** CI de testes em Python (ci.yml) não garante o sucesso da compilação de binários nativos no GitHub Actions.
+### 2026-10-08: Falhas sucessivas na Release Automática (GitHub Actions)
+**Sintoma:** O workflow de `Windows Release` no GitHub Actions falhou durante a criação da versão `0.9.4` e iterativamente na `0.9.5`, cancelando a compilação do executável na etapa `Validate code and release version` e `Verify source`, enquanto o workflow de `CI` passava perfeitamente para as mesmas alterações.
+**Causas Múltiplas:**
+1. **Erro de Payload (KeyError):** Uma mudança de refatoração para aplicar filtros de áudio em tempo real não incluiu o campo `extra_filters` quando vazio. Isso quebrou testes de regressão no CI e na Release local.
+2. **Extração Obsoleta de Versão:** A verificação de versão da Release usava `importlib.metadata.version()`. Como a etapa rodava antes de construir o pacote (ou com uma instalação em cache), ela lia uma versão defasada (`0.9.4`), desencadeando erro falso de correspondência de tag (`0.9.5`).
+3. **Testes Redundantes Quebrando Instalações Não-Editáveis:** O workflow da Release repetia os testes unitários (`pytest`), mas usava o comando `pip install ".[dev]"` em vez de `pip install -e ".[dev]"` como o CI. A simples chamada de testes gerava conflitos de importação de módulos em ambiente não-editável, quebrando os testes.
+4. **Bug de Resolução UI em Escalas Altas (DPI):** Uma nova frase adicionada às configurações de Câmera Virtual espremia um `QLabel` sem tamanho mínimo (quebrava linhas num espaço não flexível). Um teste (`test_all_settings_pages_fit_fhd_work_area_at_desktop_scale`) que rodava com Windows em 200% de escala pegava isso e quebrava as compilações da Release.
+**Solução:**
+- O tratamento de dicionário vazio `data.get("extra_filters", {})` foi corrigido.
+- `virtual_camera_dialog.py` recebeu um `setMinimumHeight(75)` no `QLabel` para suportar monitores de alta resolução e DPI scaling sem esmagar o texto e falhar testes.
+- A lógica de validação de versão da tag foi substituída por leitura segura via `tomllib.load()` direto do `pyproject.toml` (compatível nativamente com Python 3.12).
+- As execuções de verificação redundantes (pytest, ruff) foram **removidas completamente do arquivo `release.yml`**, delegando toda a confiança ao workflow `ci.yml`, que audita com segurança em ambiente limpo e editável em cada novo envio de código.
+**Aprendizado:** Ter validações unitárias rodando em duas frentes diferentes (`ci.yml` e `release.yml`) introduz bloqueios na geração do executável por causa de nuances bobas de instalação (editável vs build pacote). O workflow de lançamento deve focar apenas no empacotamento, deixando a bateria de testes de código inteiramente para a integração contínua (CI). Adicionalmente, interfaces gráficas baseadas em DPI e text strings quebrando layout devem possuir medidas rígidas de segurança em testes multi-resolução.
