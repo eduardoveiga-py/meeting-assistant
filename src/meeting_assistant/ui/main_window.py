@@ -177,7 +177,8 @@ class MainWindow(QMainWindow):
             self._on_camera_state()
         else:
             self.camera_button.setEnabled(False)
-            self.camera_button.setText("📹 Câmera WhatsApp")
+            self.camera_button.setText("📹 Câmera indisponível")
+            self.camera_button.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
             from pathlib import Path
             icon_root = Path(__file__).parent.parent / "resources"
             whatsapp_svg = icon_root / "whatsapp.svg"
@@ -316,7 +317,7 @@ class MainWindow(QMainWindow):
         status_grid.setVerticalSpacing(2)
         self.status_labels: dict[str, QLabel] = {}
         status_items = [
-            ("OBS", "obs.svg", "OBS"),
+            ("OBS", "obs.png", "OBS"),
             ("JW Library", "jwlibrary.svg", "JW Library"),
             ("Zoom", "zoom.svg", "Zoom"),
             ("Tela 2", "display2.svg", "Tela 2"),
@@ -356,7 +357,7 @@ class MainWindow(QMainWindow):
             (OperatingMode.BACKGROUND, "yeartext.svg", "Texto do Ano (Repouso do JW Library)", 0, 0),
             (OperatingMode.SPEAKER, "stage.svg", "Palco (Câmera do orador no OBS)", 0, 1),
             (OperatingMode.MEDIA, "media.svg", "Mídia (Vídeos e imagens do JW Library)", 0, 2),
-            (OperatingMode.ZOOM, "zoom.svg", "Zoom → Salão (Exibir participantes na 2ª tela)", 0, 3),
+            (OperatingMode.ZOOM, "zoom_hall.svg", "Zoom → Salão (Exibir participantes na 2ª tela)", 0, 3),
         ]
         for mode, icon_file, tooltip, row, col in button_specs:
             button = QPushButton()
@@ -365,7 +366,10 @@ class MainWindow(QMainWindow):
             svg_path = icon_root / icon_file
             if svg_path.is_file():
                 button.setIcon(QIcon(str(svg_path)))
-                button.setIconSize(QSize(24, 24))
+                if mode is OperatingMode.ZOOM:
+                    button.setIconSize(QSize(40, 20))
+                else:
+                    button.setIconSize(QSize(24, 24))
             button.setToolTip(tooltip)
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             button.setMinimumHeight(44)
@@ -453,19 +457,10 @@ class MainWindow(QMainWindow):
         settings_row.setSpacing(4)
         settings_row.addWidget(self.volume_button, 1)
         settings_row.addWidget(settings_button, 1)
-        system_grid.addWidget(settings_cell, 1, 1)
 
         # Row 1
-        self.ext_media_button = QPushButton("🎬 Mídia Externa")
-        self.ext_media_button.setCheckable(True)
-        self.ext_media_button.setToolTip(
-            "Apresenta o player ou navegador escolhido no Salão e nas chamadas. "
-            "Clique novamente para voltar ao JWL."
-        )
-        self.ext_media_button.clicked.connect(self._toggle_ext_media)
-        system_grid.addWidget(self.ext_media_button, 2, 0)
-
-        self.camera_button = QPushButton("Câmera WhatsApp")
+        self.camera_button = QPushButton("📹 Iniciar câmera")
+        self.camera_button.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         whatsapp_svg = icon_root / "whatsapp.svg"
         if whatsapp_svg.is_file():
             self.camera_button.setIcon(QIcon(str(whatsapp_svg)))
@@ -482,7 +477,18 @@ class MainWindow(QMainWindow):
         self.zoom_mic_button.setObjectName("ZoomMic")
         self.zoom_mic_button.setToolTip("Controla seu microfone no Zoom; não silencia participantes.")
         self.zoom_mic_button.clicked.connect(self._zoom_microphone)
-        system_grid.addWidget(self.zoom_mic_button, 2, 1)
+        system_grid.addWidget(self.zoom_mic_button, 1, 1)
+
+        # Row 2
+        self.ext_media_button = QPushButton("🎬 Mídia Externa")
+        self.ext_media_button.setCheckable(True)
+        self.ext_media_button.setToolTip(
+            "Apresenta o player ou navegador escolhido no Salão e nas chamadas. "
+            "Clique novamente para voltar ao JWL."
+        )
+        self.ext_media_button.clicked.connect(self._toggle_ext_media)
+        system_grid.addWidget(self.ext_media_button, 2, 0)
+        system_grid.addWidget(settings_cell, 2, 1)
 
         # Two equal columns accommodate native Windows font/emoji metrics
         # without widening the window or truncating action names.
@@ -1358,12 +1364,13 @@ class MainWindow(QMainWindow):
         running = state == "running"
         busy = state in {"starting", "stopping"}
         if running:
-            text = "⏹️ Parar câmera (WhatsApp)"
+            text = "⏹️ Parar câmera"
         elif state == "error":
-            text = "📹 Tentar câmera (WhatsApp)"
+            text = "📹 Tentar câmera"
         else:
-            text = "📹 Iniciar câmera (WhatsApp)"
+            text = "📹 Iniciar câmera"
         self.camera_button.setText(text)
+        self.camera_button.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         from pathlib import Path
         icon_root = Path(__file__).parent.parent / "resources"
         whatsapp_svg = icon_root / "whatsapp.svg"

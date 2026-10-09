@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 36" width="72" height="36">
+  <!-- Zoom App Icon on Left -->
+  <rect x="2" y="5" width="26" height="26" rx="6" fill="#2d8cff"/>
+  <rect x="7.5" y="13.5" width="10" height="9" rx="2.5" fill="#ffffff"/>
+  <path d="M18.5 16.5l4-2.5v8l-4-2.5v-3z" fill="#ffffff"/>
+
+  <!-- Forward Arrow in Center -->
+  <path d="M33 18h8m-3-3.5l3.5 3.5-3.5 3.5" fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Second Monitor on Right -->
+  <rect x="47" y="5" width="23" height="18" rx="2.5" fill="#0f2b46" stroke="#38a5ff" stroke-width="1.8"/>
+  <rect x="49" y="7" width="19" height="14" fill="#123d66"/>
+  <!-- Monitor Stand -->
+  <path d="M57 23h3v5h-3z" fill="#38a5ff"/>
+  <path d="M54 28h9v1.8h-9z" fill="#38a5ff"/>
+  <!-- Number 2 inside monitor -->
+  <text x="58.5" y="17.5" font-family="'Segoe UI', Arial, sans-serif" font-weight="900" font-size="9" fill="#ffffff" text-anchor="middle">2</text>
+</svg>

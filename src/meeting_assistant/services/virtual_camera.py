@@ -133,7 +133,7 @@ class WindowsPipe:
             fn = self.k.WriteFile if data is not None else self.k.ReadFile
             ok = fn(self.handle, buffer, size, ctypes.byref(count), ctypes.byref(ov))
             if not ok and ctypes.get_last_error() == 997:
-                if self.k.WaitForSingleObject(ov.hEvent, 400) != 0:
+                if self.k.WaitForSingleObject(ov.hEvent, 1500) != 0:
                     self.k.CancelIoEx(self.handle, ctypes.byref(ov))
                     self.k.GetOverlappedResult(self.handle, ctypes.byref(ov), ctypes.byref(count), True)
                     raise TimeoutError("A ponte OBS não respondeu no prazo.")

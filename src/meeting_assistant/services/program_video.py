@@ -127,7 +127,7 @@ class PreviewReader(threading.Thread):
 
     def stop(self):
         self.stopping.set()
-        self.join(timeout=2.0)  # Pipe operations have individual 400 ms deadlines.
+        self.join(timeout=3.0)  # Pipe operations have individual deadlines.
 
 
 class ProgramVideo(QObject):
@@ -143,6 +143,7 @@ class ProgramVideo(QObject):
         self.last_frame = None
         self.last_status = "Aguardando ponte de vídeo do OBS…"
         self.last_received = 0.0
+        self.last_fresh_time = 0.0
         self.diagnostic = {
             "protocol": 1,
             "video_revision": 3,
