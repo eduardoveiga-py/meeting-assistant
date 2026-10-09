@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <rect width="44" height="44" x="2" y="2" rx="10" fill="#2d8cff"/>
+  <!-- Video camera body -->
+  <rect x="11" y="16" width="17" height="16" rx="4" fill="#ffffff"/>
+  <!-- Video camera lens cone -->
+  <path d="M29 21.5l7-4.5v14l-7-4.5v-5z" fill="#ffffff"/>
+</svg>

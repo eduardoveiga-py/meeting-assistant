@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Microphone body -->
+  <rect x="18" y="6" width="12" height="20" rx="6" fill="#e2e8f0" stroke="#718096" stroke-width="1.5"/>
+  <!-- Microphone grille lines -->
+  <line x1="18" y1="12" x2="30" y2="12" stroke="#a0aec0" stroke-width="1.5"/>
+  <line x1="18" y1="17" x2="30" y2="17" stroke="#a0aec0" stroke-width="1.5"/>
+  <line x1="24" y1="6" x2="24" y2="26" stroke="#cbd5e0" stroke-width="1"/>
+  <!-- Cradle U-shape -->
+  <path d="M13 18c0 6.6 4.9 12 11 12s11-5.4 11-12" fill="none" stroke="#63b3ed" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Stem and base -->
+  <line x1="24" y1="30" x2="24" y2="39" stroke="#63b3ed" stroke-width="3" stroke-linecap="round"/>
+  <path d="M15 39h18" stroke="#63b3ed" stroke-width="3" stroke-linecap="round"/>
+</svg>

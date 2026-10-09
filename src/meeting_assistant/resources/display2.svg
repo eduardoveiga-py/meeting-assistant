@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Screen 1 (Primary / left / subtle) -->
+  <rect x="3" y="14" width="18" height="14" rx="2" fill="#1c232d" stroke="#48566a" stroke-width="1.5"/>
+  <rect x="5" y="16" width="14" height="10" fill="#10141a"/>
+  <!-- Screen 1 stand -->
+  <path d="M10 28h4v3h-4z" fill="#48566a"/>
+  <path d="M8 31h8v1.5H8z" fill="#48566a"/>
+
+  <!-- Screen 2 (Secondary / right / active & highlighted) -->
+  <rect x="23" y="11" width="22" height="17" rx="3" fill="#0f2b46" stroke="#38a5ff" stroke-width="2"/>
+  <rect x="25" y="13" width="18" height="13" fill="#123d66"/>
+  <!-- Screen 2 stand -->
+  <path d="M32 28h4v4h-4z" fill="#38a5ff"/>
+  <path d="M29 32h10v2H29z" fill="#38a5ff"/>
+  <!-- Number 2 inside Screen 2 -->
+  <text x="34" y="23" font-family="Segoe UI, Arial, sans-serif" font-weight="900" font-size="10" fill="#ffffff" text-anchor="middle">2</text>
+</svg>

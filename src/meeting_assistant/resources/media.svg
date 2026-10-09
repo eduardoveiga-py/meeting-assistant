@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Rounded display frame / film card -->
+  <rect x="5" y="8" width="38" height="32" rx="6" fill="#1e293b" stroke="#3b82f6" stroke-width="2"/>
+  <!-- Film strip notches top/bottom -->
+  <rect x="9" y="11" width="4" height="3" rx="1" fill="#94a3b8"/>
+  <rect x="17" y="11" width="4" height="3" rx="1" fill="#94a3b8"/>
+  <rect x="25" y="11" width="4" height="3" rx="1" fill="#94a3b8"/>
+  <rect x="33" y="11" width="4" height="3" rx="1" fill="#94a3b8"/>
+  <rect x="9" y="34" width="4" height="3" rx="1" fill="#94a3b8"/>
+  <rect x="17" y="34" width="4" height="3" rx="1" fill="#94a3b8"/>
+  <rect x="25" y="34" width="4" height="3" rx="1" fill="#94a3b8"/>
+  <rect x="33" y="34" width="4" height="3" rx="1" fill="#94a3b8"/>
+  <!-- Bright centered Play triangle -->
+  <polygon points="21,18 33,24 21,30" fill="#60a5fa"/>
+</svg>

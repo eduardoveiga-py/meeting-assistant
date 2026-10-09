@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <circle cx="24" cy="24" r="22" fill="#181d24" stroke="#313946" stroke-width="2"/>
+  <!-- OBS Studio classic triple swirl in crisp white/light gray -->
+  <path d="M24 10a14 14 0 0 1 13.9 12.4c-2.3-1.8-5.3-2.9-8.5-2.9-6.3 0-11.7 4.1-13.4 9.8A14 14 0 0 1 24 10z" fill="#ffffff" opacity="0.95"/>
+  <path d="M38 24a14 14 0 0 1-13.9 14c1.8-2.3 2.9-5.3 2.9-8.5 0-6.3-4.1-11.7-9.8-13.4A14 14 0 0 1 38 24z" fill="#ffffff" opacity="0.95"/>
+  <path d="M24 38A14 14 0 0 1 10.1 25.6c2.3 1.8 5.3 2.9 8.5 2.9 6.3 0 11.7-4.1 13.4-9.8A14 14 0 0 1 24 38z" fill="#ffffff" opacity="0.95"/>
+  <circle cx="24" cy="24" r="5" fill="#181d24"/>
+</svg>

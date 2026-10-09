@@ -234,10 +234,10 @@ class MainWindow(QMainWindow):
 
         brand_icon = QLabel()
         brand_icon.setObjectName("BrandIcon")
-        brand_icon.setFixedSize(30, 30)
+        brand_icon.setFixedSize(32, 32)
         brand_icon.setAlignment(Qt.AlignCenter)
         if not self.app_icon.isNull():
-            brand_icon.setPixmap(self.app_icon.pixmap(26, 26))
+            brand_icon.setPixmap(self.app_icon.pixmap(28, 28))
         header.addWidget(brand_icon, alignment=Qt.AlignVCenter)
 
         title_box = QVBoxLayout()
@@ -247,7 +247,7 @@ class MainWindow(QMainWindow):
         title.setWordWrap(True)
         title.setMinimumWidth(0)
         title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        subtitle = QLabel("Operação local • OBS • Zoom • JW Library")
+        subtitle = QLabel("")
         subtitle.setObjectName("Subtitle")
         subtitle.setWordWrap(True)
         subtitle.setMinimumWidth(0)
@@ -258,18 +258,29 @@ class MainWindow(QMainWindow):
         title_box.addWidget(subtitle)
         header.addLayout(title_box, 1)
 
+        # Right control stack: Automation Badge on top, WhatsApp toggle row below
+        right_box = QVBoxLayout()
+        right_box.setSpacing(3)
+        right_box.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
         self.automation_badge = QLabel("AUTOMAÇÃO PAUSADA")
         self.automation_badge.setObjectName("AutomationBadge")
         self.automation_badge.setAlignment(Qt.AlignCenter)
         self.automation_badge.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        header.addWidget(self.automation_badge, alignment=Qt.AlignVCenter)
+        right_box.addWidget(self.automation_badge, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+        wa_row = QHBoxLayout()
+        wa_row.setSpacing(6)
+        wa_row.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
+
+        from pathlib import Path
+        icon_root = Path(__file__).parent.parent / "resources"
 
         self.congregation_label = QLabel()
         self.congregation_label.hide()
 
         self.whatsapp_icon = QLabel()
-        from pathlib import Path
-        whatsapp_svg = Path(__file__).parent.parent / "resources" / "whatsapp.svg"
+        whatsapp_svg = icon_root / "whatsapp.svg"
         if whatsapp_svg.is_file():
             self.whatsapp_icon.setPixmap(QIcon(str(whatsapp_svg)).pixmap(18, 18))
         else:
@@ -280,8 +291,11 @@ class MainWindow(QMainWindow):
         self.whatsapp_toggle.setToolTip("Usar WhatsApp")
         self.whatsapp_toggle.toggled.connect(self._on_whatsapp_toggle)
 
-        header.addWidget(self.whatsapp_icon, alignment=Qt.AlignVCenter)
-        header.addWidget(self.whatsapp_toggle, alignment=Qt.AlignVCenter)
+        wa_row.addWidget(self.whatsapp_icon)
+        wa_row.addWidget(self.whatsapp_toggle)
+        right_box.addLayout(wa_row)
+
+        header.addLayout(right_box)
         root.addLayout(header)
 
         status_grid = QGridLayout()
@@ -289,17 +303,22 @@ class MainWindow(QMainWindow):
         status_grid.setVerticalSpacing(2)
         self.status_labels: dict[str, QLabel] = {}
         status_items = [
-            ("OBS", "🎥", "OBS"),
-            ("JW Library", "📖", "JW Library"),
-            ("Zoom", "💻", "Zoom"),
-            ("Tela 2", "🖥️", "Tela 2"),
+            ("OBS", "obs.svg", "OBS"),
+            ("JW Library", "jwlibrary.svg", "JW Library"),
+            ("Zoom", "zoom.svg", "Zoom"),
+            ("Tela 2", "display2.svg", "Tela 2"),
         ]
-        for index, (name, icon, tip_name) in enumerate(status_items):
-            label = QLabel(icon)
+        for index, (name, icon_file, tip_name) in enumerate(status_items):
+            label = QLabel()
             label.setObjectName("StatusBadge")
             label.setProperty("state", "pending")
-            label.setFixedHeight(24)
+            label.setFixedHeight(28)
             label.setAlignment(Qt.AlignCenter)
+            svg_path = icon_root / icon_file
+            if svg_path.is_file():
+                label.setPixmap(QIcon(str(svg_path)).pixmap(20, 20))
+            else:
+                label.setText(name[:3])
             label.setToolTip(f"{tip_name}: aguardando verificação")
             self.status_labels[name] = label
             status_grid.addWidget(label, 0, index)
@@ -321,15 +340,19 @@ class MainWindow(QMainWindow):
         mode_grid.setVerticalSpacing(4)
         self.mode_buttons: dict[OperatingMode, QPushButton] = {}
         button_specs = [
-            (OperatingMode.BACKGROUND, "📖", "Texto do Ano (Repouso do JW Library)", 0, 0),
-            (OperatingMode.SPEAKER, "🎤", "Palco (Câmera do orador no OBS)", 0, 1),
-            (OperatingMode.MEDIA, "🎬", "Mídia (Vídeos e imagens do JW Library)", 0, 2),
-            (OperatingMode.ZOOM, "💻", "Zoom → Salão (Exibir participantes na 2ª tela)", 0, 3),
+            (OperatingMode.BACKGROUND, "jwlibrary.svg", "Texto do Ano (Repouso do JW Library)", 0, 0),
+            (OperatingMode.SPEAKER, "stage.svg", "Palco (Câmera do orador no OBS)", 0, 1),
+            (OperatingMode.MEDIA, "media.svg", "Mídia (Vídeos e imagens do JW Library)", 0, 2),
+            (OperatingMode.ZOOM, "zoom.svg", "Zoom → Salão (Exibir participantes na 2ª tela)", 0, 3),
         ]
-        for mode, icon_text, tooltip, row, col in button_specs:
-            button = QPushButton(icon_text)
+        for mode, icon_file, tooltip, row, col in button_specs:
+            button = QPushButton()
             button.setObjectName("ModeButton")
             button.setCheckable(True)
+            svg_path = icon_root / icon_file
+            if svg_path.is_file():
+                button.setIcon(QIcon(str(svg_path)))
+                button.setIconSize(QSize(24, 24))
             button.setToolTip(tooltip)
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             button.setMinimumHeight(44)
@@ -1464,7 +1487,7 @@ class MainWindow(QMainWindow):
             self.yeartext_notice.setText(f'<a href="yeartext">{action}</a>')
             self.yeartext_notice.setToolTip(self.yeartext_store.status())
         else:
-            self.yeartext_notice.setText("Operação local • OBS • Zoom • JW Library")
+            self.yeartext_notice.setText("")
             self.yeartext_notice.setToolTip(self.yeartext_store.status())
 
     def _on_hall_task_finished(self, action, ok, message):
@@ -1612,13 +1635,6 @@ class MainWindow(QMainWindow):
         tooltip: str,
     ) -> None:
         label = self.status_labels[name]
-        icons = {
-            "OBS": "🎥",
-            "JW Library": "📖",
-            "Zoom": "💻",
-            "Tela 2": "🖥️",
-        }
-        label.setText(icons.get(name, text))
         label.setProperty("state", state)
         label.setToolTip(tooltip or f"{name}: {state}")
         self._repolish(label)

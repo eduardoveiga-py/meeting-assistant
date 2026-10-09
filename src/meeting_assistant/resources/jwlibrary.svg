@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <rect width="44" height="44" x="2" y="2" rx="10" fill="#4a317a"/>
+  <!-- Open Bible Pages -->
+  <path d="M11 16c4.5-2 8.5-1.5 12 1v17c-3.5-2.5-7.5-3-12-1V16z" fill="#ffffff"/>
+  <path d="M37 16c-4.5-2-8.5-1.5-12 1v17c3.5-2.5 7.5-3 12-1V16z" fill="#f0eefa"/>
+  <!-- Spine and marker ribbon -->
+  <line x1="23.5" y1="16.5" x2="23.5" y2="34.5" stroke="#37225c" stroke-width="1.5"/>
+  <path d="M22 17h3v13l-1.5-1.5L22 30V17z" fill="#ffd166"/>
+</svg>
