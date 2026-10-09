@@ -357,3 +357,15 @@ reaplicado automaticamente.
 janelas JWL; a nova fonte resolve a ambiguidade pelo HWND sem liberar captura de
 monitor. Preservar trabalho local e confirmar o resultado do Git evita testar
 código antigo. [Casos INC-030/031 e histórico completo](incident-history.md).
+
+## 2026-10-09 — Versão Oficial 1.0.0 e Estabilização do Pipe de Vídeo
+
+**Decisão:** Consolidação da versão oficial 1.0.0 do Meeting Assistant.
+Aumento do timeout de transferência no named pipe em WindowsPipe.transfer() de 400 ms para 1500 ms;
+implementação de pausa da prévia (⏸️ Pausar Prévia) para economia de recursos;
+reorganização visual completa da janela principal com iconografia dedicada em alta resolução para mesa de corte (Texto do Ano, Palco, Mídia, Zoom → Salão) e crachás de status (ícone oficial do OBS Studio 256×256 e ícone composto Zoom/Tela 2);
+reposicionamento dos controles na grade do sistema (Mic Zoom junto com Câmera na linha superior; Volumes e Ajustes na linha inferior);
+alinhamento do ícone WhatsApp à direita no botão de câmera (RightToLeft).
+
+**Evidência:** O timeout de 400 ms causava falso-positivo sob carga do OBS, desconectando o pipe e alternando a tela de prévia para erro em loop, degradando a taxa observada para 4.6 FPS. Com o timeout em 1500 ms, as operações completam sem desconexões espúrias e o preview opera continuamente.
+Todos os 655 testes automatizados cobrindo áudio, vídeo, janelas, baseline do salão e interface passam com 100% de sucesso.

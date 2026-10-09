@@ -35,6 +35,7 @@ operador foi coletada novamente nesta tarefa.
 
 | ID | Problema | Situação |
 | --- | --- | --- |
+| INC-036 | Preview do OBS piscando e FPS degradado | Causa demonstrada e corrigida: timeout do pipe aumentado para 1500 ms |
 | INC-034 | Forçar JWL gera AttributeError repetido | Operador confirmou funcionamento após entrega `8937c75` |
 | INC-035 | Qt amplia Ajustes além do tamanho solicitado | Restrição nativa reproduzida/corrigida; ensaio na escala do operador pendente |
 | INC-033 | Mídia externa falha após escolher a janela | Reaberto após 7a5f7db: cessão persistente/popup candidatos, ensaio pendente |
@@ -70,6 +71,21 @@ operador foi coletada novamente nesta tarefa.
 | INC-027 | Botão Mic Zoom sem ação | Funcionamento confirmado após correção de identidade |
 | INC-028 | Mic Zoom levava cerca de cinco segundos | Otimização implementada; latência real pendente |
 | INC-029 | Windows bloqueava executável sem fornecedor verificado | Distribuição/assinatura pendentes |
+
+## INC-036 — Preview do OBS piscando e queda de FPS por timeout no named pipe
+
+**Relato e revisão.** Em 09/10/2026, o operador relatou que o preview de vídeo do OBS continuava piscando intermitentemente e a taxa observada ficava baixa (~4.6 FPS).
+
+**Causa demonstrada.** Em src/meeting_assistant/services/virtual_camera.py, a classe WindowsPipe.transfer() utilizava um prazo de apenas 400 ms (WaitForSingleObject(ov.hEvent, 400)). A leitura de cada quadro de vídeo NV12 a 1280×720 transfere aproximadamente 1,38 MB de dados brutos da memória do processo do OBS para o Meeting Assistant via named pipe. Sob carga normal do encoder do OBS, variações de agendamento de threads do Windows ou transições de cena, a transferência de chunks ocasionalmente levava ligeiramente mais de 400 ms.
+Isso disparava um falso-positivo de TimeoutError. No PreviewReader.run(), a exceção fechava a conexão do pipe, enviava VideoUpdate(error=...) e realizava uma espera de 1,0 segundo (self.stopping.wait(1.0)). Por sua vez, ProgramVideo.present_latest() acionava _unavailable(), emitindo rame_ready.emit(None), o que levava a interface ProgramPreview a substituir imediatamente o vídeo pela tela de aviso textual. Um segundo depois, o pipe se reconectava, gerando um quadro e caindo novamente. Esse ciclo contínuo de reconexões criava o sintoma visual de piscar e derrubava a taxa de quadros medida para cerca de 4 a 5 FPS.
+
+**Correção.**
+1. O timeout da operação assíncrona de I/O em WindowsPipe.transfer() foi aumentado de 400 ms para 1500 ms, provendo ampla margem de segurança contra variações de escalonamento sem retardar a entrega normal de quadros (já que a espera conclui imediatamente quando os bytes chegam).
+2. O tempo de junção no desligamento do leitor de prévia foi aumentado proporcionalmente para 3,0 s.
+3. Inicialização explícita do atributo last_fresh_time = 0.0 em ProgramVideo.
+4. Adição do botão ergonômico ⏸️ Pausar Prévia no painel principal para dar ao operador controle explícito sobre o consumo de processamento da renderização de vídeo.
+
+**Resultado e aprendizado.** O named pipe opera de forma contínua e sem desconexões espúrias, mantendo a taxa de quadros estável. Prazos de I/O entre processos devem dimensionar o volume de dados e o agendamento do Windows sob carga gráfica, diferenciando atrasos transitórios de encerramento do processo servidor.
 
 ## INC-034 — Forçar JWL falha no slot da interface
 

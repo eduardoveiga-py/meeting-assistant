@@ -10,17 +10,16 @@ O **Meeting Assistant** é um orquestrador open-source criado para simplificar e
 ---
 
 
-## 📸 Telas do Aplicativo
+## 📸 Telas do Aplicativo (Versão Oficial 1.0)
 
 <p align="center">
-  <img src="docs/screenshots/painel-principal.png" width="32%" alt="Painel Principal">
-  <img src="docs/screenshots/configuracao.png" width="32%" alt="Ajustes">
-  <img src="docs/screenshots/assistente.png" width="32%" alt="Assistente de Instalação">
+  <img src="docs/screenshots/painel-principal.png" width="48%" alt="Painel Principal com Mesa de Corte e Preview">
+  <img src="docs/screenshots/ajustes-audio.png" width="48%" alt="Ajustes de Áudio e Sincronia">
 </p>
-
-As imagens acima registram versões anteriores. A configuração atual usa uma
-[janela Ajustes por categorias](docs/settings-workspace.md), com acesso direto
-a Volumes e verificação das fontes/plugins do OBS.
+<p align="center">
+  <img src="docs/screenshots/ajustes-instalacao.png" width="48%" alt="Verificação de Ambiente e Plugins">
+  <img src="docs/screenshots/ajustes-diagnostico.png" width="48%" alt="Diagnóstico e Telemetria">
+</p>
 
 ---
 
@@ -97,13 +96,14 @@ O painel principal foi desenhado para uso em monitores de toque ou mouse, de for
 
 | Botão | Ação |
 |---|---|
-| **▶ Iniciar Reunião** | Solicita OBS, Zoom, JWL e WhatsApp; verifica abertura e inicia câmera virtual. |
-| **🔴 Encerrar** | Pausa automação/câmeras, solicita fechamento normal e informa confirmações pendentes. |
-| **Volumes** | Ganhos por fonte, com aplicação independente do roteamento. |
-| **⚙️ Ajustes** | Reunião/janelas, OBS/vídeo, áudio, instalação/plugins e diagnóstico. |
-| **🎬 Mídia Externa** | Seleciona janela, prepara captura própria no OBS e apresenta na tela do salão. |
-| **📷 Câmera WhatsApp** | Inicia/Para o envio de vídeo do OBS para o aplicativo do WhatsApp. |
-| **🎤 Mic Zoom** | Alterna entre "Mudo/Aberto" no Zoom em segundo plano. |
+| **🟢 Iniciar reunião** / **🔴 Encerrar** | Abre ou encerra OBS, Zoom e JW Library com verificação e ativação da câmera. |
+| **🛡️ JW na 2ª Tela** | Retorna imediatamente a saída do JW Library para a segunda tela sem exigir automação ativa. |
+| **📹 Iniciar / ⏹️ Parar câmera** | Liga ou desliga a câmera virtual nativa do Windows 11 para transmissão ao WhatsApp. |
+| **🎙 Mic Zoom** | Alterna entre mudo e aberto seu microfone no Zoom em segundo plano. |
+| **🎬 Mídia Externa** | Seleciona player ou navegador e projeta no Salão e no OBS, com retorno seguro ao JWL. |
+| **Volumes** | Acesso rápido aos ganhos, atraso de sincronização com a câmera (ms) e filtros de áudio. |
+| **⚙️ Ajustes** | Configurações completas: Reunião, OBS e Vídeo, Áudio, Instalação/Plugins e Diagnóstico. |
+| **⏸️ Pausar Prévia** | Suspende a renderização do preview do OBS para economizar CPU e GPU da máquina. |
 
 F1 mostra os atalhos disponíveis. Atalhos globais são opcionais e não substituem os atalhos do Windows indiscriminadamente.
 
@@ -135,7 +135,7 @@ resolvendo títulos iguais no OBS. Na primeira execução, feche OBS para o scri
 instalar automaticamente a nova DLL pronta. Requer Windows 11 x64 e OBS 31.0.3+.
 Depois use **Ajustes → OBS e vídeo → Fontes → Preparar captura JWL**.
 [Instalação, diagnóstico e testes com dois monitores](docs/jwl-hwnd-capture.md).
-O instalador a partir da versão v0.9.6 já inclui esses componentes integrados de forma transparente.
+O instalador a partir da versão v1.0.0 já inclui esses componentes integrados de forma transparente.
 
 O operador confirmou o funcionamento da nova captura em **07/10/2026**.
 Esse aceite não significa que toda a matriz de reinícios e troca de monitores

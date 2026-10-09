@@ -1,5 +1,16 @@
 # Histórico de alterações
 
+## [1.0.0] — Versão Oficial de Lançamento — 09/10/2026
+
+- **Lançamento Oficial 1.0:** Consolidação de todas as melhorias e correções dos ciclos de homologação física e testes automatizados.
+- **Preview de Vídeo Estabilizado:** Aumento do timeout de transferência no named pipe em WindowsPipe.transfer() de 400 ms para 1500 ms, eliminando falso-positivo de TimeoutError e desconexões repetidas sob carga de processamento do OBS.
+- **Pausa de Prévia:** Inclusão do botão ⏸️ Pausar Prévia no painel principal, permitindo desativar o leitor e a renderização Qt para economizar recursos de CPU e memória quando desejado.
+- **Iconografia e Mesa de Corte:** Botões de modo de apresentação com ícones exclusivos e proporcionais (Texto do Ano, Palco, Mídia e Zoom → Salão com monitor duplo). Crachás de status com ícone oficial do OBS Studio em 256×256 e ícone composto Zoom/Tela 2.
+- **Organização do Painel do Sistema:** Mic Zoom no topo junto com controle de câmera; Volumes e Ajustes na linha inferior; botão de câmera com ícone do WhatsApp no final via alinhamento RightToLeft.
+- **Áudio em Tempo Real:** Aba unificada de Volumes com controle de ganho, sincronia de atraso (ms) para alinhamento com câmeras IP, e filtros (Compressor, Noise Gate, Redução de Ruído).
+- **Mídia Externa Confiável:** Apresentação e restauração de players/navegadores no segundo monitor com controle de prioridade e confirmação de retorno seguro ao JW Library.
+- **Arquitetura 64-bit e Validação:** Ambiente Python 3.12 64-bit, componentes nativos x64, 100% de sucesso nos 655 testes de regressão do projeto.
+
 ## Não lançado — restauração nativa antes da projeção externa — 08/10/2026
 
 - Reaberto INC-033: após entrega `e072427`, o operador relatou o mesmo erro,

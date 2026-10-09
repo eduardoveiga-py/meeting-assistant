@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "meeting-assistant"
-version = "0.9.6"
+version = "1.0.0"
 description = "Assistente de operação para reuniões com OBS, Zoom e JW Library"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -31,7 +31,7 @@ meeting-assistant = "meeting_assistant.main:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"meeting_assistant.resources" = ["*.svg"]
+"meeting_assistant.resources" = ["*.svg", "*.png", "*.ico"]
 
 [tool.ruff]
 target-version = "py312"
