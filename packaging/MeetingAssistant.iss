@@ -61,8 +61,8 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "Abrir {#MyAppName}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [UninstallRun]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Start-Process -FilePath '{sys}\WindowsPowerShell\v1.0\powershell.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ''{app}\native\install-video-native.ps1'' -Component RemoveCamera' -Verb RunAs -WindowStyle Hidden -Wait"""; Flags: runhidden
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Start-Process -FilePath '{sys}\WindowsPowerShell\v1.0\powershell.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ''{app}\native\install-video-native.ps1'' -Component RemoveBridge' -Verb RunAs -WindowStyle Hidden -Wait"""; Flags: runhidden
+Filename: "{sysnative}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Start-Process -FilePath '{sysnative}\WindowsPowerShell\v1.0\powershell.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ''{app}\native\install-video-native.ps1'' -Component RemoveCamera' -Verb RunAs -WindowStyle Hidden -Wait"""; Flags: runhidden
+Filename: "{sysnative}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Start-Process -FilePath '{sysnative}\WindowsPowerShell\v1.0\powershell.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ''{app}\native\install-video-native.ps1'' -Component RemoveBridge' -Verb RunAs -WindowStyle Hidden -Wait"""; Flags: runhidden
 
 [Code]
 var
@@ -100,7 +100,7 @@ var
 begin
   Result := '';
   ExtractTemporaryFile('installer-preflight.ps1');
-  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+  if not Exec(ExpandConstant('{sysnative}\WindowsPowerShell\v1.0\powershell.exe'),
     '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\installer-preflight.ps1') + '"',
     '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
     Result := 'Não foi possível verificar os aplicativos abertos.'
@@ -117,7 +117,7 @@ begin
     ExpandConstant('{app}\native\install-video-native.ps1') + '" -Component ' + Component;
   if Component = 'Bridge' then
     Parameters := Parameters + ' -ObsDirectory "' + ObsPage.Values[0] + '"';
-  if not ShellExec('runas', ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters,
+  if not ShellExec('runas', ExpandConstant('{sysnative}\WindowsPowerShell\v1.0\powershell.exe'), Parameters,
     ExpandConstant('{app}\native'), SW_SHOW, ewWaitUntilTerminated, ExitCode) then
     MsgBox('Nao foi possivel executar o instalador da camera/ponte.', mbError, MB_OK);
   if ExitCode <> 0 then
