@@ -119,9 +119,9 @@ begin
     Parameters := Parameters + ' -ObsDirectory "' + ObsPage.Values[0] + '"';
   if not ShellExec('runas', ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters,
     ExpandConstant('{app}\native'), SW_SHOW, ewWaitUntilTerminated, ExitCode) then
-    RaiseException('Não foi possível executar o instalador da câmera/ponte.');
+    MsgBox('Nao foi possivel executar o instalador da camera/ponte.', mbError, MB_OK);
   if ExitCode <> 0 then
-    RaiseException('Componente ' + Component + ' não instalado. Use o assistente do app para tentar novamente.');
+    MsgBox('O Windows bloqueou a instalacao de ' + Component + ' (possivel restricao do Smart App Control). O app funcionara normalmente e voce podera tentar instalá-lo depois pelo menu Ajustes.', mbError, MB_OK);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
