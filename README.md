@@ -135,7 +135,7 @@ resolvendo títulos iguais no OBS. Na primeira execução, feche OBS para o scri
 instalar automaticamente a nova DLL pronta. Requer Windows 11 x64 e OBS 31.0.3+.
 Depois use **Ajustes → OBS e vídeo → Fontes → Preparar captura JWL**.
 [Instalação, diagnóstico e testes com dois monitores](docs/jwl-hwnd-capture.md).
-O instalador do app já publicado não inclui esta atualização; use o fluxo Python acima.
+O instalador a partir da versão v0.9.6 já inclui esses componentes integrados de forma transparente.
 
 O operador confirmou o funcionamento da nova captura em **07/10/2026**.
 Esse aceite não significa que toda a matriz de reinícios e troca de monitores
