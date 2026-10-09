@@ -150,8 +150,8 @@ def test_main_window_camera_button_and_auto_start(app):
     try:
         assert "Iniciar câmera" in window.camera_button.text()
         assert "WhatsApp" in window.camera_button.accessibleName()
-        assert "WhatsApp" in window.camera_button.toolTip()
-        assert window.mode_buttons[window.state.current_mode].text().startswith("📖 Texto do Ano")
+        assert window.mode_buttons[window.state.current_mode].text() == "📖"
+        assert "Texto do Ano" in window.mode_buttons[window.state.current_mode].toolTip()
         window._on_obs_connected(True, "OBS conectado")
         window._auto_start_camera()
         assert camera.start_calls == 1

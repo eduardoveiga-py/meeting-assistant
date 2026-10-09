@@ -230,14 +230,14 @@ class MainWindow(QMainWindow):
         root.setSpacing(5)
 
         header = QHBoxLayout()
-        header.setSpacing(10)
+        header.setSpacing(8)
 
         brand_icon = QLabel()
         brand_icon.setObjectName("BrandIcon")
-        brand_icon.setFixedSize(34, 34)
+        brand_icon.setFixedSize(30, 30)
         brand_icon.setAlignment(Qt.AlignCenter)
         if not self.app_icon.isNull():
-            brand_icon.setPixmap(self.app_icon.pixmap(30, 30))
+            brand_icon.setPixmap(self.app_icon.pixmap(26, 26))
         header.addWidget(brand_icon, alignment=Qt.AlignVCenter)
 
         title_box = QVBoxLayout()
@@ -256,8 +256,6 @@ class MainWindow(QMainWindow):
         subtitle.linkActivated.connect(lambda _: self._open_hall_setup(self))
         title_box.addWidget(title)
         title_box.addWidget(subtitle)
-        # The title column owns the remaining width. A separate stretch here
-        # would consume it because the labels deliberately have no width floor.
         header.addLayout(title_box, 1)
 
         self.automation_badge = QLabel("AUTOMAÇÃO PAUSADA")
@@ -265,52 +263,54 @@ class MainWindow(QMainWindow):
         self.automation_badge.setAlignment(Qt.AlignCenter)
         self.automation_badge.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         header.addWidget(self.automation_badge, alignment=Qt.AlignVCenter)
-        root.addLayout(header)
 
-        profile_layout = QHBoxLayout()
-        profile_layout.setSpacing(10)
-        profile_layout.setContentsMargins(0, 0, 0, 5)
-        self.congregation_label = QLabel(self.settings.congregation_name or "Congregação não configurada")
-        self.congregation_label.setObjectName("ProfileLabel")
-        self.congregation_label.setStyleSheet("font-weight: bold; color: #555;")
-        
+        self.congregation_label = QLabel()
+        self.congregation_label.hide()
+
         self.whatsapp_icon = QLabel()
         from pathlib import Path
         whatsapp_svg = Path(__file__).parent.parent / "resources" / "whatsapp.svg"
         if whatsapp_svg.is_file():
-            self.whatsapp_icon.setPixmap(QIcon(str(whatsapp_svg)).pixmap(20, 20))
+            self.whatsapp_icon.setPixmap(QIcon(str(whatsapp_svg)).pixmap(18, 18))
         else:
             self.whatsapp_icon.setText("WA")
-            
+
         self.whatsapp_toggle = ToggleSwitch()
         self.whatsapp_toggle.setChecked(self.settings.whatsapp_enabled)
         self.whatsapp_toggle.setToolTip("Usar WhatsApp")
         self.whatsapp_toggle.toggled.connect(self._on_whatsapp_toggle)
-        
-        profile_layout.addWidget(self.congregation_label)
-        profile_layout.addStretch()
-        profile_layout.addWidget(self.whatsapp_icon)
-        profile_layout.addWidget(self.whatsapp_toggle)
-        root.addLayout(profile_layout)
+
+        header.addWidget(self.whatsapp_icon, alignment=Qt.AlignVCenter)
+        header.addWidget(self.whatsapp_toggle, alignment=Qt.AlignVCenter)
+        root.addLayout(header)
 
         status_grid = QGridLayout()
         status_grid.setHorizontalSpacing(5)
-        status_grid.setVerticalSpacing(5)
+        status_grid.setVerticalSpacing(2)
         self.status_labels: dict[str, QLabel] = {}
-        for index, name in enumerate(("OBS", "JW Library", "Zoom", "Tela 2")):
-            label = QLabel(f"○ {name}")
+        status_items = [
+            ("OBS", "🎥", "OBS"),
+            ("JW Library", "📖", "JW Library"),
+            ("Zoom", "💻", "Zoom"),
+            ("Tela 2", "🖥️", "Tela 2"),
+        ]
+        for index, (name, icon, tip_name) in enumerate(status_items):
+            label = QLabel(icon)
             label.setObjectName("StatusBadge")
             label.setProperty("state", "pending")
-            label.setToolTip(f"{name}: aguardando verificação")
+            label.setFixedHeight(24)
+            label.setAlignment(Qt.AlignCenter)
+            label.setToolTip(f"{tip_name}: aguardando verificação")
             self.status_labels[name] = label
             status_grid.addWidget(label, 0, index)
+            status_grid.setColumnStretch(index, 1)
         root.addLayout(status_grid)
 
         controls_card = QFrame()
         controls_card.setObjectName("Card")
         controls = QVBoxLayout(controls_card)
         self._controls_layout = controls
-        controls.setContentsMargins(10, 9, 10, 10)
+        controls.setContentsMargins(10, 8, 10, 8)
         controls.setSpacing(4)
 
         controls.addWidget(self._section_label("CONTROLE DA APRESENTAÇÃO"))
@@ -318,20 +318,26 @@ class MainWindow(QMainWindow):
         mode_grid = QGridLayout()
         self._mode_grid = mode_grid
         mode_grid.setHorizontalSpacing(6)
-        mode_grid.setVerticalSpacing(6)
+        mode_grid.setVerticalSpacing(4)
         self.mode_buttons: dict[OperatingMode, QPushButton] = {}
         button_specs = [
-            (OperatingMode.BACKGROUND, "📖 Texto do Ano", 0, 0),
-            (OperatingMode.SPEAKER, "🎤 Palco", 0, 1),
-            (OperatingMode.MEDIA, "🎥 Mídia", 1, 0),
-            (OperatingMode.ZOOM, "💻 Zoom → Salão", 1, 1),
+            (OperatingMode.BACKGROUND, "📖", "Texto do Ano (Repouso do JW Library)", 0, 0),
+            (OperatingMode.SPEAKER, "🎤", "Palco (Câmera do orador no OBS)", 0, 1),
+            (OperatingMode.MEDIA, "🎬", "Mídia (Vídeos e imagens do JW Library)", 0, 2),
+            (OperatingMode.ZOOM, "💻", "Zoom → Salão (Exibir participantes na 2ª tela)", 0, 3),
         ]
-        for mode, text, row, col in button_specs:
-            button = QPushButton(text)
+        for mode, icon_text, tooltip, row, col in button_specs:
+            button = QPushButton(icon_text)
+            button.setObjectName("ModeButton")
             button.setCheckable(True)
+            button.setToolTip(tooltip)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            button.setMinimumHeight(44)
+            button.setMinimumWidth(0)
             button.clicked.connect(lambda checked=False, m=mode: self._manual_select(m))
             self.mode_buttons[mode] = button
             mode_grid.addWidget(button, row, col)
+            mode_grid.setColumnStretch(col, 1)
         controls.addLayout(mode_grid)
 
         self.auto_button = QPushButton("🚥 Ativar")
@@ -344,6 +350,9 @@ class MainWindow(QMainWindow):
         self.automation_status = QLabel("Automação pausada")
         self.automation_status.setObjectName("AutomationStatus")
         self.automation_status.setWordWrap(True)
+        self.automation_status.setMinimumWidth(0)
+        self.automation_status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.automation_status.setAlignment(Qt.AlignCenter)
         controls.addWidget(self.automation_status)
 
         panic = QPushButton("🚨 Emergência (Texto do Ano)")
@@ -455,7 +464,7 @@ class MainWindow(QMainWindow):
 
         # Probe command lives in Settings; no local button needed here.
         controls.addSpacing(2)
-        controls.addWidget(self._section_label("PREVIEW DO OBS — NÃO É RETORNO REMOTO"))
+        controls.addWidget(self._section_label("PREVIEW DO OBS"))
 
         preview_row = QHBoxLayout()
         self.preview = ProgramPreview(self)
@@ -464,17 +473,27 @@ class MainWindow(QMainWindow):
         preview_row.addWidget(self.preview, 1)
         controls.addLayout(preview_row, 1)
 
+        self.pause_preview_button = QPushButton("⏸️ Pausar Prévia")
+        self.pause_preview_button.setObjectName("PausePreviewButton")
+        self.pause_preview_button.setToolTip("Pausa a prévia de vídeo para economizar CPU e memória")
+        self.pause_preview_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.pause_preview_button.clicked.connect(self._toggle_preview_pause)
+        controls.addWidget(self.pause_preview_button)
+
         self.zoom_output_label = QLabel("Zoom recebe: OBS Virtual Camera • transições feitas pelo OBS")
         self.zoom_output_label.setObjectName("ZoomOutputLabel")
         self.zoom_output_label.setAlignment(Qt.AlignCenter)
         self.zoom_output_label.setWordWrap(True)
+        self.zoom_output_label.setMinimumWidth(0)
+        self.zoom_output_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         controls.addWidget(self.zoom_output_label)
 
         self.mode_label = QLabel()
         self.mode_label.setObjectName("ModeLabel")
+        self.mode_label.setAlignment(Qt.AlignCenter)
         self.mode_label.setWordWrap(True)
         self.mode_label.setMinimumWidth(0)
-        self.mode_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.mode_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         controls.addWidget(self.mode_label)
 
         root.addWidget(controls_card, 1)
@@ -549,9 +568,21 @@ class MainWindow(QMainWindow):
     def _section_label(self, text: str) -> QLabel:
         label = QLabel(text)
         label.setObjectName("SectionTitle")
+        label.setAlignment(Qt.AlignCenter)
         label.setWordWrap(True)
         label.setMinimumWidth(0)
         return label
+
+    def _toggle_preview_pause(self) -> None:
+        new_paused = not self.preview.is_paused
+        self.preview.set_paused(new_paused)
+        if new_paused:
+            self.pause_preview_button.setText("▶️ Retomar Prévia")
+            self.pause_preview_button.setToolTip("Retoma a transmissão da prévia na tela")
+        else:
+            self.pause_preview_button.setText("⏸️ Pausar Prévia")
+            self.pause_preview_button.setToolTip("Pausa a prévia de vídeo para economizar CPU e memória")
+
 
     def _select_mode(self, mode: OperatingMode) -> None:
         if self.external_media and self.external_media.active:
@@ -1581,9 +1612,15 @@ class MainWindow(QMainWindow):
         tooltip: str,
     ) -> None:
         label = self.status_labels[name]
-        label.setText(text)
+        icons = {
+            "OBS": "🎥",
+            "JW Library": "📖",
+            "Zoom": "💻",
+            "Tela 2": "🖥️",
+        }
+        label.setText(icons.get(name, text))
         label.setProperty("state", state)
-        label.setToolTip(tooltip)
+        label.setToolTip(tooltip or f"{name}: {state}")
         self._repolish(label)
 
     @staticmethod
@@ -1626,13 +1663,15 @@ class MainWindow(QMainWindow):
                 font-size: 10px;
                 font-weight: 700;
                 letter-spacing: 1px;
+                qproperty-alignment: AlignCenter;
             }
             QLabel#StatusBadge {
                 background: #1b2029;
                 border: 1px solid #2c3440;
                 border-radius: 6px;
-                padding: 5px 7px;
-                font-size: 10px;
+                padding: 2px 4px;
+                font-size: 13px;
+                qproperty-alignment: AlignCenter;
             }
             QLabel#StatusBadge[state='ok'] {
                 color: #73e6a2;
@@ -1706,6 +1745,36 @@ class MainWindow(QMainWindow):
             QPushButton:disabled {
                 color: #8b95a3;
                 background: #1c222b;
+            }
+            QPushButton#ModeButton {
+                text-align: center;
+                font-size: 20px;
+                padding: 6px 0px;
+                background: #252c36;
+                border: 1px solid #3d4959;
+                border-radius: 8px;
+            }
+            QPushButton#ModeButton:hover {
+                background: #313c4a;
+                border-color: #54667d;
+            }
+            QPushButton#ModeButton:checked {
+                background: #0b5cab;
+                border: 2px solid #58a6ff;
+            }
+            QPushButton#PausePreviewButton {
+                text-align: center;
+                background: #1c222b;
+                border: 1px solid #2e3846;
+                font-size: 11px;
+                padding: 5px 8px;
+                border-radius: 6px;
+                color: #b0bccd;
+            }
+            QPushButton#PausePreviewButton:hover {
+                background: #252c38;
+                color: #ffffff;
+                border-color: #415064;
             }
             QPushButton#ZoomMic { background: #174a70; border: 2px solid #4da6de; padding: 8px; }
             QPushButton#ZoomMic[state='live'] { background: #612c31; border-color: #f09b9b; }

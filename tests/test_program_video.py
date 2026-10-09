@@ -21,9 +21,9 @@ def black_pixels():
     return bytes([16]) * (WIDTH * HEIGHT) + bytes([128]) * (WIDTH * HEIGHT // 2)
 
 
-def test_nv12_stays_video_frame_and_preserves_color():
+def test_yuv420p_stays_video_frame_and_preserves_color():
     frame = video_frame(black_pixels())
-    assert frame.pixelFormat() == QVideoFrameFormat.PixelFormat.Format_NV12
+    assert frame.pixelFormat() == QVideoFrameFormat.PixelFormat.Format_YUV420P
     assert frame.width() == 1280 and frame.height() == 720
     # Conversion is used only by this assertion, not by the production renderer.
     assert frame.toImage().pixelColor(640, 360).red() < 3

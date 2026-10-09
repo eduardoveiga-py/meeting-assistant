@@ -30,19 +30,43 @@ class ProgramPreview(QWidget):
     def sizeHint(self):
         return QSize(480, 270)
 
+    @property
+    def is_paused(self) -> bool:
+        return getattr(self, "_paused", False)
+
+    def set_paused(self, paused: bool) -> None:
+        self._paused = paused
+        if paused:
+            self.monitor.stop()
+            self.video.videoSink().setVideoFrame(QVideoFrame())
+            self.message.setText(
+                "⏸️ Prévia pausada para economizar recursos\n(Clique em Retomar para reativar)"
+            )
+            self.stack.setCurrentWidget(self.message)
+        else:
+            self.message.setText(self.monitor.last_status)
+            self.monitor.start()
+            if self.monitor.last_frame:
+                self.present(self.monitor.last_frame)
+
     def showEvent(self, event):
         super().showEvent(event)
-        self.monitor.start()
-        self.present(self.monitor.last_frame)
+        if not self.is_paused:
+            self.monitor.start()
+            self.present(self.monitor.last_frame)
 
     def status(self, text):
-        self.message.setText(text)
+        if not self.is_paused:
+            self.message.setText(text)
         self.setToolTip(text)
 
     def present(self, frame):
+        if self.is_paused:
+            return
         if frame is None:
             self.video.videoSink().setVideoFrame(QVideoFrame())
             self.stack.setCurrentWidget(self.message)
         elif self.isVisible():
             self.stack.setCurrentWidget(self.video)
             self.video.videoSink().setVideoFrame(frame)
+

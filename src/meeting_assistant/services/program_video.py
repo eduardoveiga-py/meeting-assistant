@@ -15,10 +15,10 @@ from meeting_assistant.services.virtual_camera import FRAME_BYTES, HEIGHT, WIDTH
 
 
 def video_frame(pixels):
-    """Copy NV12 planes once; Qt's video renderer handles color and scaling."""
+    """Convert NV12 to YUV420P via fast slicing to avoid 200ms+ GUI freeze on Qt fallback renderer."""
     if len(pixels) != FRAME_BYTES:
         raise ValueError("Quadro NV12 incompleto.")
-    fmt = QVideoFrameFormat(QSize(WIDTH, HEIGHT), QVideoFrameFormat.PixelFormat.Format_NV12)
+    fmt = QVideoFrameFormat(QSize(WIDTH, HEIGHT), QVideoFrameFormat.PixelFormat.Format_YUV420P)
     fmt.setColorSpace(QVideoFrameFormat.ColorSpace.ColorSpace_BT709)
     fmt.setColorRange(QVideoFrameFormat.ColorRange.ColorRange_Video)
     frame = QVideoFrame(fmt)
@@ -26,15 +26,32 @@ def video_frame(pixels):
         raise ValueError("Não foi possível preparar o quadro de vídeo.")
     try:
         source = memoryview(pixels)
-        for plane, rows, offset in ((0, HEIGHT, 0), (1, HEIGHT // 2, WIDTH * HEIGHT)):
-            stride, view = frame.bytesPerLine(plane), frame.bits(plane)
-            if stride == WIDTH:
-                view[: rows * WIDTH] = source[offset : offset + rows * WIDTH]
-            else:
-                for row in range(rows):
-                    view[row * stride : row * stride + WIDTH] = source[
-                        offset + row * WIDTH : offset + (row + 1) * WIDTH
-                    ]
+        y_size = WIDTH * HEIGHT
+        y_stride = frame.bytesPerLine(0)
+        y_view = frame.bits(0)
+        if y_stride == WIDTH:
+            y_view[:y_size] = source[:y_size]
+        else:
+            for row in range(HEIGHT):
+                y_view[row * y_stride : row * y_stride + WIDTH] = source[row * WIDTH : (row + 1) * WIDTH]
+                
+        uv_source = source[y_size : y_size + y_size // 2]
+        u_stride = frame.bytesPerLine(1)
+        u_view = frame.bits(1)
+        u_width = WIDTH // 2
+        u_height = HEIGHT // 2
+        
+        v_stride = frame.bytesPerLine(2)
+        v_view = frame.bits(2)
+        
+        if u_stride == u_width and v_stride == u_width:
+            u_view[: u_width * u_height] = uv_source[::2]
+            v_view[: u_width * u_height] = uv_source[1::2]
+        else:
+            for row in range(u_height):
+                row_uv = uv_source[row * WIDTH : (row + 1) * WIDTH]
+                u_view[row * u_stride : row * u_stride + u_width] = row_uv[::2]
+                v_view[row * v_stride : row * v_stride + u_width] = row_uv[1::2]
     finally:
         frame.unmap()
     return frame
