@@ -939,3 +939,8 @@ cNormalPosition\ quebra as regras do Desktop Window Manager, causando falhas de 
 - A lógica de validação de versão da tag foi substituída por leitura segura via `tomllib.load()` direto do `pyproject.toml` (compatível nativamente com Python 3.12).
 - As execuções de verificação redundantes (pytest, ruff) foram **removidas completamente do arquivo `release.yml`**, delegando toda a confiança ao workflow `ci.yml`, que audita com segurança em ambiente limpo e editável em cada novo envio de código.
 **Aprendizado:** Ter validações unitárias rodando em duas frentes diferentes (`ci.yml` e `release.yml`) introduz bloqueios na geração do executável por causa de nuances bobas de instalação (editável vs build pacote). O workflow de lançamento deve focar apenas no empacotamento, deixando a bateria de testes de código inteiramente para a integração contínua (CI). Adicionalmente, interfaces gráficas baseadas em DPI e text strings quebrando layout devem possuir medidas rígidas de segurança em testes multi-resolução.
+
+
+## Sucesso: Atualizador Automático (08/10/2026)
+- **Registro:** O operador confirmou o primeiro teste bem-sucedido do atualizador interno do aplicativo (pulando para a v0.9.6).
+- **Resultado:** A separação entre instalação e runtime, combinada com a arquitetura correta de empacotamento, permitiu a atualização fluida sem perder as configurações do usuário. A instalação não quebrou por falsos-positivos da câmera (resolvido na v0.9.6).
