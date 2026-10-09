@@ -30,7 +30,7 @@ a Volumes e verificação das fontes/plugins do OBS.
   O sensor de imagem identifica repouso e mídia, com calibração do Texto do Ano.
   O guardião atua somente com a automação ligada; respeita Zoom, mídia externa e transições.
 * **🎛️ Gestão Avançada de Áudio e Sincronia:**
-  Configuração de Ganho, Filtros (Limiter, Redução de Ruído) e **Atraso de Sincronização (Sync Offset)** direto pelo aplicativo. Perfeito para alinhar o áudio de mesas de som físicas com o atraso de Câmeras IP.
+  Ajuste em **tempo real** de Volume, Atraso de Sincronização (Sync Offset em milissegundos) e Filtros (Corte de Ruídos e Compressor) direto na aba de Volumes. Perfeito para alinhar o áudio de mesas de som físicas com o atraso de Câmeras IP.
 * **⚙️ Configuração e manutenção unificadas:**
   Cenas, vídeo, áudio, instalação e diagnóstico organizados por assunto. O app
   verifica a estrutura do OBS e completa somente o que falta, preservando

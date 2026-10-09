@@ -111,9 +111,11 @@ reunião. A apresentação local não envia a imagem dos participantes de volta 
 Program. Ambas as janelas devem permanecer abertas. Aguarde confirmação do
 JWL no retorno, mesmo com automação pausada.
 
-Para volume, use **Volumes** no painel principal e **Aplicar volumes**. A ação salva
-somente os ganhos editados. Comece em 0 dB e aumente em passos pequenos, ouvindo
-no receptor. O limitador não corrige entrada já distorcida nem remove ruído.
+Para volume, use **Volumes** no painel principal e **Aplicar**. A ação salva e
+aplica instantaneamente ganhos, sincronia e filtros. Comece em 0 dB e aumente
+em passos pequenos. Se a câmera estiver atrasada em relação ao áudio, ajuste o
+atraso (ms) positivamente na fonte desejada. Para remover chiado de fundo ou
+suavizar vozes baixas/altas, ative o *Corte de ruídos* ou o *Compressor*.
 
 Para terminar, clique **Encerrar reunião**. O app solicita fechamento normal;
 confirme no Zoom quando necessário e confira se há aplicativos ainda abertos.
