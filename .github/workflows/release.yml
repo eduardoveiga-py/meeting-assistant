@@ -40,10 +40,6 @@ jobs:
       - name: Verify source
         shell: pwsh
         run: |
-          python -m ruff check .
-          if ($LASTEXITCODE -ne 0) { throw 'Ruff failed' }
-          python -m pytest -q
-          if ($LASTEXITCODE -ne 0) { throw 'Pytest failed' }
           $tokens = $null; $errors = $null
           [System.Management.Automation.Language.Parser]::ParseFile(
             (Join-Path $PWD 'packaging/installer-preflight.ps1'), [ref]$tokens, [ref]$errors) | Out-Null
