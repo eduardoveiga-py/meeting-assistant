@@ -177,7 +177,13 @@ class MainWindow(QMainWindow):
             self._on_camera_state()
         else:
             self.camera_button.setEnabled(False)
-            self.camera_button.setText("📹 Câmera")
+            self.camera_button.setText("📹 Câmera WhatsApp")
+            from pathlib import Path
+            icon_root = Path(__file__).parent.parent / "resources"
+            whatsapp_svg = icon_root / "whatsapp.svg"
+            if whatsapp_svg.is_file():
+                self.camera_button.setIcon(QIcon(str(whatsapp_svg)))
+                self.camera_button.setIconSize(QSize(16, 16))
             self.camera_button.setAccessibleName("Câmera virtual WhatsApp indisponível")
             self.camera_button.setToolTip(
                 "A câmera virtual nativa do Windows 11 não está disponível nesta execução."
@@ -232,21 +238,29 @@ class MainWindow(QMainWindow):
         header = QHBoxLayout()
         header.setSpacing(8)
 
+        brand_row = QHBoxLayout()
+        brand_row.setSpacing(10)
+        brand_row.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+
         brand_icon = QLabel()
         brand_icon.setObjectName("BrandIcon")
         brand_icon.setFixedSize(32, 32)
         brand_icon.setAlignment(Qt.AlignCenter)
         if not self.app_icon.isNull():
             brand_icon.setPixmap(self.app_icon.pixmap(28, 28))
-        header.addWidget(brand_icon, alignment=Qt.AlignVCenter)
+        brand_row.addWidget(brand_icon, alignment=Qt.AlignVCenter)
+
+        title = QLabel("Meeting Assistant")
+        title.setObjectName("Title")
+        title.setWordWrap(False)
+        title.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        brand_row.addWidget(title, alignment=Qt.AlignVCenter)
 
         title_box = QVBoxLayout()
         title_box.setSpacing(0)
-        title = QLabel("Meeting Assistant")
-        title.setObjectName("Title")
-        title.setWordWrap(True)
-        title.setMinimumWidth(0)
-        title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        title_box.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        title_box.addLayout(brand_row)
+
         subtitle = QLabel("")
         subtitle.setObjectName("Subtitle")
         subtitle.setWordWrap(True)
@@ -254,7 +268,6 @@ class MainWindow(QMainWindow):
         subtitle.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.yeartext_notice = subtitle
         subtitle.linkActivated.connect(lambda _: self._open_hall_setup(self))
-        title_box.addWidget(title)
         title_box.addWidget(subtitle)
         header.addLayout(title_box, 1)
 
@@ -340,7 +353,7 @@ class MainWindow(QMainWindow):
         mode_grid.setVerticalSpacing(4)
         self.mode_buttons: dict[OperatingMode, QPushButton] = {}
         button_specs = [
-            (OperatingMode.BACKGROUND, "jwlibrary.svg", "Texto do Ano (Repouso do JW Library)", 0, 0),
+            (OperatingMode.BACKGROUND, "yeartext.svg", "Texto do Ano (Repouso do JW Library)", 0, 0),
             (OperatingMode.SPEAKER, "stage.svg", "Palco (Câmera do orador no OBS)", 0, 1),
             (OperatingMode.MEDIA, "media.svg", "Mídia (Vídeos e imagens do JW Library)", 0, 2),
             (OperatingMode.ZOOM, "zoom.svg", "Zoom → Salão (Exibir participantes na 2ª tela)", 0, 3),
@@ -452,7 +465,11 @@ class MainWindow(QMainWindow):
         self.ext_media_button.clicked.connect(self._toggle_ext_media)
         system_grid.addWidget(self.ext_media_button, 2, 0)
 
-        self.camera_button = QPushButton("📷 Câmera")
+        self.camera_button = QPushButton("Câmera WhatsApp")
+        whatsapp_svg = icon_root / "whatsapp.svg"
+        if whatsapp_svg.is_file():
+            self.camera_button.setIcon(QIcon(str(whatsapp_svg)))
+            self.camera_button.setIconSize(QSize(16, 16))
         self.camera_button.setToolTip(
             "Inicia ou para a câmera virtual nativa que transmite o Program do OBS ao WhatsApp."
         )
@@ -1341,12 +1358,18 @@ class MainWindow(QMainWindow):
         running = state == "running"
         busy = state in {"starting", "stopping"}
         if running:
-            text = "⏹️ Parar câmera"
+            text = "⏹️ Parar câmera (WhatsApp)"
         elif state == "error":
-            text = "📹 Tentar câmera"
+            text = "📹 Tentar câmera (WhatsApp)"
         else:
-            text = "📹 Iniciar câmera"
+            text = "📹 Iniciar câmera (WhatsApp)"
         self.camera_button.setText(text)
+        from pathlib import Path
+        icon_root = Path(__file__).parent.parent / "resources"
+        whatsapp_svg = icon_root / "whatsapp.svg"
+        if whatsapp_svg.is_file():
+            self.camera_button.setIcon(QIcon(str(whatsapp_svg)))
+            self.camera_button.setIconSize(QSize(16, 16))
         enabled = bool(self.camera_session.supported) and not busy and \
             getattr(self.settings, "whatsapp_enabled", True)
         self.camera_button.setEnabled(enabled)

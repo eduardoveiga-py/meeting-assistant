@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Slim TV Monitor Frame -->
+  <rect x="4" y="9" width="40" height="28" rx="3" fill="#181e26" stroke="#4a5568" stroke-width="1.8"/>
+  <!-- Display Screen (Dark Hall TV background) -->
+  <rect x="6" y="11" width="36" height="24" rx="1.5" fill="#0d1117"/>
+  
+  <!-- Scripture Quote Lines (White text on black screen) -->
+  <line x1="10" y1="17" x2="32" y2="17" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+  <line x1="10" y1="22" x2="28" y2="22" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/>
+  <!-- Bible Citation Line (e.g. Psalm 56:3) in soft yellow/gold -->
+  <line x1="14" y1="27" x2="26" y2="27" stroke="#ffd166" stroke-width="1.5" stroke-linecap="round"/>
+  
+  <!-- JW Badge in Bottom Right Corner of Screen (Identical to Hall TV in photo) -->
+  <rect x="34" y="27" width="6.5" height="6.5" rx="1" fill="#4a317a"/>
+  <text x="37.2" y="32.2" font-family="'Segoe UI', Arial, sans-serif" font-weight="bold" font-size="3.5" fill="#ffffff" text-anchor="middle">JW</text>
+  
+  <!-- Wall mount bracket hint -->
+  <line x1="20" y1="37" x2="28" y2="37" stroke="#334155" stroke-width="2"/>
+</svg>

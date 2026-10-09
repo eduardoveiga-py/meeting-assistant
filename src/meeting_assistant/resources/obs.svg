@@ -1,8 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
-  <circle cx="24" cy="24" r="22" fill="#181d24" stroke="#313946" stroke-width="2"/>
-  <!-- OBS Studio classic triple swirl in crisp white/light gray -->
-  <path d="M24 10a14 14 0 0 1 13.9 12.4c-2.3-1.8-5.3-2.9-8.5-2.9-6.3 0-11.7 4.1-13.4 9.8A14 14 0 0 1 24 10z" fill="#ffffff" opacity="0.95"/>
-  <path d="M38 24a14 14 0 0 1-13.9 14c1.8-2.3 2.9-5.3 2.9-8.5 0-6.3-4.1-11.7-9.8-13.4A14 14 0 0 1 38 24z" fill="#ffffff" opacity="0.95"/>
-  <path d="M24 38A14 14 0 0 1 10.1 25.6c2.3 1.8 5.3 2.9 8.5 2.9 6.3 0 11.7-4.1 13.4-9.8A14 14 0 0 1 24 38z" fill="#ffffff" opacity="0.95"/>
-  <circle cx="24" cy="24" r="5" fill="#181d24"/>
+  <!-- Outer Chrome/Silver Ring -->
+  <circle cx="24" cy="24" r="22" fill="#111317" stroke="#e2e8f0" stroke-width="2.5"/>
+  <!-- Inner dark vignette circle -->
+  <circle cx="24" cy="24" r="19.5" fill="url(#obs_grad)"/>
+  <defs>
+    <radialGradient id="obs_grad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2a303c"/>
+      <stop offset="100%" stop-color="#0a0c10"/>
+    </radialGradient>
+  </defs>
+  <!-- OBS Signature Triple Vortex Blade Swirl -->
+  <path d="M24 10.5 C31.5 10.5 37.5 16.5 37.5 24 C35 22 31.5 20.8 27.8 21.2 C22 21.8 17.5 26.6 17 32.5 C13 29.5 10.5 24.5 10.5 19 C14.5 21.5 19.5 21 23 18 C26.2 15.2 26 11.2 24 10.5 Z" fill="#ffffff" opacity="0.95"/>
+  <path d="M37.5 24 C37.5 31.5 31.5 37.5 24 37.5 C26 35 27.2 31.5 26.8 27.8 C26.2 22 21.4 17.5 15.5 17 C18.5 13 23.5 10.5 29 10.5 C26.5 14.5 27 19.5 30 23 C32.8 26.2 36.8 26 37.5 24 Z" fill="#ffffff" opacity="0.95"/>
+  <path d="M24 37.5 C16.5 37.5 10.5 31.5 10.5 24 C13 26 16.5 27.2 20.2 26.8 C26 26.2 30.5 21.4 31 15.5 C35 18.5 37.5 23.5 37.5 29 C33.5 26.5 28.5 27 25 30 C21.8 32.8 22 36.8 24 37.5 Z" fill="#ffffff" opacity="0.95"/>
+  <!-- Center circle hole -->
+  <circle cx="24" cy="24" r="4.2" fill="#0a0c10"/>
 </svg>
