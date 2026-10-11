@@ -6,8 +6,8 @@ Challenger 2 Test Suite covering:
    - Rigorous verification of enforce_no_display_captures() and assert_safe_media().
 2. Audio Mix-Minus Infiltration & Echo Prevention:
    - Zoom process audio monitoring type strictly enforced as OBS_MONITORING_TYPE_NONE.
-   - Track isolation (Tracks 1-5 False, Track 6 True) preventing audio bleed into recording/stream.
-   - JW Library process audio monitoring type enforced as OBS_MONITORING_TYPE_MONITOR_ONLY.
+   - Track isolation (Tracks 1-6 False) preventing audio bleed into recording/stream.
+   - JW Library process audio starts unmonitored (MONITOR_NONE) and muted.
 3. OBS Provisioning Resilience & Failure Injection:
    - Socket timeouts, connection dropped mid-provisioning.
    - Unexpected OBSSDKRequestError codes (601, 700, 404, 500).
@@ -37,7 +37,6 @@ import scripts.av_setup_tool as av_tool
 from meeting_assistant.services.obs_av_provisioner import (
     JWL_AUDIO_SOURCE,
     MONITOR_NONE,
-    MONITOR_ONLY,
     PROCESS_AUDIO_KIND,
     ZOOM_AUDIO_SOURCE,
     enforce_no_display_captures,
@@ -476,29 +475,28 @@ class TestAudioMixMinusInfiltration:
         assert client.input_monitor_types[ZOOM_AUDIO_SOURCE] == MONITOR_NONE
 
     def test_zoom_audio_track_isolation_enforced(self):
-        """Zoom audio must have tracks 1-5 set to False and track 6 set to True."""
+        """Zoom audio must have tracks 1-6 set to False to prevent recording bleed."""
         client = AdversarialMockObsClient()
         provision_scenes(client)
 
         provision_process_audio(client)
 
         tracks = client.input_tracks[ZOOM_AUDIO_SOURCE]
-        for trk in ("1", "2", "3", "4", "5"):
+        for trk in ("1", "2", "3", "4", "5", "6"):
             assert tracks[trk] is False, f"Track {trk} must be False to prevent audio bleed!"
-        assert tracks["6"] is True, "Track 6 must be True for routing!"
 
-    def test_jwl_audio_monitor_is_always_monitor_only(self):
-        """JW Library audio must always be MONITOR_ONLY with track 6 enabled."""
+    def test_jwl_audio_monitor_starts_unmonitored_and_isolated(self):
+        """JW Library audio newly created must start MONITOR_NONE, muted, and tracks 1-6 False."""
         client = AdversarialMockObsClient()
         provision_scenes(client)
 
         provision_process_audio(client)
 
-        assert client.input_monitor_types[JWL_AUDIO_SOURCE] == MONITOR_ONLY
+        assert client.input_monitor_types[JWL_AUDIO_SOURCE] == MONITOR_NONE
+        assert client.input_mutes[JWL_AUDIO_SOURCE] is True
         tracks = client.input_tracks[JWL_AUDIO_SOURCE]
-        for trk in ("1", "2", "3", "4", "5"):
+        for trk in ("1", "2", "3", "4", "5", "6"):
             assert tracks[trk] is False
-        assert tracks["6"] is True
 
     def test_repeated_provisioning_preserves_mix_minus_invariants(self):
         """Run provision_process_audio repeatedly 10 times; invariants must never drift."""
@@ -509,8 +507,8 @@ class TestAudioMixMinusInfiltration:
             configured, errors = provision_process_audio(client)
             assert not errors
             assert client.input_monitor_types[ZOOM_AUDIO_SOURCE] == MONITOR_NONE
-            assert client.input_monitor_types[JWL_AUDIO_SOURCE] == MONITOR_ONLY
-            assert client.input_tracks[ZOOM_AUDIO_SOURCE]["6"] is True
+            assert client.input_monitor_types[JWL_AUDIO_SOURCE] == MONITOR_NONE
+            assert client.input_tracks[ZOOM_AUDIO_SOURCE]["6"] is False
             assert client.input_tracks[ZOOM_AUDIO_SOURCE]["1"] is False
 
 

@@ -34,6 +34,8 @@ DEFAULT_ZOOM_MONITOR_DEVICE_NAME = "V-OUT Zoom (Envio)"
 
 JWL_AUDIO_SOURCE = "Meeting Assistant - Áudio JW Library"
 ZOOM_AUDIO_SOURCE = "Meeting Assistant - Áudio Zoom"
+MESA_AUDIO_SOURCE = "Meeting Assistant - Mesa"
+MIC_AUDIO_KIND = "wasapi_input_capture"
 PROCESS_AUDIO_KIND = "wasapi_process_output_capture"
 
 MONITOR_ONLY = "OBS_MONITORING_TYPE_MONITOR_ONLY"
@@ -359,14 +361,16 @@ def provision_jwl_hwnd_capture(
 
 
 def provision_process_audio(client: Any) -> tuple[list[str], list[str]]:
-    """Configure isolated application process audio outputs in Meeting Assistant - Áudio.
+    """Configure isolated application process and desk microphone audio in Meeting Assistant - Áudio.
 
     Configures:
-    - Meeting Assistant - Áudio JW Library: jwlibrary.exe, MONITOR_ONLY, track 6.
-    - Meeting Assistant - Áudio Zoom: zoom.exe, MONITOR_NONE, track 6.
+    - Meeting Assistant - Mesa: wasapi_input_capture, MONITOR_NONE, starts muted.
+    - Meeting Assistant - Áudio JW Library: jwlibrary.exe, starts muted with MONITOR_NONE.
+    - Meeting Assistant - Áudio Zoom: zoom.exe, MONITOR_NONE, starts muted.
 
-    Tracks 1-5 are set to False, track 6 is set to True to prevent audio bleed into
-    stream/recording tracks while allowing proper monitoring and mix-minus.
+    Tracks 1-6 are all set to False (tracks["6"] = False) to ensure local process audio
+    is NOT routed to recording/stream tracks, complying strictly with docs/audio-routing.md
+    and obs_audio.py.
 
     Args:
         client: Connected obs-websocket client.
@@ -377,9 +381,18 @@ def provision_process_audio(client: Any) -> tuple[list[str], list[str]]:
     configured: list[str] = []
     errors: list[str] = []
 
-    app_targets = [
-        (JWL_AUDIO_SOURCE, "jwlibrary.exe", MONITOR_ONLY),
-        (ZOOM_AUDIO_SOURCE, "zoom.exe", MONITOR_NONE),
+    audio_targets = [
+        (MESA_AUDIO_SOURCE, MIC_AUDIO_KIND, {"device_id": "__unconfigured__"}),
+        (
+            JWL_AUDIO_SOURCE,
+            PROCESS_AUDIO_KIND,
+            {"window": "Qualquer:Qualquer:jwlibrary.exe", "priority": 2},
+        ),
+        (
+            ZOOM_AUDIO_SOURCE,
+            PROCESS_AUDIO_KIND,
+            {"window": "Qualquer:Qualquer:zoom.exe", "priority": 2},
+        ),
     ]
 
     try:
@@ -394,18 +407,17 @@ def provision_process_audio(client: Any) -> tuple[list[str], list[str]]:
     except Exception as exc:
         return [], [f"Falha ao consultar itens da cena '{AUDIO_BUS_SCENE}': {exc}"]
 
-    for name, exe_name, monitor_type in app_targets:
+    for name, kind, settings in audio_targets:
         try:
-            settings = {"window": f"Qualquer:Qualquer:{exe_name}", "priority": 2}
-
-            if name not in inputs:
+            is_new = name not in inputs
+            if is_new:
                 try:
                     client.send(
                         "CreateInput",
                         {
                             "sceneName": AUDIO_BUS_SCENE,
                             "inputName": name,
-                            "inputKind": PROCESS_AUDIO_KIND,
+                            "inputKind": kind,
                             "inputSettings": settings,
                             "sceneItemEnabled": True,
                         },
@@ -416,6 +428,24 @@ def provision_process_audio(client: Any) -> tuple[list[str], list[str]]:
                         errors.append(f"Nome '{name}' já reservado no OBS.")
                         continue
                     raise
+
+                # New sources start muted and unmonitored per docs/audio-routing.md and obs_audio.py
+                client.send(
+                    "SetInputMute",
+                    {
+                        "inputName": name,
+                        "inputMuted": True,
+                    },
+                    raw=True,
+                )
+                client.send(
+                    "SetInputAudioMonitorType",
+                    {
+                        "inputName": name,
+                        "monitorType": MONITOR_NONE,
+                    },
+                    raw=True,
+                )
             else:
                 client.send(
                     "SetInputSettings",
@@ -450,9 +480,9 @@ def provision_process_audio(client: Any) -> tuple[list[str], list[str]]:
                     raw=True,
                 )
 
-            # Track isolation: Tracks 1-5 = False, Track 6 = True
+            # Track isolation: Tracks 1-6 = False (tracks["6"] = False)
+            # Ensures local process and unconfigured audio is NOT routed to recording/stream tracks
             tracks = {str(i): False for i in range(1, 7)}
-            tracks["6"] = True
             client.send(
                 "SetInputAudioTracks",
                 {
@@ -462,25 +492,16 @@ def provision_process_audio(client: Any) -> tuple[list[str], list[str]]:
                 raw=True,
             )
 
-            # Monitor type
-            client.send(
-                "SetInputAudioMonitorType",
-                {
-                    "inputName": name,
-                    "monitorType": monitor_type,
-                },
-                raw=True,
-            )
-
-            # Unmute
-            client.send(
-                "SetInputMute",
-                {
-                    "inputName": name,
-                    "inputMuted": False,
-                },
-                raw=True,
-            )
+            # Zoom audio monitor type must strictly remain MONITOR_NONE to prevent echo loops
+            if name == ZOOM_AUDIO_SOURCE:
+                client.send(
+                    "SetInputAudioMonitorType",
+                    {
+                        "inputName": name,
+                        "monitorType": MONITOR_NONE,
+                    },
+                    raw=True,
+                )
 
             configured.append(name)
         except Exception as exc:
@@ -506,7 +527,7 @@ def provision_obs_av(
     3. Provisions scenes (Texto do Ano, Palco, Mídias, Meeting Assistant - Áudio).
     4. Enforces anti-display-capture safety (disables monitor_capture).
     5. Configures HWND-based JW Library capture in Mídias.
-    6. Configures application process audio outputs with mix-minus & track 6 isolation.
+    6. Configures application process and desk audio outputs with mix-minus & track isolation.
 
     NEVER changes Program scene or deletes operator sources.
 

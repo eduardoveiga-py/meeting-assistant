@@ -18,8 +18,9 @@ from meeting_assistant.services.obs_av_provisioner import (
     DEFAULT_ZOOM_MONITOR_DEVICE_NAME,
     JWL_AUDIO_SOURCE,
     MANAGED_SCENES,
+    MESA_AUDIO_SOURCE,
+    MIC_AUDIO_KIND,
     MONITOR_NONE,
-    MONITOR_ONLY,
     PROCESS_AUDIO_KIND,
     ZOOM_AUDIO_SOURCE,
     enforce_no_display_captures,
@@ -344,26 +345,35 @@ def test_provision_process_audio():
 
     configured, errors = provision_process_audio(client)
     assert not errors
-    assert set(configured) == {JWL_AUDIO_SOURCE, ZOOM_AUDIO_SOURCE}
+    assert set(configured) == {MESA_AUDIO_SOURCE, JWL_AUDIO_SOURCE, ZOOM_AUDIO_SOURCE}
 
-    # Verify JW Library audio: wasapi_process_output_capture, MONITOR_ONLY, track 6
+    # Verify JW Library audio: wasapi_process_output_capture, MONITOR_NONE, tracks 1-6 False, inputMuted True
     assert JWL_AUDIO_SOURCE in client.inputs
     assert client.inputs[JWL_AUDIO_SOURCE]["inputKind"] == PROCESS_AUDIO_KIND
-    assert client.input_monitor_types[JWL_AUDIO_SOURCE] == MONITOR_ONLY
-    assert client.input_tracks[JWL_AUDIO_SOURCE]["6"] is True
+    assert client.input_monitor_types[JWL_AUDIO_SOURCE] == MONITOR_NONE
+    assert client.input_tracks[JWL_AUDIO_SOURCE]["6"] is False
     assert client.input_tracks[JWL_AUDIO_SOURCE]["1"] is False
-    assert client.input_mutes[JWL_AUDIO_SOURCE] is False
+    assert client.input_mutes[JWL_AUDIO_SOURCE] is True
 
-    # Verify Zoom audio: wasapi_process_output_capture, MONITOR_NONE, track 6
+    # Verify Zoom audio: wasapi_process_output_capture, MONITOR_NONE, tracks 1-6 False, inputMuted True
     assert ZOOM_AUDIO_SOURCE in client.inputs
     assert client.inputs[ZOOM_AUDIO_SOURCE]["inputKind"] == PROCESS_AUDIO_KIND
     assert client.input_monitor_types[ZOOM_AUDIO_SOURCE] == MONITOR_NONE
-    assert client.input_tracks[ZOOM_AUDIO_SOURCE]["6"] is True
+    assert client.input_tracks[ZOOM_AUDIO_SOURCE]["6"] is False
     assert client.input_tracks[ZOOM_AUDIO_SOURCE]["1"] is False
-    assert client.input_mutes[ZOOM_AUDIO_SOURCE] is False
+    assert client.input_mutes[ZOOM_AUDIO_SOURCE] is True
+
+    # Verify Mesa audio: wasapi_input_capture, MONITOR_NONE, tracks 1-6 False, inputMuted True
+    assert MESA_AUDIO_SOURCE in client.inputs
+    assert client.inputs[MESA_AUDIO_SOURCE]["inputKind"] == MIC_AUDIO_KIND
+    assert client.input_monitor_types[MESA_AUDIO_SOURCE] == MONITOR_NONE
+    assert client.input_tracks[MESA_AUDIO_SOURCE]["6"] is False
+    assert client.input_tracks[MESA_AUDIO_SOURCE]["1"] is False
+    assert client.input_mutes[MESA_AUDIO_SOURCE] is True
 
     # Verify items in AUDIO_BUS_SCENE
     bus_items = client.scene_items[AUDIO_BUS_SCENE]
+    assert any(i["sourceName"] == MESA_AUDIO_SOURCE and i["sceneItemEnabled"] for i in bus_items)
     assert any(i["sourceName"] == JWL_AUDIO_SOURCE and i["sceneItemEnabled"] for i in bus_items)
     assert any(i["sourceName"] == ZOOM_AUDIO_SOURCE and i["sceneItemEnabled"] for i in bus_items)
 
@@ -395,7 +405,7 @@ def test_provision_obs_av_master_end_to_end(tmp_path: Path):
     assert result.monitoring_device_set is True
     assert set(result.scenes_created) == {*MANAGED_SCENES, AUDIO_BUS_SCENE}
     assert result.jwl_hwnd_capture_configured is True
-    assert set(result.process_audio_configured) == {JWL_AUDIO_SOURCE, ZOOM_AUDIO_SOURCE}
+    assert set(result.process_audio_configured) == {MESA_AUDIO_SOURCE, JWL_AUDIO_SOURCE, ZOOM_AUDIO_SOURCE}
 
     # Strict compliance: Program scene was NEVER changed!
     assert client.program_scene_calls == []

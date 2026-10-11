@@ -36,6 +36,7 @@ from meeting_assistant.services.obs_av_provisioner import (
     DEFAULT_ZOOM_MONITOR_DEVICE_NAME,
     JWL_AUDIO_SOURCE,
     MANAGED_SCENES,
+    MESA_AUDIO_SOURCE,
     MONITOR_NONE,
     PROCESS_AUDIO_KIND,
     ZOOM_AUDIO_SOURCE,
@@ -549,7 +550,7 @@ class TestTier1FeatureCoverage:
         assert res.monitoring_device_set is True
         assert set(res.scenes_created) == {*MANAGED_SCENES, AUDIO_BUS_SCENE}
         assert res.jwl_hwnd_capture_configured is True
-        assert set(res.process_audio_configured) == {JWL_AUDIO_SOURCE, ZOOM_AUDIO_SOURCE}
+        assert set(res.process_audio_configured) == {MESA_AUDIO_SOURCE, JWL_AUDIO_SOURCE, ZOOM_AUDIO_SOURCE}
         assert client.program_scene_calls == []  # Program scene never switched
 
     def test_e2e_f18_standalone_gui_window(self, monkeypatch):
