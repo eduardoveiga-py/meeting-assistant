@@ -476,64 +476,70 @@ def generate_elevation_script(
         "# Meeting Assistant AV Setup - Elevated Registry Modifications",
         "$ErrorActionPreference = 'Stop'",
         "$successCount = 0",
-        "",
+        "try {",
     ]
 
     # Renames
     if renames:
-        lines.append("# --- Rename Endpoints ---")
+        lines.append("    # --- Rename Endpoints ---")
         for ep_id, new_name in renames.items():
             guid = _sanitize_endpoint_guid(ep_id)
             flow_dir = get_endpoint_flow_name(ep_id)
             clean_name = re.sub(r"[\r\n]+", " ", new_name).strip()
             escaped_name = clean_name.replace("'", "''")
 
-            lines.append(f"# Rename {guid} to '{escaped_name}'")
-            lines.append(f"$guid = '{guid}'")
-            lines.append(f"$newName = '{escaped_name}'")
-            lines.append(f"$directions = @('{flow_dir}')")
+            lines.append(f"    # Rename {guid} to '{escaped_name}'")
+            lines.append(f"    $guid = '{guid}'")
+            lines.append(f"    $newName = '{escaped_name}'")
+            lines.append(f"    $directions = @('{flow_dir}')")
             lines.append(
-                "foreach ($dir in $directions) {\n"
-                "    $propPath = \"HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\"
+                "    foreach ($dir in $directions) {\n"
+                "        $propPath = \"HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\"
                 "MMDevices\\Audio\\$dir\\$guid\\Properties\"\n"
-                "    if (Test-Path $propPath) {\n"
-                "        Set-ItemProperty -Path $propPath -Name '{a45c254e-df1c-4efd-8020-67d146a850e0},2' "
+                "        if (Test-Path $propPath) {\n"
+                "            Set-ItemProperty -Path $propPath "
+                "-Name '{a45c254e-df1c-4efd-8020-67d146a850e0},2' "
                 "-Value $newName -Type String -Force\n"
-                "        $successCount++\n"
-                "    }\n"
-                "}"
+                "            $successCount++\n"
+                "        }\n"
+                "    }"
             )
             lines.append("")
 
     # Disables
     if disables:
-        lines.append("# --- Disable Endpoints ---")
+        lines.append("    # --- Disable Endpoints ---")
         for ep_id in disables:
             guid = _sanitize_endpoint_guid(ep_id)
             flow_dir = get_endpoint_flow_name(ep_id)
 
-            lines.append(f"# Disable endpoint {guid}")
-            lines.append(f"$guid = '{guid}'")
-            lines.append(f"$directions = @('{flow_dir}')")
+            lines.append(f"    # Disable endpoint {guid}")
+            lines.append(f"    $guid = '{guid}'")
+            lines.append(f"    $directions = @('{flow_dir}')")
             lines.append(
-                "foreach ($dir in $directions) {\n"
-                "    $devPath = \"HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\"
+                "    foreach ($dir in $directions) {\n"
+                "        $devPath = \"HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\"
                 "MMDevices\\Audio\\$dir\\$guid\"\n"
-                "    if (Test-Path $devPath) {\n"
-                "        Set-ItemProperty -Path $devPath -Name 'DeviceState' "
+                "        if (Test-Path $devPath) {\n"
+                "            Set-ItemProperty -Path $devPath -Name 'DeviceState' "
                 "-Value 268435457 -Type DWord -Force\n"
-                "        $successCount++\n"
-                "    }\n"
-                "}"
+                "            $successCount++\n"
+                "        }\n"
+                "    }"
             )
             lines.append("")
 
     if restart_audiosrv:
-        lines.append("# --- Restart Windows Audio Service ---")
-        lines.append("Restart-Service Audiosrv -Force")
+        lines.append("    # --- Restart Windows Audio Service ---")
+        lines.append("    Restart-Service Audiosrv -Force")
         lines.append("")
 
-    lines.append('Write-Output "SUCCESS: $successCount operations completed"')
+    lines.append('    Write-Output "SUCCESS: $successCount operations completed"')
+    lines.append("    exit 0")
+    lines.append("} catch {")
+    lines.append("    Write-Error $_.Exception.Message")
+    lines.append("    exit 1")
+    lines.append("}")
     return "\n".join(lines)
 
 
@@ -648,10 +654,11 @@ def apply_device_modifications(
             f.write(script_content)
             temp_script = f.name
 
-        # Launch elevated PowerShell using Start-Process -Verb RunAs
+        # Launch elevated PowerShell using Start-Process -Verb RunAs with -PassThru to capture exit code
         ps_cmd = (
-            f"Start-Process powershell.exe -ArgumentList "
-            f"'-NoProfile -ExecutionPolicy Bypass -File \"{temp_script}\"' -Verb RunAs -Wait"
+            f"$p = Start-Process powershell.exe -ArgumentList "
+            f"'-NoProfile -ExecutionPolicy Bypass -File \"{temp_script}\"' -Verb RunAs -Wait -PassThru; "
+            f"if ($p) {{ exit $p.ExitCode }} else {{ exit 1 }}"
         )
         proc = subprocess.run(
             ["powershell.exe", "-NoProfile", "-Command", ps_cmd],

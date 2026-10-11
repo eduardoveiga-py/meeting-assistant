@@ -712,7 +712,7 @@ class AVSetupDialog(QDialog):
             eps, roles = _task()
             self._on_audio_scan_finished((eps, roles))
         else:
-            worker = GenericWorker(_task, parent=self)
+            worker = GenericWorker(_task)
             worker.finished_result.connect(self._on_audio_scan_finished)
             worker.failed_error.connect(lambda err: self.audio_summary_label.setText(f"Erro: {err}"))
             self._start_worker(worker)
@@ -784,8 +784,11 @@ class AVSetupDialog(QDialog):
             opts = check_all_optimizations()
             self._on_os_scan_finished(opts)
         else:
-            worker = GenericWorker(check_all_optimizations, parent=self)
+            worker = GenericWorker(check_all_optimizations)
             worker.finished_result.connect(self._on_os_scan_finished)
+            worker.failed_error.connect(
+                lambda err: self.global_status_label.setText(f"Erro ao verificar otimizações: {err}")
+            )
             self._start_worker(worker)
 
     def _on_os_scan_finished(self, opts: list[OptimizationStatus]) -> None:
@@ -846,8 +849,11 @@ class AVSetupDialog(QDialog):
             routes, cams = _task()
             self._on_routing_scan_finished((routes, cams))
         else:
-            worker = GenericWorker(_task, parent=self)
+            worker = GenericWorker(_task)
             worker.finished_result.connect(self._on_routing_scan_finished)
+            worker.failed_error.connect(
+                lambda err: self.global_status_label.setText(f"Erro ao verificar rotas: {err}")
+            )
             self._start_worker(worker)
 
     def _on_routing_scan_finished(self, result: tuple[dict[str, Any], dict[str, Any]]) -> None:
@@ -928,8 +934,11 @@ class AVSetupDialog(QDialog):
             data = _task()
             self._on_full_diag_finished(data)
         else:
-            worker = GenericWorker(_task, parent=self)
+            worker = GenericWorker(_task)
             worker.finished_result.connect(self._on_full_diag_finished)
+            worker.failed_error.connect(
+                lambda err: self.readiness_banner.setText(f"Erro no diagnóstico: {err}")
+            )
             self._start_worker(worker)
 
     def _on_full_diag_finished(self, data: dict[str, Any]) -> None:
@@ -1015,6 +1024,29 @@ class AVSetupDialog(QDialog):
     # Action Slots
     # -----------------------------------------------------------------------
 
+    def _confirm_audiosrv_restart_if_needed(self) -> bool:
+        """Prompt explicit confirmation before forcing Audiosrv restart.
+
+        Alerts the operator that OBS Studio and call audio streams will be reset.
+        """
+        if not self.restart_audiosrv_checkbox.isChecked():
+            return True
+        msg = (
+            "Atenção: Reiniciar o serviço de áudio do Windows (Audiosrv) interromperá "
+            "temporariamente todos os fluxos de som.\n\n"
+            "O áudio do OBS Studio e das chamadas em andamento (Zoom/WhatsApp) será "
+            "reinicializado e precisará ser restabelecido.\n\n"
+            "Deseja realmente reiniciar o serviço Audiosrv agora?"
+        )
+        reply = QMessageBox.question(
+            self,
+            "Confirmar Reinício do Serviço de Áudio",
+            msg,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return reply == QMessageBox.StandardButton.Yes
+
     def _on_rename_devices_clicked(self, blocking: bool = False) -> None:
         """Trigger device renaming script generation and UAC execution."""
         renames: dict[str, str] = {}
@@ -1041,7 +1073,11 @@ class AVSetupDialog(QDialog):
             )
             return
 
+        if not self._confirm_audiosrv_restart_if_needed():
+            return
+
         restart_srv = self.restart_audiosrv_checkbox.isChecked()
+        self.rename_btn.setEnabled(False)
         self.global_status_label.setText("Executando modificações de dispositivos (UAC)...")
 
         def _task():
@@ -1052,6 +1088,7 @@ class AVSetupDialog(QDialog):
             )
 
         def _on_done(res: tuple[bool, str]):
+            self.rename_btn.setEnabled(True)
             ok, msg = res
             if ok:
                 QMessageBox.information(self, "Sucesso", msg)
@@ -1059,13 +1096,22 @@ class AVSetupDialog(QDialog):
                 QMessageBox.warning(self, "Aviso / Erro", msg)
             self.refresh_audio_devices(blocking=blocking)
 
+        def _on_fail(err: str):
+            self.rename_btn.setEnabled(True)
+            QMessageBox.critical(self, "Erro ao Renomear", f"Falha ao executar modificações: {err}")
+            self.global_status_label.setText(f"Erro: {err}")
+
         if blocking:
-            res = _task()
-            _on_done(res)
+            try:
+                res = _task()
+                _on_done(res)
+            except Exception as exc:
+                _on_fail(str(exc))
             return
 
-        worker = GenericWorker(_task, parent=self)
+        worker = GenericWorker(_task)
         worker.finished_result.connect(_on_done)
+        worker.failed_error.connect(_on_fail)
         self._start_worker(worker)
 
     def _on_disable_endpoints_clicked(self, blocking: bool = False) -> None:
@@ -1089,6 +1135,12 @@ class AVSetupDialog(QDialog):
             )
             return
 
+        if not self._confirm_audiosrv_restart_if_needed():
+            return
+
+        self.disable_endpoints_btn.setEnabled(False)
+        self.global_status_label.setText("Desativando dispositivos de áudio selecionados (UAC)...")
+
         def _task():
             return apply_device_modifications(
                 renames={},
@@ -1097,6 +1149,7 @@ class AVSetupDialog(QDialog):
             )
 
         def _on_done(res: tuple[bool, str]):
+            self.disable_endpoints_btn.setEnabled(True)
             ok, msg = res
             if ok:
                 QMessageBox.information(self, "Sucesso", f"Dispositivos desativados: {msg}")
@@ -1104,23 +1157,34 @@ class AVSetupDialog(QDialog):
                 QMessageBox.warning(self, "Aviso / Erro", msg)
             self.refresh_audio_devices(blocking=blocking)
 
+        def _on_fail(err: str):
+            self.disable_endpoints_btn.setEnabled(True)
+            QMessageBox.critical(self, "Erro ao Desativar", f"Falha ao desativar dispositivos: {err}")
+            self.global_status_label.setText(f"Erro: {err}")
+
         if blocking:
-            res = _task()
-            _on_done(res)
+            try:
+                res = _task()
+                _on_done(res)
+            except Exception as exc:
+                _on_fail(str(exc))
             return
 
-        worker = GenericWorker(_task, parent=self)
+        worker = GenericWorker(_task)
         worker.finished_result.connect(_on_done)
+        worker.failed_error.connect(_on_fail)
         self._start_worker(worker)
 
     def _on_apply_os_clicked(self, blocking: bool = False) -> None:
         """Apply recommended OS optimizations via UAC."""
+        self.apply_os_btn.setEnabled(False)
         self.global_status_label.setText("Aplicando otimizações do Windows 11...")
 
         def _task():
             return apply_elevated_os_optimizations()
 
         def _on_done(res: tuple[bool, str]):
+            self.apply_os_btn.setEnabled(True)
             ok, msg = res
             if ok:
                 QMessageBox.information(self, "Otimizações Aplicadas", msg)
@@ -1128,13 +1192,22 @@ class AVSetupDialog(QDialog):
                 QMessageBox.warning(self, "Aviso / Falha", msg)
             self.refresh_os_optimizations(blocking=blocking)
 
+        def _on_fail(err: str):
+            self.apply_os_btn.setEnabled(True)
+            QMessageBox.critical(self, "Erro nas Otimizações", f"Falha ao aplicar otimizações: {err}")
+            self.global_status_label.setText(f"Erro: {err}")
+
         if blocking:
-            res = _task()
-            _on_done(res)
+            try:
+                res = _task()
+                _on_done(res)
+            except Exception as exc:
+                _on_fail(str(exc))
             return
 
-        worker = GenericWorker(_task, parent=self)
+        worker = GenericWorker(_task)
         worker.finished_result.connect(_on_done)
+        worker.failed_error.connect(_on_fail)
         self._start_worker(worker)
 
     def _on_auto_route_clicked(self, blocking: bool = False) -> None:
@@ -1144,28 +1217,46 @@ class AVSetupDialog(QDialog):
         wapp_mic = self._role_map.get(ROLE_V_MIC_WAPP)
         wapp_spk = self._role_map.get(ROLE_MESA_OUT_P2)
 
+        kwargs: dict[str, str] = {}
+        if zoom_spk and zoom_spk.id:
+            kwargs["zoom_render"] = zoom_spk.id
+        if zoom_mic and zoom_mic.id:
+            kwargs["zoom_capture"] = zoom_mic.id
+        if wapp_spk and wapp_spk.id:
+            kwargs["whatsapp_render"] = wapp_spk.id
+        if wapp_mic and wapp_mic.id:
+            kwargs["whatsapp_capture"] = wapp_mic.id
+
+        self.auto_route_btn.setEnabled(False)
+        self.global_status_label.setText("Configurando roteamento por aplicativo...")
+
         def _task():
-            return configure_all_routes(
-                zoom_render_id=zoom_spk.id if zoom_spk else None,
-                zoom_capture_id=zoom_mic.id if zoom_mic else None,
-                whatsapp_render_id=wapp_spk.id if wapp_spk else None,
-                whatsapp_capture_id=wapp_mic.id if wapp_mic else None,
-            )
+            return configure_all_routes(**kwargs)
 
         def _on_done(results: dict[str, Any]):
+            self.auto_route_btn.setEnabled(True)
             details = []
             for app, (ok, msg) in results.items():
                 details.append(f"{app}: {'OK' if ok else 'Falha'} ({msg})")
             QMessageBox.information(self, "Roteamento Automático", "\n".join(details))
             self.refresh_routing_and_cameras(blocking=blocking)
 
+        def _on_fail(err: str):
+            self.auto_route_btn.setEnabled(True)
+            QMessageBox.critical(self, "Erro no Roteamento", f"Falha no roteamento: {err}")
+            self.global_status_label.setText(f"Erro: {err}")
+
         if blocking:
-            res = _task()
-            _on_done(res)
+            try:
+                res = _task()
+                _on_done(res)
+            except Exception as exc:
+                _on_fail(str(exc))
             return
 
-        worker = GenericWorker(_task, parent=self)
+        worker = GenericWorker(_task)
         worker.finished_result.connect(_on_done)
+        worker.failed_error.connect(_on_fail)
         self._start_worker(worker)
 
     def _on_open_windows_volume_settings(self) -> None:
@@ -1174,6 +1265,7 @@ class AVSetupDialog(QDialog):
             QMessageBox.warning(self, "Erro", msg)
 
     def _on_start_obs_virtual_cam_clicked(self, blocking: bool = False) -> None:
+        self.start_obs_cam_btn.setEnabled(False)
         self.global_status_label.setText("Iniciando Câmera Virtual do OBS...")
 
         def _task():
@@ -1184,6 +1276,7 @@ class AVSetupDialog(QDialog):
             return start_obs_virtual_cam(client)
 
         def _on_done(res: tuple[bool, str]):
+            self.start_obs_cam_btn.setEnabled(True)
             ok, msg = res
             if ok:
                 QMessageBox.information(self, "Câmera Virtual", msg)
@@ -1191,16 +1284,26 @@ class AVSetupDialog(QDialog):
                 QMessageBox.warning(self, "Falha na Câmera Virtual", msg)
             self.refresh_routing_and_cameras(blocking=blocking)
 
+        def _on_fail(err: str):
+            self.start_obs_cam_btn.setEnabled(True)
+            QMessageBox.critical(self, "Erro na Câmera Virtual", f"Falha ao iniciar câmera virtual: {err}")
+            self.global_status_label.setText(f"Erro: {err}")
+
         if blocking:
-            res = _task()
-            _on_done(res)
+            try:
+                res = _task()
+                _on_done(res)
+            except Exception as exc:
+                _on_fail(str(exc))
             return
 
-        worker = GenericWorker(_task, parent=self)
+        worker = GenericWorker(_task)
         worker.finished_result.connect(_on_done)
+        worker.failed_error.connect(_on_fail)
         self._start_worker(worker)
 
     def _on_stop_obs_virtual_cam_clicked(self, blocking: bool = False) -> None:
+        self.stop_obs_cam_btn.setEnabled(False)
         self.global_status_label.setText("Parando Câmera Virtual do OBS...")
 
         def _task():
@@ -1211,6 +1314,7 @@ class AVSetupDialog(QDialog):
             return stop_obs_virtual_cam(client)
 
         def _on_done(res: tuple[bool, str]):
+            self.stop_obs_cam_btn.setEnabled(True)
             ok, msg = res
             if ok:
                 QMessageBox.information(self, "Câmera Virtual", msg)
@@ -1218,19 +1322,30 @@ class AVSetupDialog(QDialog):
                 QMessageBox.warning(self, "Aviso", msg)
             self.refresh_routing_and_cameras(blocking=blocking)
 
+        def _on_fail(err: str):
+            self.stop_obs_cam_btn.setEnabled(True)
+            QMessageBox.critical(self, "Erro na Câmera Virtual", f"Falha ao parar câmera virtual: {err}")
+            self.global_status_label.setText(f"Erro: {err}")
+
         if blocking:
-            res = _task()
-            _on_done(res)
+            try:
+                res = _task()
+                _on_done(res)
+            except Exception as exc:
+                _on_fail(str(exc))
             return
 
-        worker = GenericWorker(_task, parent=self)
+        worker = GenericWorker(_task)
         worker.finished_result.connect(_on_done)
+        worker.failed_error.connect(_on_fail)
         self._start_worker(worker)
 
     def _on_test_obs_connection_clicked(self, blocking: bool = False) -> None:
         host = self.obs_host_input.text().strip() or "127.0.0.1"
         port = int(self.obs_port_input.text().strip() or "4455")
         pwd = self.obs_password_input.text()
+
+        self.test_obs_btn.setEnabled(False)
 
         def _task():
             client = connect_obs(host=host, port=port, password=pwd, timeout=2.0)
@@ -1243,10 +1358,12 @@ class AVSetupDialog(QDialog):
             return True, f"Conexão estabelecida com sucesso! OBS Studio versão {ver_str}."
 
         def _on_done(res: tuple[bool, str]):
+            self.test_obs_btn.setEnabled(True)
             ok, msg = res
             QMessageBox.information(self, "Teste OBS", msg)
 
         def _on_fail(err: str):
+            self.test_obs_btn.setEnabled(True)
             QMessageBox.warning(self, "Falha na Conexão", f"Não foi possível conectar ao OBS: {err}")
 
         if blocking:
@@ -1257,7 +1374,7 @@ class AVSetupDialog(QDialog):
                 _on_fail(str(exc))
             return
 
-        worker = GenericWorker(_task, parent=self)
+        worker = GenericWorker(_task)
         worker.finished_result.connect(_on_done)
         worker.failed_error.connect(_on_fail)
         self._start_worker(worker)
@@ -1322,7 +1439,7 @@ class AVSetupDialog(QDialog):
                 _on_fail(str(exc))
             return
 
-        worker = GenericWorker(_task, parent=self)
+        worker = GenericWorker(_task)
         worker.finished_result.connect(_on_done)
         worker.failed_error.connect(_on_fail)
         self._start_worker(worker)
@@ -1369,14 +1486,16 @@ class AVSetupDialog(QDialog):
         for worker in list(self._active_workers):
             if worker.isRunning():
                 worker.requestInterruption()
-                try:
-                    worker.finished_result.disconnect()
-                except Exception:
-                    pass
-                try:
-                    worker.failed_error.disconnect()
-                except Exception:
-                    pass
+                import warnings
+                for sig_name in ("finished_result", "failed_error"):
+                    try:
+                        sig = getattr(worker, sig_name, None)
+                        if sig is not None:
+                            with warnings.catch_warnings():
+                                warnings.simplefilter("ignore", category=RuntimeWarning)
+                                sig.disconnect()
+                    except Exception:
+                        pass
                 worker.wait(400)
         super().closeEvent(event)
 

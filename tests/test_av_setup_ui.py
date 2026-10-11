@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 import scripts.av_setup_tool as av_tool
 from meeting_assistant.core.state import AppState
@@ -289,6 +289,10 @@ def test_rename_and_disable_device_actions(monkeypatch):
     monkeypatch.setattr("meeting_assistant.ui.av_setup_dialog.map_project_roles", lambda _: roles)
     monkeypatch.setattr("meeting_assistant.ui.av_setup_dialog.apply_device_modifications", _mock_apply)
     monkeypatch.setattr("meeting_assistant.ui.av_setup_dialog.QMessageBox.information", lambda *args: None)
+    monkeypatch.setattr(
+        "meeting_assistant.ui.av_setup_dialog.QMessageBox.question",
+        lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
+    )
 
     window = AVSetupWindow(auto_refresh=False)
     try:
@@ -450,3 +454,136 @@ def test_setup_assistant_dialog_contains_av_setup_buttons(tmp_path, monkeypatch)
     finally:
         dialog.close()
         owner.close()
+
+
+# ---------------------------------------------------------------------------
+# Tests for Fragilities F1, F2, F3, F7
+# ---------------------------------------------------------------------------
+
+
+def test_auto_route_button_click_and_parameter_mapping(monkeypatch):
+    """F1: Test _on_auto_route_clicked passes correct parameters without TypeError."""
+    called_kwargs = {}
+
+    def _mock_configure(**kwargs):
+        called_kwargs.update(kwargs)
+        return {
+            "Zoom.exe": (True, "OK"),
+            "WhatsApp.exe": (True, "OK"),
+        }
+
+    eps, roles = _make_sample_endpoints()
+    monkeypatch.setattr("meeting_assistant.ui.av_setup_dialog.enumerate_endpoints", lambda: eps)
+    monkeypatch.setattr("meeting_assistant.ui.av_setup_dialog.map_project_roles", lambda _: roles)
+    monkeypatch.setattr("meeting_assistant.ui.av_setup_dialog.configure_all_routes", _mock_configure)
+    monkeypatch.setattr("meeting_assistant.ui.av_setup_dialog.QMessageBox.information", lambda *args: None)
+
+    window = AVSetupWindow(auto_refresh=False)
+    try:
+        window.refresh_audio_devices(blocking=True)
+        # Trigger routing click
+        window._on_auto_route_clicked(blocking=True)
+        QApplication.processEvents()
+
+        # Verify correct parameter names were passed (not _id suffix)
+        assert "zoom_render" in called_kwargs
+        assert "zoom_capture" in called_kwargs
+        assert "whatsapp_render" in called_kwargs
+        assert "whatsapp_capture" in called_kwargs
+        assert "zoom_render_id" not in called_kwargs
+        assert "zoom_capture_id" not in called_kwargs
+
+        # Verify button remains enabled
+        assert window.auto_route_btn.isEnabled() is True
+    finally:
+        window.close()
+
+
+def test_audiosrv_restart_confirmation_dialog_reject_and_accept(monkeypatch):
+    """F7: Test safety confirmation dialog before restarting Audiosrv."""
+    applied = []
+
+    def _mock_apply(renames, disables, restart_audiosrv=False):
+        applied.append({"renames": renames, "disables": disables, "restart": restart_audiosrv})
+        return True, "OK"
+
+    eps, roles = _make_sample_endpoints()
+    monkeypatch.setattr("meeting_assistant.ui.av_setup_dialog.enumerate_endpoints", lambda: eps)
+    monkeypatch.setattr("meeting_assistant.ui.av_setup_dialog.map_project_roles", lambda _: roles)
+    monkeypatch.setattr("meeting_assistant.ui.av_setup_dialog.apply_device_modifications", _mock_apply)
+    monkeypatch.setattr("meeting_assistant.ui.av_setup_dialog.QMessageBox.information", lambda *args: None)
+
+    window = AVSetupWindow(auto_refresh=False)
+    try:
+        window.refresh_audio_devices(blocking=True)
+        window.restart_audiosrv_checkbox.setChecked(True)
+
+        # 1. User clicks No (rejects restart)
+        monkeypatch.setattr(
+            "meeting_assistant.ui.av_setup_dialog.QMessageBox.question",
+            lambda *args, **kwargs: QMessageBox.StandardButton.No,
+        )
+        window._on_disable_endpoints_clicked(blocking=True)
+        assert len(applied) == 0  # Aborted!
+
+        # 2. User clicks Yes (accepts restart)
+        monkeypatch.setattr(
+            "meeting_assistant.ui.av_setup_dialog.QMessageBox.question",
+            lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
+        )
+        window._on_disable_endpoints_clicked(blocking=True)
+        assert len(applied) == 1
+        assert applied[0]["restart"] is True
+    finally:
+        window.close()
+
+
+def test_worker_error_handling_and_button_reenable(monkeypatch):
+    """F2: Test worker.failed_error re-enables buttons and shows error dialog."""
+    critical_messages = []
+
+    def _mock_failing_apply():
+        raise RuntimeError("Simulated UAC failure or error")
+
+    monkeypatch.setattr(
+        "meeting_assistant.ui.av_setup_dialog.apply_elevated_os_optimizations", _mock_failing_apply
+    )
+    monkeypatch.setattr(
+        "meeting_assistant.ui.av_setup_dialog.QMessageBox.critical",
+        lambda parent, title, text: critical_messages.append(text),
+    )
+
+    window = AVSetupWindow(auto_refresh=False)
+    try:
+        window._on_apply_os_clicked(blocking=True)
+        QApplication.processEvents()
+
+        # Button must be re-enabled
+        assert window.apply_os_btn.isEnabled() is True
+        # Critical error dialog was presented
+        assert len(critical_messages) == 1
+        assert "Simulated UAC failure" in critical_messages[0]
+    finally:
+        window.close()
+
+
+def test_close_event_with_running_worker_does_not_crash(monkeypatch):
+    """F3: Test closing window while GenericWorker is active terminates safely without crash."""
+    import time
+
+    def _slow_task():
+        time.sleep(0.1)
+        return True
+
+    window = AVSetupWindow(auto_refresh=False)
+    try:
+        from meeting_assistant.ui.av_setup_dialog import GenericWorker
+
+        worker = GenericWorker(_slow_task)
+        window._start_worker(worker)
+        assert worker.isRunning()
+        # Closing window while worker is active should cleanly interrupt and not trigger qFatal
+        window.close()
+        QApplication.processEvents()
+    finally:
+        pass

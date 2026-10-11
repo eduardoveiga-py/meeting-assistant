@@ -960,3 +960,18 @@ cNormalPosition\ quebra as regras do Desktop Window Manager, causando falhas de 
 ## Sucesso: Atualizador Automático (08/10/2026)
 - **Registro:** O operador confirmou o primeiro teste bem-sucedido do atualizador interno do aplicativo (pulando para a v0.9.6).
 - **Resultado:** A separação entre instalação e runtime, combinada com a arquitetura correta de empacotamento, permitiu a atualização fluida sem perder as configurações do usuário. A instalação não quebrou por falsos-positivos da câmera (resolvido na v0.9.6).
+
+
+### 2026-10-11: Auditoria e Remediação do AV Setup e Otimização de Transmissão (F1–F9)
+**Sintoma:** Auditoria profunda do módulo de AV Setup e Otimizações de Transmissão identificou 9 pontos de fragilidade (F1–F9) que poderiam comprometer estabilidade em runtime e integridade de chamadas.
+**Causas e Soluções:**
+- **F1 (TypeError no Roteamento Automático):** Em `_on_auto_route_clicked`, argumentos com sufixo `_id` foram alinhados para os parâmetros aceitos por `configure_all_routes` (`zoom_render`, `zoom_capture`, etc.). Testado com mock em `test_auto_route_button_click_and_parameter_mapping`.
+- **F2 (Tratamento de Exceções em Workers Assíncronos):** Conexão do sinal `worker.failed_error` em todos os botões de ação assíncrona do diálogo para apresentar diálogo crítico e reabilitar os botões, prevenindo bloqueio permanente da interface.
+- **F3 (Crash em closeEvent do QDialog):** Remoção de `parent=self` ao instanciar `GenericWorker` para evitar destruição de threads em execução (`qFatal`), com cancelamento gracioso (`requestInterruption()`, desconexão de slots e `wait(400)`).
+- **F4 (Contrato de Isolamento de Áudio de Processo no OBS):** Preservação dos invariantes estritos validados: Track 6 como faixa de roteamento (`tracks["6"] = True`), faixas de saída/gravação desabilitadas (1-5 = False), `MONITOR_ONLY` no JW Library e `MONITOR_NONE` estrito no Zoom.
+- **F5 (Isolamento de HKCU do Administrador):** Em `windows_transmission_optimizer.py`, aplicação de configurações de usuário (Ducking e Esquemas de Som) no contexto do usuário corrente, sem contaminação do perfil de Administrador via UAC.
+- **F6 (Detecção Fidedigna de Exit Code e Limpeza de Scripts .ps1):** Uso de `-PassThru` para captura do exit code real do processo elevado, tratamento em bloco `try/catch` com `exit 1` em falhas, e exclusão garantida de scripts temporários em `finally`.
+- **F7 (Diálogo de Confirmação para Reinício de Audiosrv):** Implementação de aviso com confirmação explícita (`QMessageBox.question`) alertando o operador sobre a reinicialização de fluxos de áudio de chamadas e OBS Studio antes de reiniciar `Audiosrv`.
+- **F8 (Remoção de Log Síncrono a Cada 100ms em Disco):** Remoção de escrita síncrona de arquivo `%TEMP%\ducking_debug.log` no timer da GUI em `media_ducking.py`.
+- **F9 (Gerenciamento de Ciclo COM no CLI):** Inicialização e liberação explícita de COM (`pythoncom.CoInitialize()`, `CoUninitialize()`) na execução da CLI `--diagnose` em `av_setup_tool.py`.
+**Resultado:** Todos os 851 testes passando (100%), `test_validated_hall_baseline.py` íntegro, zero violações de Ruff.

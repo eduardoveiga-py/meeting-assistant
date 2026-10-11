@@ -621,58 +621,70 @@ def check_all_optimizations() -> list[OptimizationStatus]:
 
 
 def generate_os_optimization_script() -> str:
-    """Generate an elevated PowerShell script that applies all HKLM and system settings."""
+    """Generate an elevated PowerShell script that applies all HKLM and system settings.
+
+    Note: User-scoped settings (HKCU Communications Ducking and HKCU Sound Schemes)
+    are applied directly in the logged-in user context by apply_elevated_os_optimizations,
+    preventing user settings from polluting the Administrator profile.
+    """
     return (
         "# Meeting Assistant AV Setup - Elevated OS Optimizations Script\n"
-        "$ErrorActionPreference = 'Continue'\n"
+        "$ErrorActionPreference = 'Stop'\n"
+        "try {\n"
+        "    # 1. Communications Ducking (UserDuckingPreference) and Sound Schemes are applied in user HKCU\n"
         "\n"
-        "# 1. Communications Ducking (Do nothing)\n"
-        "$duckingPath = 'HKCU:\\Software\\Microsoft\\Multimedia\\Audio'\n"
-        "if (-not (Test-Path $duckingPath)) { New-Item -Path $duckingPath -Force | Out-Null }\n"
-        "Set-ItemProperty -Path $duckingPath -Name 'UserDuckingPreference' -Value 3 -Type DWord -Force\n"
-        "\n"
-        "# 2. Sound Scheme (.None)\n"
-        "$schemesPath = 'HKCU:\\AppEvents\\Schemes'\n"
-        "Set-ItemProperty -Path $schemesPath -Name '(Default)' -Value '.None' -Type String -Force\n"
-        "\n"
-        "# 3. Disable Windows Startup Sound\n"
-        "$bootPath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\"
+        "    # 2. Disable Windows Startup Sound\n"
+        "    $bootPath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\"
         "Authentication\\LogonUI\\BootAnimation'\n"
-        "if (-not (Test-Path $bootPath)) { New-Item -Path $bootPath -Force | Out-Null }\n"
-        "Set-ItemProperty -Path $bootPath -Name 'DisableStartupSound' -Value 1 -Type DWord -Force\n"
+        "    if (-not (Test-Path $bootPath)) { New-Item -Path $bootPath -Force | Out-Null }\n"
+        "    Set-ItemProperty -Path $bootPath -Name 'DisableStartupSound' -Value 1 -Type DWord -Force\n"
         "\n"
-        "# 4. Power Plan AC Timeouts (Monitor & Standby = 0)\n"
-        "powercfg /change monitor-timeout-ac 0\n"
-        "powercfg /change standby-timeout-ac 0\n"
+        "    # 3. Power Plan AC Timeouts (Monitor & Standby = 0)\n"
+        "    powercfg /change monitor-timeout-ac 0\n"
+        "    powercfg /change standby-timeout-ac 0\n"
         "\n"
-        "# 5. Disable Exclusive Mode and Signal Enhancements across MMDevices\n"
-        "foreach ($dir in @('Render', 'Capture')) {\n"
-        "    $base = \"HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\MMDevices\\Audio\\$dir\"\n"
-        "    if (Test-Path $base) {\n"
-        "        Get-ChildItem -Path $base | ForEach-Object {\n"
-        "            $prop = Join-Path $_.PSPath 'Properties'\n"
-        "            if (Test-Path $prop) {\n"
-        "                # Exclusive mode disabled (0)\n"
-        "                Set-ItemProperty -Path $prop -Name '{b3f8fa53-0004-438e-9003-51a46e139bfc},3' "
+        "    # 4. Disable Exclusive Mode and Signal Enhancements across MMDevices\n"
+        "    foreach ($dir in @('Render', 'Capture')) {\n"
+        "        $base = \"HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\MMDevices\\Audio\\$dir\"\n"
+        "        if (Test-Path $base) {\n"
+        "            Get-ChildItem -Path $base | ForEach-Object {\n"
+        "                $prop = Join-Path $_.PSPath 'Properties'\n"
+        "                if (Test-Path $prop) {\n"
+        "                    # Exclusive mode disabled (0)\n"
+        "                    Set-ItemProperty -Path $prop -Name '{b3f8fa53-0004-438e-9003-51a46e139bfc},3' "
         "-Value 0 -Type DWord -Force\n"
-        "                Set-ItemProperty -Path $prop -Name '{b3f8fa53-0004-438e-9003-51a46e139bfc},4' "
+        "                    Set-ItemProperty -Path $prop -Name '{b3f8fa53-0004-438e-9003-51a46e139bfc},4' "
         "-Value 0 -Type DWord -Force\n"
-        "                # Signal enhancements disabled (1)\n"
-        "                Set-ItemProperty -Path $prop -Name '{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5' "
+        "                    # Signal enhancements disabled (1)\n"
+        "                    Set-ItemProperty -Path $prop -Name '{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5' "
         "-Value 1 -Type DWord -Force\n"
+        "                }\n"
         "            }\n"
         "        }\n"
         "    }\n"
-        "}\n"
         "\n"
-        "Write-Output 'OS Optimizations Applied Successfully'\n"
+        "    Write-Output 'SUCCESS: OS Optimizations Applied Successfully'\n"
+        "    exit 0\n"
+        "} catch {\n"
+        "    Write-Error $_.Exception.Message\n"
+        "    exit 1\n"
+        "}\n"
     )
 
 
 def apply_elevated_os_optimizations() -> tuple[bool, str]:
-    """Apply OS transmission optimizations with UAC elevation if required."""
+    """Apply OS transmission optimizations with UAC elevation if required.
+
+    Applies HKCU user-level configurations (Communications Ducking and Sound Schemes)
+    directly in the current logged-in user context before executing elevated HKLM commands,
+    preventing user settings from polluting the Administrator profile.
+    """
     if sys.platform != "win32":
         return False, "Otimizações de sistema exclusivas para Windows 11."
+
+    # Always apply HKCU user-level settings directly in the logged-in user context
+    apply_ducking()
+    apply_sound_scheme()
 
     if is_user_admin():
         res = apply_all_optimizations()
@@ -692,8 +704,9 @@ def apply_elevated_os_optimizations() -> tuple[bool, str]:
             temp_script = f.name
 
         cmd = (
-            f"Start-Process powershell.exe -ArgumentList "
-            f"'-NoProfile -ExecutionPolicy Bypass -File \"{temp_script}\"' -Verb RunAs -Wait"
+            f"$p = Start-Process powershell.exe -ArgumentList "
+            f"'-NoProfile -ExecutionPolicy Bypass -File \"{temp_script}\"' -Verb RunAs -Wait -PassThru; "
+            f"if ($p) {{ exit $p.ExitCode }} else {{ exit 1 }}"
         )
         proc = subprocess.run(
             ["powershell.exe", "-NoProfile", "-Command", cmd],

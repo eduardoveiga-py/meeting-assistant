@@ -190,16 +190,34 @@ def main() -> int:
 
     # If --diagnose requested
     if args.diagnose:
-        diag = run_headless_diagnostics(
-            obs_host=args.host,
-            obs_port=args.port,
-            obs_password=args.password,
-        )
-        if args.json:
-            print(json.dumps(diag, indent=2, cls=EnhancedJSONEncoder))
-        else:
-            print_text_diagnostics(diag)
-        return 0
+        need_com = sys.platform == "win32"
+        if need_com:
+            try:
+                import pythoncom
+
+                pythoncom.CoInitialize()
+            except Exception:
+                need_com = False
+
+        try:
+            diag = run_headless_diagnostics(
+                obs_host=args.host,
+                obs_port=args.port,
+                obs_password=args.password,
+            )
+            if args.json:
+                print(json.dumps(diag, indent=2, cls=EnhancedJSONEncoder))
+            else:
+                print_text_diagnostics(diag)
+            return 0
+        finally:
+            if need_com:
+                try:
+                    import pythoncom
+
+                    pythoncom.CoUninitialize()
+                except Exception:
+                    pass
 
     # If explicit --gui or default without command flags
     return start_gui()
