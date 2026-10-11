@@ -25,15 +25,19 @@ O **Meeting Assistant** é um orquestrador open-source criado para simplificar e
 
 ## ✨ Principais Funcionalidades
 
+* **🎛️ Assistente de Áudio e Vídeo (AV Setup Integrado e CLI):**
+  Diagnóstico automático com 1 clique de toda a cadeia AV: dispositivos virtuais (VB-CABLE), câmeras, OBS e serviços do Windows. Roteamento de áudio direto por processo (WASAPI/Core Audio) para Zoom, WhatsApp e JW Library, provisionamento seguro de fontes no OBS Studio (`Meeting Assistant - Mesa`, mudo padrão e isolamento da faixa de gravação), e script autônomo de diagnóstico (`scripts/run_av_setup.ps1`).
+* **⚡ Otimizador de Transmissão para Windows 11:**
+  Ajustes finos no stack de rede e multimídia (Network Throttling Index, agendamento de pacotes, TCP Ack Frequency) e eliminação do ducking do sistema (`Zero Ducking`) para chamadas do Zoom e WhatsApp sem rebaixamento acústico indevido do Salão.
 * **🤖 Automação do JW Library e OBS:**
   O sensor de imagem identifica repouso e mídia, com calibração do Texto do Ano.
   O guardião atua somente com a automação ligada; respeita Zoom, mídia externa e transições.
-* **🎛️ Gestão Avançada de Áudio e Sincronia:**
+* **🎚️ Gestão Avançada de Áudio e Sincronia:**
   Ajuste em **tempo real** de Volume, Atraso de Sincronização (Sync Offset em milissegundos) e Filtros (Corte de Ruídos e Compressor) direto na aba de Volumes. Perfeito para alinhar o áudio de mesas de som físicas com o atraso de Câmeras IP.
 * **⚙️ Configuração e manutenção unificadas:**
-  Cenas, vídeo, áudio, instalação e diagnóstico organizados por assunto. O app
+  Cenas, vídeo, áudio, instalação, assistente AV e diagnóstico organizados por assunto. O app
   verifica a estrutura do OBS e completa somente o que falta, preservando
-  fontes pessoais e envio existente. O painel oferece acesso direto a Volumes.
+  fontes pessoais e envio existente. O painel oferece acesso direto a Volumes e Assistente AV.
 * **🎥 Câmera virtual Windows 11:**
   A ponte nativa recebe o Program do OBS e entrega vídeo ao WhatsApp. A câmera virtual
   do OBS atende o Zoom. O áudio usa dispositivos virtuais separados do vídeo.
@@ -102,45 +106,44 @@ O painel principal foi desenhado para uso em monitores de toque ou mouse, de for
 | **🎙 Mic Zoom** | Alterna entre mudo e aberto seu microfone no Zoom em segundo plano. |
 | **🎬 Mídia Externa** | Seleciona player ou navegador e projeta no Salão e no OBS, com retorno seguro ao JWL. |
 | **Volumes** | Acesso rápido aos ganhos, atraso de sincronização com a câmera (ms) e filtros de áudio. |
-| **⚙️ Ajustes** | Configurações completas: Reunião, OBS e Vídeo, Áudio, Instalação/Plugins e Diagnóstico. |
+| **🎛️ Assistente AV** | Verificação de prontidão para reuniões, roteamento de áudio por processo e provisionamento OBS. |
+| **⚙️ Ajustes** | Configurações completas: Reunião, OBS e Vídeo, Áudio, Instalação/Plugins, Assistente AV e Diagnóstico. |
 | **⏸️ Pausar Prévia** | Suspende a renderização do preview do OBS para economizar CPU e GPU da máquina. |
 
 F1 mostra os atalhos disponíveis. Atalhos globais são opcionais e não substituem os atalhos do Windows indiscriminadamente.
 
 ---
 
-## Correções em desenvolvimento
+## 🚀 Versões Recentes e Estado do Projeto
 
-O código de `main` inclui as correções da revisão de 03/10/2026, a captura JWL
-por HWND e a reorganização de Ajustes de 07/10/2026. Cada correção tem seu próprio estado de validação;
-o instalador v0.8.1 já publicado não contém este lote.
-[Confira as alterações e o roteiro de testes](docs/review-fixes-2026-10-03.md).
+* **Versão 1.1.0 (Versão Atual):**
+  * **Assistente Integrado de Áudio e Vídeo (AV Setup):** Diagnóstico completo e automatizado com 1 clique de toda a cadeia AV (dispositivos virtuais VB-CABLE, câmeras, OBS e serviços de áudio do Windows).
+  * **Roteamento de Áudio por Processo no Windows:** Vinculação nativa de aplicativos (Zoom, WhatsApp, JW Library, navegadores) a dispositivos específicos usando APIs de baixo nível (Windows Core Audio / WASAPI / PolicyConfig).
+  * **Provisionamento Seguro no OBS Studio:** Provisionamento idempotente de cenas e fontes de áudio alinhadas à matriz oficial de roteamento (`docs/audio-routing.md`), com adição da fonte `Meeting Assistant - Mesa`, mudo e desmonitoramento padrão de novas fontes, e exclusão de fontes de processo da faixa 6 de gravação.
+  * **Otimizador de Transmissão para Windows 11:** Otimizações no stack de rede e multimídia (Network Throttling Index, TCP Ack Frequency, agendamento de pacotes multimídia) e eliminação do ducking do Windows (`Zero Ducking`) preservando o perfil HKCU sem contaminação por elevação UAC.
+  * **Remediação de Auditoria e Estabilidade (F1–F9):** Eliminação de riscos de crash em fechamento de janelas, proteção contra vazamentos de threads COM, confirmação explícita para reinício de serviços (`Audiosrv`), e logs otimizados sem I/O síncrono no loop da interface.
+  * **Cobertura de 851 Testes Automatizados:** 100% de sucesso em testes unitários, e2e, adversariais e integridade do baseline protegido do Salão.
 
-A correção do **Mic Zoom** consulta o estado atual antes de alternar e informa
-falhas do controle. [Roteiro de teste e diagnóstico](docs/zoom-microphone-control.md).
+* **Versão 1.0.0:**
+  * Lançamento oficial com mesa de corte com proporções precisas e iconografia em alta definição (Texto do Ano, Palco, Mídia, Zoom → Salão com monitor duplo).
+  * Estabilização definitiva do preview do OBS via aumento do timeout de named pipe para 1500 ms e botão de Pausa de Prévia (⏸️).
+  * Captura nativa da segunda tela do JW Library por HWND direto, resolvendo ambiguidade de títulos idênticos no OBS.
+  * Arquitetura 100% 64-bit (Python 3.12 x64, DLLs e Câmera Virtual Media Foundation).
 
-Para continuar testando pelo Python, na pasta do projeto:
+Para executar o aplicativo pelo código Python:
 
 ```powershell
 git pull --ff-only
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1
 ```
 
-O script usa Python 3.12, atualiza a `.venv` e verifica os componentes nativos
-pré-compilados conforme o manifesto. Não exige MSBuild nem compilação local.
-Os componentes da câmera e da ponte OBS não foram alterados neste lote.
+Para executar o diagnóstico e provisionamento autônomo de AV via terminal:
 
-**Captura da segunda janela JWL:** o módulo independente usa diretamente seu HWND,
-resolvendo títulos iguais no OBS. Na primeira execução, feche OBS para o script
-instalar automaticamente a nova DLL pronta. Requer Windows 11 x64 e OBS 31.0.3+.
-Depois use **Ajustes → OBS e vídeo → Fontes → Preparar captura JWL**.
-[Instalação, diagnóstico e testes com dois monitores](docs/jwl-hwnd-capture.md).
-O instalador a partir da versão v1.0.0 já inclui esses componentes integrados de forma transparente.
-
-O operador confirmou o funcionamento da nova captura em **07/10/2026**.
-Esse aceite não significa que toda a matriz de reinícios e troca de monitores
-foi executada novamente. Se o Git bloquear a atualização por trabalho local,
-use o [procedimento com preservação das alterações](docs/test-python-update.md).
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_av_setup.ps1
+# Ou diretamente pelo utilitário CLI:
+.\.venv\Scripts\python.exe scripts/av_setup_tool.py --diagnose
+```
 
 ## Histórico e documentação
 

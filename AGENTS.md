@@ -46,8 +46,19 @@ Os caminhos abaixo são relativos a src/meeting_assistant/:
   main.py conecta componentes sem duplicar sua lógica.
 - Atualize widgets somente na thread da GUI, usando sinais/slots do Qt. Rede,
   captura, espera de processos e tarefas demoradas não podem bloquear a interface.
-- Workers precisam de cancelamento, encerramento com prazo e liberação de recursos.
-  Inicialize COM na thread que o utiliza quando necessário.
+- Ciclo de vida e estabilidade de workers Qt:
+  - Não passe `parent=self` ao instanciar `QThread` ou `GenericWorker` em diálogos (`QDialog`)
+    que possam ser fechados pelo operador. Isso causa falha crítica (`qFatal`) ao destruir
+    o diálogo com a thread em execução.
+  - No `closeEvent()` ou rejeição do diálogo, desconecte sinais e requisite encerramento
+    cooperativo com prazo seguro (`requestInterruption()`, desconexão e `wait()`).
+  - Conecte sempre o sinal de falha (`failed_error`) aos manipuladores de interface para
+    exibir alertas críticos e reabilitar controles, impedindo botões eternamente travados.
+- Inicialize e finalize COM (`pythoncom.CoInitialize()` e `CoUninitialize()`) na thread que
+  utiliza interfaces nativas (WASAPI, MMDevice, PolicyConfig, UIA).
+- Timers rápidos de GUI (<= 100 ms) e laços em tempo real: não realize operações síncronas
+  de disco (`write`, logs contínuos) nem varreduras completas de janelas que retenham o GIL
+  do Python e congelem a thread de leitura do pipe de vídeo do OBS.
 - Inicialização e reconexão devem ser idempotentes: evite serviços, leitores de
   vídeo, atalhos ou conexões de sinais duplicados.
 - Trate erros nas fronteiras das integrações. Não esconda falhas com except: pass
@@ -116,6 +127,24 @@ participantes; não herdam automaticamente a validação histórica.
   Solicite encerramento normal; não force todos os processos como padrão nem ignore
   diálogos de confirmação do anfitrião.
 
+### Assistente de AV, roteamento por processo e transmissão
+- Roteamento por processo: vincule aplicativos (Zoom, WhatsApp, JW Library, navegadores)
+  aos endpoints adequados via APIs nativas do Windows Core Audio / MMDevice / PolicyConfig.
+- Provisionamento OBS: siga rigorosamente `docs/audio-routing.md` e `obs_audio.py`.
+  Inclua a fonte física da mesa (`Meeting Assistant - Mesa`); novas fontes de processo
+  locais devem iniciar mutadas (`inputMuted: True`) e sem monitoramento (`MONITOR_NONE`).
+  Fontes de áudio de processos locais nunca devem ser gravadas na faixa mestra
+  (`tracks["6"] = False`), preservando a gravação limpa da reunião.
+- Otimização do sistema e UAC: diretivas de Registro do Windows específicas de usuário
+  (`HKCU`, como ducking zero e esquemas sonoros) devem ser aplicadas estritamente no
+  contexto do usuário corrente, sem contaminação do perfil de Administrador durante elevação.
+- Execução elevada: scripts PowerShell elevados (`Start-Process -Verb RunAs`) devem usar
+  `-PassThru` para captura fidedigna do exit code, tratamento `try/catch` com `exit 1` em
+  falha, e limpeza garantida de scripts temporários em blocos `finally`.
+- Proteção de serviços críticos: nunca reinicie o serviço de áudio do sistema (`Audiosrv`)
+  sem diálogo de confirmação explícito ao operador, pois chamadas ativas (Zoom/WhatsApp)
+  e o OBS sofrem desconexão imediata de áudio.
+
 ## 5. Núcleo validado e proteção contra regressões
 - Contrato e roteiro físico: [validated-hall-contract.md](docs/validated-hall-contract.md).
 - Manifesto: [validated-hall-baseline.json](docs/validated-hall-baseline.json).
@@ -138,6 +167,14 @@ confirmação de uma versão antiga a código posteriormente alterado.
 - Rode testes relevantes e, para mudanças de comportamento ou integração, a suíte
   de regressão. Teste eventos/conexões da UI quando afetados; mocks de métodos
   isolados não comprovam que o botão funciona.
+- Em desenvolvimento iterativo rápido, execute testes do módulo afetado (ex.:
+  `pytest tests/test_av_*.py`). Execute a suíte completa de regressão antes da entrega final.
+- Auditoria e trabalho multi-agente / teamwork:
+  - Submeta alterações a testes adversariais e de stress para comprovar resiliência.
+  - Cada vulnerabilidade ou fragilidade identificada (F1-Fn) deve ser catalogada em
+    `docs/incident-history.md` com sintoma, causa raiz demonstrada, correção aplicada
+    e regressão correspondente.
+  - Nunca enfraqueça ou delete asserções de testes existentes para fazê-los passar.
 - Use Ruff primeiro sem correções automáticas. Limite formatação e correções aos
   arquivos necessários, respeitando a proteção do núcleo.
 - Mudanças de distribuição exigem verificar também .spec, scripts PowerShell,
@@ -158,17 +195,27 @@ Comandos existentes, na raiz e com dependências de desenvolvimento instaladas:
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m pytest tests/test_validated_hall_baseline.py
+.\.venv\Scripts\python.exe -m pytest tests/test_av_setup_ui.py tests/test_av_adversarial_stress.py
 .\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe scripts/av_setup_tool.py --diagnose
 ```
 
-Para executar o código Python:
+Para executar o código Python ou ferramentas autônomas:
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_av_setup.ps1
 ```
 Essa opção vale para o processo iniciado; não altere a política global do Windows.
 Verifique scripts antes de recomendá-los; não cite utilitários inexistentes.
 
 ## 7. Distribuição, diagnóstico e entrega
+- Protocolo padronizado para criação de nova versão (Release):
+  1. Incrementar versão em `pyproject.toml` e `src/meeting_assistant/__init__.py`.
+  2. Criar notas de lançamento em `docs/releases/v<versão>.md` (obrigatório para Inno Setup).
+  3. Atualizar `CHANGELOG.md` e `docs/decision-log.md` com evidências e testes.
+  4. Atualizar `README.md` com funcionalidades, roteiros e contagem de testes.
+  5. Validar integridade do baseline de validação física (`test_validated_hall_baseline.py`).
+  6. Confirmar 100% de aprovação na suíte de testes (`pytest`) e zero violações no Ruff.
 - Não exija compilação local para testar mudanças Python. Use o mecanismo existente
   para obter componentes nativos, verificando origem, versão e integridade. Uma DLL
   alterada exige binário correspondente; atualizar Python sozinho não a substitui.

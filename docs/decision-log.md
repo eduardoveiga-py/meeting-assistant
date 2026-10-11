@@ -369,3 +369,20 @@ alinhamento do ícone WhatsApp à direita no botão de câmera (RightToLeft).
 
 **Evidência:** O timeout de 400 ms causava falso-positivo sob carga do OBS, desconectando o pipe e alternando a tela de prévia para erro em loop, degradando a taxa observada para 4.6 FPS. Com o timeout em 1500 ms, as operações completam sem desconexões espúrias e o preview opera continuamente.
 Todos os 655 testes automatizados cobrindo áudio, vídeo, janelas, baseline do salão e interface passam com 100% de sucesso.
+
+## 2026-10-11 — Versão 1.1.0: Assistente de AV, Roteamento por Processo, Otimizações de Transmissão e Remediação F1-F9
+
+**Decisão:** Lançamento da versão 1.1.0 incorporando o novo módulo Assistente de Áudio e Vídeo (AV Setup), ferramenta CLI de diagnóstico/provisionamento autônomo, roteamento de áudio granular por processo no Windows (WASAPI / MMDevice / PolicyConfig), provisionamento automatizado de fontes e cenas no OBS Studio e otimização do stack de transmissão/QoS do Windows 11.
+Remediação completa das fragilidades apontadas em auditoria técnica (F1–F9):
+1. Alinhamento dos parâmetros de roteamento automático (`configure_all_routes`);
+2. Conexão obrigatória de tratamento de erros assíncronos (`worker.failed_error`) para prevenir travamentos da interface;
+3. Desvinculamento do `parent=self` em threads de diálogo e adição de cancelamento cooperativo com timeout de encerramento;
+4. Provisionamento OBS estritamente conforme `docs/audio-routing.md` e `obs_audio.py`, incluindo fonte de mesa (`Meeting Assistant - Mesa`), fontes de processo criadas mutadas e desmonitoreadas, e excluídas da faixa 6 de gravação;
+5. Isolamento de HKCU garantindo que ajustes de ducking e som de usuário não sejam aplicados ao perfil do Administrador durante elevação UAC;
+6. Captura fidedigna de exit code em scripts PowerShell com `-PassThru` e exclusão garantida de temporários em `finally`;
+7. Diálogo com confirmação explícita do operador antes de reiniciar o serviço de áudio `Audiosrv`;
+8. Remoção de escritas de arquivo síncronas a cada 100 ms dentro do loop da GUI;
+9. Inicialização e liberação explícita de COM (`CoInitialize`/`CoUninitialize`) em todas as threads e pontos de entrada CLI.
+
+**Evidência:** Todos os 851 testes automatizados (um acréscimo de 196 testes cobrindo áudio, e2e, stress adversarial e integridade de roteamento) passam com 100% de sucesso. O baseline protegido do Salão (`tests/test_validated_hall_baseline.py`) permanece rigorosamente íntegro. Zero alertas ou violações de Ruff.
+

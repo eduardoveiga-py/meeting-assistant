@@ -26,6 +26,7 @@ htmlcov/
 *.log
 logs/
 settings.local.json
+.agents/
 
 # OS
 Thumbs.db

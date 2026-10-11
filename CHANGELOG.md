@@ -1,5 +1,14 @@
 # Histórico de alterações
 
+## [1.1.0] — Assistente de AV e Otimização de Transmissão — 11/10/2026
+
+- **Assistente de Áudio e Vídeo Integrado (AV Setup):** Nova suíte de verificação automatizada, diagnóstico de latência e provisionamento com 1 clique acessível em `Ajustes → Assistente AV` e via scripts autônomos (`run_av_setup.ps1` e `av_setup_tool.py`).
+- **Roteamento de Áudio por Processo no Windows:** Vinculação nativa de aplicativos (Zoom, WhatsApp, JW Library, navegadores) a dispositivos específicos usando APIs do Windows Core Audio / MMDevice / PolicyConfig, evitando desvios para saídas padrão indesejadas.
+- **Provisionamento e Isolamento no OBS Studio:** Provisionamento idempotente de cenas e fontes de áudio alinhadas à matriz oficial de roteamento; inclusão da fonte `Meeting Assistant - Mesa`; garantia de fontes mutadas e sem monitoramento na criação; exclusão de fontes de processo da faixa 6 de gravação mestre para manter a pureza do registro da reunião.
+- **Otimizações de Transmissão para Windows 11:** Otimização de TCP/QoS, Network Throttling Index, prioridade de pacotes de áudio/vídeo e desativação de ducking do sistema (`Zero Ducking`) mantendo o isolamento de HKCU sem contaminação por perfil elevado de Administrador.
+- **Remediação de Auditoria e Estabilidade (F1–F9):** Desacoplamento de threads em fechamento de janelas com encerramento gracioso, cancelamento cooperativo, conexão resiliente de erros a alertas da interface, confirmação explícita antes de reiniciar serviços do sistema (`Audiosrv`), e ciclo COM isolado por thread.
+- **Cobertura de Testes de Regressão:** Bateria expandida para 851 testes automatizados (100% de sucesso), incluindo testes de stress adversarial, fluxos e2e, roteamento e baseline do Salão.
+
 ## [1.0.0] — Versão Oficial de Lançamento — 09/10/2026
 
 - **Lançamento Oficial 1.0:** Consolidação de todas as melhorias e correções dos ciclos de homologação física e testes automatizados.
