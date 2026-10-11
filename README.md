@@ -3,6 +3,8 @@
 ![Windows 11](https://img.shields.io/badge/Windows-11-blue?style=flat-square&logo=windows)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-blue?style=flat-square&logo=python)
 ![PySide6](https://img.shields.io/badge/PySide6-GUI-green?style=flat-square&logo=qt)
+![Versão](https://img.shields.io/badge/vers%C3%A3o-1.1.0-blue?style=flat-square)
+![Testes](https://img.shields.io/badge/testes-851%20passando-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
 O **Meeting Assistant** é um orquestrador open-source criado para simplificar e automatizar a operação de áudio e vídeo em Salões do Reino. Ele conecta e coordena **OBS Studio, JW Library, Zoom e WhatsApp**, permitindo que o operador foque na reunião, sem se preocupar com transições manuais complexas, roteamento de áudio ou gerenciamento de múltiplas janelas.
@@ -10,7 +12,7 @@ O **Meeting Assistant** é um orquestrador open-source criado para simplificar e
 ---
 
 
-## 📸 Telas do Aplicativo (Versão Oficial 1.0)
+## 📸 Telas do Aplicativo (Versão 1.1)
 
 <p align="center">
   <img src="docs/screenshots/painel-principal.png" width="48%" alt="Painel Principal com Mesa de Corte e Preview">

@@ -35,6 +35,11 @@ Não invente caminhos, comandos, configurações ou resultados. Não trate hist�
 de conversa indisponível como recuperado. Havendo divergência entre documentação
 e código, registre-a antes de declarar uma funcionalidade concluída.
 
+- Execução no terminal e comandos em background:
+  - Em testes longos ou comandos demorados, não execute laços de polling ativo (`manage_task(Action='status')`). O ambiente de execução acorda o agente reativamente quando tarefas em segundo plano concluem. Encerre o turno para aguardar o término.
+  - Ao executar scripts PowerShell no Windows, proteja variáveis contra expansão precoce pela shell invocadora: utilize aspas simples (`'...'`) para blocos de script `-Command` ou escape o símbolo (`` `$ ``) para que expressões como `$tokens` ou `$errors` não se expandam para strings vazias.
+  - Configure `WaitMsBeforeAsync` conscientemente: utilize valores maiores (5000 a 10000 ms) para comandos curtos, evitando transição desnecessária para background.
+
 ## 3. Responsabilidades e integração
 Os caminhos abaixo são relativos a src/meeting_assistant/:
 - `ui/`: Widgets, apresentação, sinais e interação do operador
@@ -50,19 +55,27 @@ Os caminhos abaixo são relativos a src/meeting_assistant/:
   - Não passe `parent=self` ao instanciar `QThread` ou `GenericWorker` em diálogos (`QDialog`)
     que possam ser fechados pelo operador. Isso causa falha crítica (`qFatal`) ao destruir
     o diálogo com a thread em execução.
-  - No `closeEvent()` ou rejeição do diálogo, desconecte sinais e requisite encerramento
-    cooperativo com prazo seguro (`requestInterruption()`, desconexão e `wait()`).
+  - No `closeEvent()` ou rejeição do diálogo, desconecte explicitamente sinais (`disconnect()`)
+    e requisite encerramento cooperativo com prazo seguro (`requestInterruption()` e `wait()`),
+    prevenindo erros `RuntimeError: wrapped C/C++ object has been deleted`.
   - Conecte sempre o sinal de falha (`failed_error`) aos manipuladores de interface para
     exibir alertas críticos e reabilitar controles, impedindo botões eternamente travados.
-- Inicialize e finalize COM (`pythoncom.CoInitialize()` e `CoUninitialize()`) na thread que
-  utiliza interfaces nativas (WASAPI, MMDevice, PolicyConfig, UIA).
+  - Workers e threads em background nunca devem acessar diretamente propriedades de widgets
+    ou invocar métodos de UI fora da thread principal; use exclusivamente sinais Qt.
+- Inicialize e finalize COM (`pythoncom.CoInitialize()` e `CoUninitialize()`) dentro de blocos
+  `try/finally` em toda thread que utiliza interfaces nativas (WASAPI, MMDevice, PolicyConfig, UIA).
 - Timers rápidos de GUI (<= 100 ms) e laços em tempo real: não realize operações síncronas
   de disco (`write`, logs contínuos) nem varreduras completas de janelas que retenham o GIL
-  do Python e congelem a thread de leitura do pipe de vídeo do OBS.
+  do Python e congelem a thread de leitura do pipe de vídeo do OBS (`WindowsPipe.transfer`).
 - Inicialização e reconexão devem ser idempotentes: evite serviços, leitores de
   vídeo, atalhos ou conexões de sinais duplicados.
 - Trate erros nas fronteiras das integrações. Não esconda falhas com except: pass
   nem transforme uma solicitação enviada em mensagem de sucesso confirmado.
+- Diretrizes para agentes em trabalho colaborativo (`/teamwork`, `/boost`):
+  - Subagentes não devem enviar mensagens intermediárias de progresso ao chamador;
+    devem executar o trabalho até o fim e enviar exatamente UM relatório estruturado via `send_message`.
+  - Agentes revisores/auditores devem atuar de modo cético e adversário, testando ativamente
+    o código e os pontos não-verificados sem jamais atuar como "carimbo de aprovação" (rubber stamp).
 
 ## 4. Contratos funcionais
 Estes são requisitos de manutenção, inclusive quando o código atual os descumpre.
@@ -130,11 +143,14 @@ participantes; não herdam automaticamente a validação histórica.
 ### Assistente de AV, roteamento por processo e transmissão
 - Roteamento por processo: vincule aplicativos (Zoom, WhatsApp, JW Library, navegadores)
   aos endpoints adequados via APIs nativas do Windows Core Audio / MMDevice / PolicyConfig.
+  No Windows Core Audio, sessões de áudio são criadas dinamicamente sob demanda (somente
+  quando o aplicativo inicia a reprodução/captura). A ausência temporária de uma sessão ativa
+  para um app ocioso é normal e não deve travar rotinas de provisionamento.
 - Provisionamento OBS: siga rigorosamente `docs/audio-routing.md` e `obs_audio.py`.
   Inclua a fonte física da mesa (`Meeting Assistant - Mesa`); novas fontes de processo
   locais devem iniciar mutadas (`inputMuted: True`) e sem monitoramento (`MONITOR_NONE`).
   Fontes de áudio de processos locais nunca devem ser gravadas na faixa mestra
-  (`tracks["6"] = False`), preservando a gravação limpa da reunião.
+  (`tracks["6"] = False`), preservando a gravação limpa da reunião e prevenindo eco em chamadas.
 - Otimização do sistema e UAC: diretivas de Registro do Windows específicas de usuário
   (`HKCU`, como ducking zero e esquemas sonoros) devem ser aplicadas estritamente no
   contexto do usuário corrente, sem contaminação do perfil de Administrador durante elevação.
@@ -198,6 +214,7 @@ Comandos existentes, na raiz e com dependências de desenvolvimento instaladas:
 .\.venv\Scripts\python.exe -m pytest tests/test_av_setup_ui.py tests/test_av_adversarial_stress.py
 .\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe scripts/av_setup_tool.py --diagnose
+powershell.exe -NoProfile -Command 'Get-ChildItem scripts/*.ps1 | ForEach-Object { $tokens = $null; $errors = $null; [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count) { throw "$($_.Name): $($errors | Out-String)" } }'
 ```
 
 Para executar o código Python ou ferramentas autônomas:
@@ -211,11 +228,15 @@ Verifique scripts antes de recomendá-los; não cite utilitários inexistentes.
 ## 7. Distribuição, diagnóstico e entrega
 - Protocolo padronizado para criação de nova versão (Release):
   1. Incrementar versão em `pyproject.toml` e `src/meeting_assistant/__init__.py`.
-  2. Criar notas de lançamento em `docs/releases/v<versão>.md` (obrigatório para Inno Setup).
-  3. Atualizar `CHANGELOG.md` e `docs/decision-log.md` com evidências e testes.
-  4. Atualizar `README.md` com funcionalidades, roteiros e contagem de testes.
-  5. Validar integridade do baseline de validação física (`test_validated_hall_baseline.py`).
-  6. Confirmar 100% de aprovação na suíte de testes (`pytest`) e zero violações no Ruff.
+  2. Criar notas de lançamento em `docs/releases/v<versão>.md` (obrigatório para compilação Inno Setup via `packaging/MeetingAssistant.iss`).
+  3. Atualizar `CHANGELOG.md` e `docs/decision-log.md` com histórico, decisões e testes.
+  4. Atualizar `README.md` com funcionalidades, comandos CLI/PowerShell, badges e contagem de testes.
+  5. Garantir que novos scripts criados em `scripts/` estejam incluídos na validação do `.github/workflows/ci.yml`.
+  6. Validar integridade do baseline de validação física (`test_validated_hall_baseline.py`).
+  7. Confirmar 100% de aprovação na suíte de testes (`pytest`) e zero violações no Ruff (`ruff check .`).
+  8. Criar commit de release e tag Git anotada (`git tag -a v<versão> -m "Release v<versão> - <descrição>"`).
+  9. Publicar commit e tag no GitHub (`git push origin <branch>` e `git push origin v<versão>`).
+  10. Confirmar integridade da árvore do Git (`git status`), garantindo que diretórios efêmeros (`.agents/`, `.gemini/`, logs) não sejam comitados.
 - Não exija compilação local para testar mudanças Python. Use o mecanismo existente
   para obter componentes nativos, verificando origem, versão e integridade. Uma DLL
   alterada exige binário correspondente; atualizar Python sozinho não a substitui.
