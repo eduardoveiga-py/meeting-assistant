@@ -162,7 +162,10 @@ class AudioSetupDialog(QDialog):
                     "para atrasar o áudio junto com o vídeo.",
                 )
                 font = sync_hint.font()
-                font.setPointSize(font.pointSize() - 1)
+                if font.pointSize() > 1:
+                    font.setPointSize(font.pointSize() - 1)
+                elif font.pixelSize() > 1:
+                    font.setPixelSize(font.pixelSize() - 1)
                 sync_hint.setFont(font)
                 sync_row = QHBoxLayout()
                 sync = QSlider(Qt.Orientation.Horizontal, group)

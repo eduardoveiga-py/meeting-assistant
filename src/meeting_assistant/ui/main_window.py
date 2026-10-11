@@ -135,6 +135,7 @@ class MainWindow(QMainWindow):
         self.yeartext_store = YeartextStore(settings_service.path.parent / "yeartext")
         self._latest_media_active = False
         self._setup_assistant = None
+        self._av_setup_window = None
         self.obs_connected = False
         self.obs_scenes: list[str] = []
         self.current_obs_scene: str | None = None
@@ -1432,6 +1433,20 @@ class MainWindow(QMainWindow):
 
     def _open_audio_setup(self, parent=None) -> None:
         self._open_settings_workspace("audio")
+
+    def _open_av_setup(self, parent=None) -> None:
+        if self._av_setup_window is not None:
+            self._av_setup_window.show()
+            self._av_setup_window.raise_()
+            self._av_setup_window.activateWindow()
+            return
+        from meeting_assistant.ui.av_setup_dialog import AVSetupWindow
+
+        self._av_setup_window = AVSetupWindow(parent=self, settings=self.settings)
+        self._av_setup_window.destroyed.connect(lambda: setattr(self, "_av_setup_window", None))
+        self._av_setup_window.show()
+        self._av_setup_window.raise_()
+        self._av_setup_window.activateWindow()
 
     def _show_settings(self) -> None:
         self._open_settings_workspace("meeting")

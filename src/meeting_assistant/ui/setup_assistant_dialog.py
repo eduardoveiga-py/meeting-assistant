@@ -188,6 +188,9 @@ class SetupAssistantDialog(QDialog):
         self.checks.setMinimumHeight(120)
         layout.addWidget(self.checks)
         self._button(layout, "Verificar ambiente", self._inspect)
+        self.av_setup_install_btn = self._button(
+            layout, "🔧 Preparação AV e Otimizações do Windows 11…", self._trigger_av_setup
+        )
         for label in (
             "Áudio e câmera IP testados",
             "Zoom e retorno JWL testados",
@@ -235,6 +238,9 @@ class SetupAssistantDialog(QDialog):
         diagnostic_body = diagnostics.widget().layout()
         tools = QGroupBox("Ferramentas")
         tools_body = QVBoxLayout(tools)
+        self.av_setup_diag_btn = self._button(
+            tools_body, "🔧 Preparação AV e Otimizações do Windows 11…", self._trigger_av_setup
+        )
         self._button(tools_body, "Observar mídia no JWL (20 s)", lambda: self._defer(owner._start_jwl_probe))
         self._button(
             tools_body, "Calibrar Texto do Ano", lambda: self._defer(owner._calibrate_idle_reference)
@@ -357,6 +363,14 @@ class SetupAssistantDialog(QDialog):
         button.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         layout.addWidget(button)
         self.actions.append(button)
+        return button
+
+    def _trigger_av_setup(self):
+        if hasattr(self.owner, "_open_av_setup"):
+            try:
+                self._defer(self.owner._open_av_setup)
+            except Exception:
+                self.owner._open_av_setup()
 
     def _save(self):
         pending = replace(self.owner.settings)
