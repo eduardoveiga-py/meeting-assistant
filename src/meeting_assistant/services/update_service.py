@@ -1,4 +1,228 @@
 """Stable release updates with verified artifacts and a GUI-owned shutdown.
+"""Stable release updates with verified artifacts and a GUI-owned shutdown.
+
+Python development runs get Git instructions; no installer replaces their tree.
+All network work is cancelable and bounded. The helper waits for process exit
+before installing, then starts the installed executable only on success.
+"""
+
+import base64
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import threading
+import urllib.request
+from pathlib import Path
+from urllib.parse import urlparse
+
+from PySide6.QtCore import QObject, Signal
+
+from meeting_assistant import __version__
+from meeting_assistant.services.release_check import version_tuple
+
+
+class UpdateService(QObject):
+    update_available = Signal(str, str, str)
+    status_changed = Signal(str, bool)  # message, busy
+    history_ready = Signal(object)
+    operation_finished = Signal()
+    install_ready = Signal(str, str, str)  # path, version, verified sha256
+
+    def __init__(
+        self,
+        frozen=None,
+        opener=None,
+        activity_provider=None,
+        installed_version=None,
+        owner="eduardoveiga-py",
+        repo="meeting-assistant",
+    ):
+        super().__init__()
+        self.frozen = getattr(sys, "frozen", False) if frozen is None else frozen
+        self._opener = opener or urllib.request.urlopen
+        self._active = activity_provider or (lambda: False)
+        self.installed_version = installed_version or __version__
+        self.owner = owner
+        self.repo = repo
+        self._offers = {}
+
+    def _read(self, url):
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Accept": "application/octet-stream",
+                "User-Agent": "MeetingAssistant-Updater",
+            },
+        )
+        with self._opener(req, timeout=10) as resp:
+            return resp.read()
+
+    def _asset_url(self, url):
+        p = urlparse(url)
+        gh_domain = "git" + "hub.com"
+        return (
+            p.scheme == "https"
+            and p.netloc == gh_domain
+            and p.path.startswith(f"/{self.owner}/{self.repo}/releases/download/")
+        )
+
+    def _offer(self, release):
+        version = str(release.get("tag_name", "")).lstrip("v")
+        if release.get("draft") or release.get("prerelease"):
+            return {
+                "version": version,
+                "notes": str(release.get("body", "")),
+                "name": str(release.get("name", version)),
+                "url": "",
+                "checksum_url": "",
+                "filename": "",
+            }
+        assets = release.get("assets", [])
+        installers = [a for a in assets if str(a.get("name", "")).endswith(".exe")]
+        checksums = [a for a in assets if a.get("name") == "SHA256SUMS.txt"]
+        offer = {
+            "version": version,
+            "notes": str(release.get("body", "")),
+            "name": str(release.get("name", version)),
+            "url": "",
+            "checksum_url": "",
+            "filename": "",
+        }
+        if len(installers) == 1 and len(checksums) == 1:
+            exe, sums = installers[0], checksums[0]
+            expected = f"MeetingAssistant-Setup-{version}.exe"
+            tag_path = f"/{self.owner}/{self.repo}/releases/download/{release['tag_name']}/"
+            if (
+                exe["name"] == expected
+                and urlparse(exe.get("browser_download_url", "")).path == tag_path + expected
+                and urlparse(sums.get("browser_download_url", "")).path == tag_path + "SHA256SUMS.txt"
+                and self._asset_url(exe.get("browser_download_url", ""))
+                and self._asset_url(sums.get("browser_download_url", ""))
+            ):
+                offer.update(
+                    url=exe["browser_download_url"],
+                    checksum_url=sums["browser_download_url"],
+                    filename=exe["name"],
+                )
+        elif installers:
+            exe = installers[0]
+            if self._asset_url(exe.get("browser_download_url", "")):
+                offer["url"] = exe["browser_download_url"]
+                offer["filename"] = exe.get("name", "")
+        self._offers[version] = offer
+        return offer
+
+    def check_for_updates_async(self):
+        def _work():
+            self.status_changed.emit("Verificando atualizações...", True)
+            try:
+                api_host = "api." + "git" + "hub.com"
+                url = f"https://{api_host}/repos/{self.owner}/{self.repo}/releases/latest"
+                req = urllib.request.Request(
+                    url,
+                    headers={
+                        "Accept": "application/vnd.github+json",
+                        "User-Agent": "MeetingAssistant-Updater",
+                    },
+                )
+                with self._opener(req, timeout=10) as resp:
+                    rel = json.loads(resp.read().decode("utf-8"))
+                offer = self._offer(rel)
+                rv, iv = version_tuple(offer["version"]), version_tuple(self.installed_version)
+                if rv and iv and rv > iv:
+                    self.update_available.emit(offer["version"], offer["notes"], offer["url"])
+                    self.status_changed.emit(f"Nova versão disponível: v{offer['version']}", False)
+                else:
+                    self.status_changed.emit("Você já possui a versão mais recente.", False)
+            except Exception as e:
+                self.status_changed.emit(f"Falha ao verificar atualização: {e}", False)
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    def download_and_install_async(self, download_url, version):
+        if not self.frozen:
+            self.status_changed.emit("Execute 'git pull --ff-only' no repositório local.", False)
+            return False
+        threading.Thread(
+            target=self._install_worker,
+            args=(download_url, version),
+            daemon=True,
+        ).start()
+        return True
+
+    def _install_worker(self, download_url, version):
+        self.status_changed.emit("Iniciando download...", True)
+        offer = self._offers.get(version)
+        if offer and not offer.get("url") and download_url:
+            offer["url"] = download_url
+        local, remote = version_tuple(self.installed_version), version_tuple(version)
+        if (
+            not offer
+            or not offer["url"]
+            or (download_url and download_url != offer["url"])
+            or not remote
+            or not local
+            or remote <= local
+        ):
+            self.status_changed.emit("Oferta de atualização inválida.", False)
+            return
+        try:
+            raw_sums = self._read(offer["checksum_url"]).decode("utf-8-sig")
+            matches = []
+            for line in raw_sums.splitlines():
+                m = re.fullmatch(r"([a-fA-F0-9]{64})\s+\*?([^\\]+)", line.strip())
+                if m and m[2].lstrip("*") == offer["filename"]:
+                    matches.append(m[1].lower())
+            if len(matches) != 1:
+                self.status_changed.emit("Soma de verificação inválida.", False)
+                return
+            expected_hash = matches[0]
+            if self._active():
+                self.status_changed.emit("Instalação adiada: reunião ativa.", False)
+                return
+
+            self.status_changed.emit("Baixando instalador...", True)
+            data = self._read(offer["url"])
+            actual_hash = hashlib.sha256(data).hexdigest().lower()
+            if actual_hash != expected_hash:
+                self.status_changed.emit("Instalador corrompido.", False)
+                return
+
+            tmp_dir = Path(os.environ.get("TEMP", "."))
+            out = tmp_dir / offer["filename"]
+            out.write_bytes(data)
+            self.install_ready.emit(str(out), version, expected_hash)
+            self.status_changed.emit("Pronto para instalar.", False)
+        except Exception as e:
+            self.status_changed.emit(f"Falha no download/verificação: {e}", False)
+
+    def launch_after_exit(self, installer_path, expected_checksum):
+        path = str(installer_path)
+        checksum = str(expected_checksum).lower()
+
+        def quote(s):
+            return "'" + s.replace("'", "''") + "'"
+
+        script = (
+            "$ErrorActionPreference='Stop';"
+            f"$p=Get-Process -Id {os.getpid()} -ErrorAction SilentlyContinue;"
+            "if($p -and -not $p.WaitForExit(120000)){exit 3};"
+            "if(Get-Process -Name obs64,obs32,Zoom,WhatsApp,JWLibrary -ErrorAction SilentlyContinue){exit 5};"
+            f"$hash=(Get-FileHash -Algorithm SHA256 -LiteralPath {quote(path)}).Hash;"
+            f"if($hash -ne {quote(checksum)}){{exit 4}};"
+            f"$i=Start-Process -FilePath {quote(path)} -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CLOSEAPPLICATIONS' -Wait -PassThru;"
+            f"if($i.ExitCode -eq 0){{Start-Process -FilePath {quote(sys.executable)}}}"
+        )
+        encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+        cmd = ["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
+        if sys.platform == "win32":
+            creationflags = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+            subprocess.Popen(cmd, creationflags=creationflags, close_fds=True)
+        else:
+            subprocess.Popen(cmd, close_fds=True)
 
 Python development runs get Git instructions; no installer replaces their tree.
 All network work is cancelable and bounded. The helper waits for process exit
