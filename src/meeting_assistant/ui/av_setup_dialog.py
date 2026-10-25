@@ -589,20 +589,30 @@ class AVSetupDialog(QDialog):
         conn_layout = QHBoxLayout(conn_group)
 
         conn_layout.addWidget(QLabel("Host:"))
-        self.obs_host_input = QLineEdit("127.0.0.1")
+        initial_host = getattr(self.settings, "obs_host", "127.0.0.1") or "127.0.0.1"
+        self.obs_host_input = QLineEdit(initial_host)
         self.obs_host_input.setFixedWidth(120)
         conn_layout.addWidget(self.obs_host_input)
 
         conn_layout.addWidget(QLabel("Porta:"))
-        self.obs_port_input = QLineEdit("4455")
+        initial_port = str(getattr(self.settings, "obs_port", 4455) or 4455)
+        self.obs_port_input = QLineEdit(initial_port)
         self.obs_port_input.setFixedWidth(70)
         conn_layout.addWidget(self.obs_port_input)
 
         conn_layout.addWidget(QLabel("Senha:"))
         self.obs_password_input = QLineEdit()
-        self.obs_password_input.setEchoMode(QLineEdit.Password)
-        if self.settings and hasattr(self.settings, "obs_password"):
-            self.obs_password_input.setText(self.settings.obs_password or "")
+        initial_pwd = (
+            getattr(self.settings, "obs_password", "")
+            if self.settings and hasattr(self.settings, "obs_password")
+            else ""
+        )
+        if not initial_pwd:
+            from meeting_assistant.services.settings import detect_obs_websocket_password
+
+            initial_pwd = detect_obs_websocket_password()
+        self.obs_password_input.setText(initial_pwd)
+        self.obs_password_input.setEchoMode(QLineEdit.EchoMode.Password)
         conn_layout.addWidget(self.obs_password_input)
 
         self.test_obs_btn = QPushButton("🔌 Testar Conexão")
@@ -1360,6 +1370,15 @@ class AVSetupDialog(QDialog):
         def _on_done(res: tuple[bool, str]):
             self.test_obs_btn.setEnabled(True)
             ok, msg = res
+            if ok and self.settings:
+                self.settings.obs_host = host
+                self.settings.obs_port = port
+                self.settings.obs_password = pwd
+                try:
+                    from meeting_assistant.services.settings import SettingsService
+                    SettingsService().save(self.settings)
+                except Exception:
+                    pass
             QMessageBox.information(self, "Teste OBS", msg)
 
         def _on_fail(err: str):
@@ -1417,6 +1436,15 @@ class AVSetupDialog(QDialog):
                     log_lines.append(f"  • {err}")
 
             self.obs_log_text.setText("\n".join(log_lines))
+            if self.settings:
+                self.settings.obs_host = host
+                self.settings.obs_port = port
+                self.settings.obs_password = pwd
+                try:
+                    from meeting_assistant.services.settings import SettingsService
+                    SettingsService().save(self.settings)
+                except Exception:
+                    pass
             if res.success:
                 QMessageBox.information(
                     self, "Provisionamento OBS", "Cenas e fontes do OBS provisionadas com sucesso!"

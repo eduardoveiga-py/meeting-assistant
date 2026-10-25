@@ -1,5 +1,15 @@
 # Histórico de alterações
 
+## [1.2.0] — Retorno Instantâneo de Mídia, Estabilidade de Layout, Preflight Resiliente e v2-Hardened — 25/10/2026
+
+- **Retorno Instantâneo de Mídia Externa:** Eliminação do atraso de 10 segundos ao interromper mídia externa. Ocultação imediata do popup de controle, elevação prioritária da saída da 2ª tela do JW Library (`HWND_TOPMOST` e `SW_RESTORE`), reativação instantânea do guardião do Zoom/JWL e transição ágil no OBS para a cena Palco.
+- **Resiliência com Navegadores Modernos:** Ajuste fino na restauração de janelas para Chrome e Edge, contornando discrepâncias de estilos DWM na verificação de bordas e eliminando o erro de timeout de 2,5s / "Repetir retorno". Proteção do subprocesso UIA contra `BrokenPipeError` e `EOFError`.
+- **Estabilidade Visual e Prevenção de Deslocamento de Tela:** Implementação de `_MainContentScrollArea` com desacoplamento de `ensureWidgetVisible`, evitando que o Qt role a tela para baixo ao focar botões após o fechamento de janelas e mantendo os botões de controle de apresentação sempre acessíveis.
+- **Fixação do Indicador de Automação:** Fixação da altura do status da automação em 24px com `setWordWrap(False)` e tamanho fixo, impedindo pulos verticais ou quebras nos botões de controle de emergência; telemetria exibida em linha única concisa com detalhes completos no tooltip.
+- **Diagnóstico Pré-Reunião (Preflight / Checar Ambiente):** Correção de falso-positivo de câmera com chamadas thread-safe no `ObsController` via `_client_lock`, autodetecção resiliente de senhas do WebSocket do OBS e detecção de monitores com fallback para `QApplication.screens()`. Adição de feedback visual com cursor de espera e desativação temporária do botão durante o teste.
+- **Arquitetura v2-Hardened Integrada:** Máquina de estados com separação entre Imagem e Vídeo, fail-safe no encerramento (`emergency_restore_on_exit`) para garantir microfones desmutados no OBS, resolução nativa de janelas UWP (`ApplicationFrameHost.exe`), algoritmo anti-pausa dramática de áudio (4,5s) e central de mídias de reunião (downloads, watch folder e backups do JW Library).
+- **Cobertura de Testes de Regressão:** Total expandido para 1005 testes automatizados (100% aprovados), com preservação rigorosa do baseline protegido do Salão e zero violações de linter.
+
 ## [1.1.0] — Assistente de AV e Otimização de Transmissão — 11/10/2026
 
 - **Assistente de Áudio e Vídeo Integrado (AV Setup):** Nova suíte de verificação automatizada, diagnóstico de latência e provisionamento com 1 clique acessível em `Ajustes → Assistente AV` e via scripts autônomos (`run_av_setup.ps1` e `av_setup_tool.py`).

@@ -3,8 +3,8 @@
 ![Windows 11](https://img.shields.io/badge/Windows-11-blue?style=flat-square&logo=windows)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-blue?style=flat-square&logo=python)
 ![PySide6](https://img.shields.io/badge/PySide6-GUI-green?style=flat-square&logo=qt)
-![Versão](https://img.shields.io/badge/vers%C3%A3o-1.1.0-blue?style=flat-square)
-![Testes](https://img.shields.io/badge/testes-851%20passando-brightgreen?style=flat-square)
+![Versão](https://img.shields.io/badge/vers%C3%A3o-1.2.0-blue?style=flat-square)
+![Testes](https://img.shields.io/badge/testes-1005%20passando-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
 O **Meeting Assistant** é um orquestrador open-source criado para simplificar e automatizar a operação de áudio e vídeo em Salões do Reino. Ele conecta e coordena **OBS Studio, JW Library, Zoom e WhatsApp**, permitindo que o operador foque na reunião, sem se preocupar com transições manuais complexas, roteamento de áudio ou gerenciamento de múltiplas janelas.
@@ -118,7 +118,15 @@ F1 mostra os atalhos disponíveis. Atalhos globais são opcionais e não substit
 
 ## 🚀 Versões Recentes e Estado do Projeto
 
-* **Versão 1.1.0 (Versão Atual):**
+* **Versão 1.2.0 (Versão Atual):**
+  * **Retorno Instantâneo de Mídia Externa:** Eliminação da latência de 10 segundos no encerramento de mídias, com fechamento imediato do popup, restauração prioritária (`HWND_TOPMOST`/`SW_RESTORE`) da 2ª tela do JW Library, reativação imediata do guardião e transição para Palco no OBS.
+  * **Estabilidade de Layout e Ergonomia da Interface:** Novo container `_MainContentScrollArea` com rolagem automática desacoplada mantendo os botões de controle de apresentação sempre visíveis; altura do status de automação fixada em 24px sem quebras de linha ou jitter vertical.
+  * **Diagnóstico Pré-Reunião Resiliente (Preflight Check):** Resolução de falso-positivo de câmera com métodos thread-safe no `ObsController` via locks, autodetecção de senhas do WebSocket e fallback de telas via `QApplication.screens()`.
+  * **Arquitetura v2-Hardened:** Separação automática entre Imagem (`DISPLAYING_IMAGE`) e Vídeo (`PLAYING_VIDEO`), fail-safe de emergência no encerramento (`emergency_restore_on_exit`), suporte a UWP (`ApplicationFrameHost.exe`) e hold anti-pausa de 4,5s no áudio.
+  * **Central de Mídias de Reunião:** Download automático de mídias, watch folder, gerenciamento de listas de reprodução e backup para o JW Library.
+  * **Cobertura de 1005 Testes Automatizados:** 100% de sucesso nos testes unitários, e2e, adversariais e integridade estrita do baseline protegido do Salão.
+
+* **Versão 1.1.0:**
   * **Assistente Integrado de Áudio e Vídeo (AV Setup):** Diagnóstico completo e automatizado com 1 clique de toda a cadeia AV (dispositivos virtuais VB-CABLE, câmeras, OBS e serviços de áudio do Windows).
   * **Roteamento de Áudio por Processo no Windows:** Vinculação nativa de aplicativos (Zoom, WhatsApp, JW Library, navegadores) a dispositivos específicos usando APIs de baixo nível (Windows Core Audio / WASAPI / PolicyConfig).
   * **Provisionamento Seguro no OBS Studio:** Provisionamento idempotente de cenas e fontes de áudio alinhadas à matriz oficial de roteamento (`docs/audio-routing.md`), com adição da fonte `Meeting Assistant - Mesa`, mudo e desmonitoramento padrão de novas fontes, e exclusão de fontes de processo da faixa 6 de gravação.

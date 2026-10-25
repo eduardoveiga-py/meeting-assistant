@@ -1,5 +1,6 @@
 """Keep operator windows inside Qt's DPI-aware desktop work area."""
 
+import shiboken6
 from PySide6.QtCore import QEvent, QObject, QRect, QTimer
 from PySide6.QtWidgets import QWidget
 
@@ -30,7 +31,7 @@ class ScreenFitController(QObject):
 
     def __init__(self, window: QWidget) -> None:
         super().__init__(window)
-        self._window = window
+        self._window: QWidget | None = window
         self._handle = None
         self._screen = None
         self._timer = QTimer(self)
@@ -38,29 +39,98 @@ class ScreenFitController(QObject):
         self._timer.timeout.connect(self._fit)
         window.installEventFilter(self)
 
+    def cleanup(self, *_args) -> None:
+        try:
+            if not shiboken6.isValid(self):
+                return
+        except Exception:
+            return
+        if self._timer is not None:
+            try:
+                if shiboken6.isValid(self._timer):
+                    self._timer.stop()
+            except Exception:
+                pass
+        if self._screen is not None:
+            try:
+                if shiboken6.isValid(self._screen):
+                    self._screen.availableGeometryChanged.disconnect(self._schedule)
+            except (RuntimeError, TypeError, ReferenceError):
+                pass
+            self._screen = None
+        if self._handle is not None:
+            try:
+                if shiboken6.isValid(self._handle):
+                    self._handle.screenChanged.disconnect(self._screen_changed)
+            except (RuntimeError, TypeError, ReferenceError):
+                pass
+            self._handle = None
+        if self._window is not None:
+            try:
+                if shiboken6.isValid(self._window):
+                    self._window.removeEventFilter(self)
+            except Exception:
+                pass
+            self._window = None
+
     def eventFilter(self, watched, event):
-        if event.type() == QEvent.Show:
-            handle = self._window.windowHandle()
-            if handle is not None and handle is not self._handle:
-                self._handle = handle
-                handle.screenChanged.connect(self._screen_changed)
-            self._screen_changed(self._window.screen())
+        try:
+            if not shiboken6.isValid(self):
+                return False
+        except Exception:
+            return False
+
+        event_type = event.type()
+        if event_type == QEvent.Type.Show:
+            if self._window is not None:
+                try:
+                    if shiboken6.isValid(self._window):
+                        handle = self._window.windowHandle()
+                        if (
+                            handle is not None
+                            and shiboken6.isValid(handle)
+                            and hasattr(handle, "screenChanged")
+                            and handle is not self._handle
+                        ):
+                            self._handle = handle
+                            handle.screenChanged.connect(self._screen_changed)
+                        if hasattr(self._window, "screen"):
+                            self._screen_changed(self._window.screen())
+                except (RuntimeError, ReferenceError):
+                    pass
+        elif event_type == QEvent.Type.Close:
+            self.cleanup()
         return super().eventFilter(watched, event)
 
     def _screen_changed(self, screen) -> None:
         if self._screen is not screen:
             if self._screen is not None:
                 try:
-                    self._screen.availableGeometryChanged.disconnect(self._schedule)
-                except RuntimeError:
+                    if shiboken6.isValid(self._screen):
+                        self._screen.availableGeometryChanged.disconnect(self._schedule)
+                except (RuntimeError, TypeError, ReferenceError):
                     pass
             self._screen = screen
             if screen is not None:
-                screen.availableGeometryChanged.connect(self._schedule)
+                try:
+                    if shiboken6.isValid(screen):
+                        screen.availableGeometryChanged.connect(self._schedule)
+                except (RuntimeError, TypeError, ReferenceError):
+                    pass
         self._schedule()
 
     def _schedule(self, *_args) -> None:
-        self._timer.start(0)
+        if self._window is not None and self._timer is not None:
+            try:
+                if shiboken6.isValid(self._window) and shiboken6.isValid(self._timer):
+                    self._timer.start(0)
+            except (RuntimeError, ReferenceError):
+                pass
 
     def _fit(self) -> None:
-        fit_window(self._window)
+        if self._window is not None:
+            try:
+                if shiboken6.isValid(self._window):
+                    fit_window(self._window)
+            except (RuntimeError, Exception):
+                pass

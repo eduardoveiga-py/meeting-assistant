@@ -202,7 +202,7 @@ def _control_process(pipe, window, action):
 
 
 class PlayerControlBackend:
-    def __init__(self, *, timeout=5.0, context=None, worker=None, platform=None):
+    def __init__(self, *, timeout=2.0, context=None, worker=None, platform=None):
         self.timeout = timeout
         self._context = context
         self._worker = worker or _control_process
@@ -231,17 +231,33 @@ class PlayerControlBackend:
             sender.close()
             deadline = time.monotonic() + self.timeout
             while not cancel.is_set() and time.monotonic() < deadline:
-                if receiver.poll(0.05):
-                    result = receiver.recv()
-                    replied = True
-                    if not result["ok"]:
-                        raise PlayerControlError(result["message"])
-                    if action == "fullscreen":
-                        self.fullscreen_owned = result["fullscreen_entered"]
-                    elif action == "exit_fullscreen":
-                        self.fullscreen_owned = False
-                    return result
+                try:
+                    if receiver.poll(0.05):
+                        result = receiver.recv()
+                        replied = True
+                        if not result["ok"]:
+                            raise PlayerControlError(result["message"])
+                        if action == "fullscreen":
+                            self.fullscreen_owned = result["fullscreen_entered"]
+                        elif action == "exit_fullscreen":
+                            self.fullscreen_owned = False
+                        return result
+                except (BrokenPipeError, EOFError, OSError):
+                    break
                 if not process.is_alive():
+                    try:
+                        if receiver.poll(0.5):
+                            result = receiver.recv()
+                            replied = True
+                            if not result["ok"]:
+                                raise PlayerControlError(result["message"])
+                            if action == "fullscreen":
+                                self.fullscreen_owned = result["fullscreen_entered"]
+                            elif action == "exit_fullscreen":
+                                self.fullscreen_owned = False
+                            return result
+                    except (BrokenPipeError, EOFError, OSError):
+                        pass
                     break
             raise PlayerControlError(
                 "Controle cancelado ou sem resposta. Confira o vídeo; nenhum comando repetido."

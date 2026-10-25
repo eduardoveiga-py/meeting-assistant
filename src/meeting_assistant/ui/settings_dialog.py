@@ -30,7 +30,7 @@ from meeting_assistant.services.display_service import (
     display_info_from_screen,
 )
 from meeting_assistant.services.obs_setup import camera_url
-from meeting_assistant.services.settings import AppSettings
+from meeting_assistant.services.settings import AppSettings, detect_obs_websocket_password
 from meeting_assistant.ui.window_geometry import ScreenFitController
 
 
@@ -54,6 +54,7 @@ class SettingsDialog(QDialog):
         embedded: bool = False,
     ) -> None:
         super().__init__(parent)
+        self._settings = settings
         self.prepare_obs_requested = False
         # One copy of every field. The workspace mounts these sections directly;
         # apply_to only writes editor fields, never confirmed live audio settings.
@@ -142,6 +143,10 @@ class SettingsDialog(QDialog):
         output_form.addRow("Modo", self.simulation_check)
         output_form.addRow("Monitor do Salão", self.hall_display_combo)
 
+        self.auto_mute_mic_for_jwl_media = QCheckBox("Silenciar mesa durante mídias")
+        self.auto_mute_mic_for_jwl_media.setChecked(settings.auto_mute_mic_for_jwl_media)
+        output_form.addRow("", self.auto_mute_mic_for_jwl_media)
+
         output_hint = QLabel(
             "No modo físico, a primeira tela não principal é o padrão. "
             "O Meeting Assistant identifica e protege a saída secundária do JW Library nesse monitor."
@@ -192,9 +197,13 @@ class SettingsDialog(QDialog):
         camera_group = QGroupBox("Câmera IP — Palco")
         camera_form = QFormLayout(camera_group)
         self.camera_ip_edit = QLineEdit(settings.camera_ip)
-        self.camera_user_edit = QLineEdit(settings.camera_username)
-        self.camera_password_edit = QLineEdit(settings.camera_password)
+        cam_user = settings.camera_ip_user or settings.camera_username
+        self.camera_user_edit = QLineEdit(cam_user)
+        self.camera_user_edit.setPlaceholderText("admin")
+        cam_pwd = settings.camera_ip_pass or settings.camera_password
+        self.camera_password_edit = QLineEdit(cam_pwd)
         self.camera_password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.camera_password_edit.setPlaceholderText("Senha RTSP da câmera")
         self.camera_port_spin = QSpinBox()
         self.camera_port_spin.setRange(1, 65535)
         self.camera_port_spin.setValue(settings.camera_rtsp_port)
@@ -249,36 +258,42 @@ class SettingsDialog(QDialog):
         telemetry_form.addRow("", telemetry_hint)
         root.addWidget(telemetry_group)
 
-        media_group = QGroupBox("Mídias e idioma")
-        media_layout = QVBoxLayout(media_group)
-        media_form = QFormLayout()
-        self.media_language_edit = QLineEdit(settings.congregation_language)
-        self.media_language_edit.setToolTip("Idioma da Congregacao (T = Portugues, E = Ingles, S = Espanhol)")
-        media_form.addRow("Codigo do Idioma:", self.media_language_edit)
-
-        self.auto_mute_mic_for_jwl_media = QCheckBox("Silenciar mesa durante mídias")
-        self.auto_mute_mic_for_jwl_media.setChecked(settings.auto_mute_mic_for_jwl_media)
-        media_form.addRow("", self.auto_mute_mic_for_jwl_media)
-        
-        media_layout.addLayout(media_form)
-        self.download_media_button = QPushButton("📥 Baixar e Preparar Mídias da Semana")
-        self.download_media_button.setText("Download de mídias — em desenvolvimento")
-        self.download_media_button.setEnabled(False)
-        self.download_media_button.hide()
-        self.download_media_button.setToolTip("Esta função ainda não baixa arquivos.")
-        self.download_media_button.clicked.connect(self._on_download_media_clicked)
-        media_layout.addWidget(self.download_media_button)
-        root.addWidget(media_group)
-
-        connection_group = QGroupBox("OBS WebSocket")
+        connection_group = QGroupBox("OBS WebSocket e Transmissão")
         connection_form = QFormLayout(connection_group)
+
+        self.whatsapp_connection_check = QCheckBox("Habilitar WhatsApp e câmera virtual")
+        self.whatsapp_connection_check.setChecked(settings.whatsapp_enabled)
+        connection_form.addRow("WhatsApp", self.whatsapp_connection_check)
+
+        def _sync_wa_from_conn(chk: bool) -> None:
+            if hasattr(self, "whatsapp_check") and self.whatsapp_check.isChecked() != chk:
+                self.whatsapp_check.blockSignals(True)
+                self.whatsapp_check.setChecked(chk)
+                self.whatsapp_check.blockSignals(False)
+
+        def _sync_wa_from_main(chk: bool) -> None:
+            if (
+                hasattr(self, "whatsapp_connection_check")
+                and self.whatsapp_connection_check.isChecked() != chk
+            ):
+                self.whatsapp_connection_check.blockSignals(True)
+                self.whatsapp_connection_check.setChecked(chk)
+                self.whatsapp_connection_check.blockSignals(False)
+
+        self.whatsapp_connection_check.toggled.connect(_sync_wa_from_conn)
+        self.whatsapp_check.toggled.connect(_sync_wa_from_main)
 
         self.host_edit = QLineEdit(settings.obs_host)
         self.port_spin = QSpinBox()
         self.port_spin.setRange(1, 65535)
         self.port_spin.setValue(settings.obs_port)
-        self.password_edit = QLineEdit(settings.obs_password)
+        detected_pwd = detect_obs_websocket_password()
+        current_pwd = settings.obs_password or detected_pwd
+        if not settings.obs_password and detected_pwd:
+            settings.obs_password = detected_pwd
+        self.password_edit = QLineEdit(current_pwd)
         self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_edit.setPlaceholderText("Senha configurada no OBS WebSocket")
 
         connection_form.addRow("Host", self.host_edit)
         connection_form.addRow("Porta", self.port_spin)
@@ -314,7 +329,7 @@ class SettingsDialog(QDialog):
         self.section_picker = QComboBox(self)
         self.section_stack = QStackedWidget(self)
         for key, title, groups in (
-            ("meeting", "Reunião e janelas", (output_group, startup_group, media_group)),
+            ("meeting", "Reunião e janelas", (output_group, startup_group)),
             ("video", "OBS e vídeo", (connection_group, scenes_group, camera_group)),
             ("diagnostics", "Diagnóstico", (telemetry_group,)),
         ):
@@ -361,7 +376,6 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
         outer.addWidget(buttons)
         if embedded:
-            media_group.hide()
             self.setWindowFlags(Qt.Widget)
             buttons.hide()
             self.setMinimumSize(0, 0)
@@ -420,16 +434,18 @@ class SettingsDialog(QDialog):
         combo.setCurrentText(current)
         return combo
 
-    def _on_download_media_clicked(self):
-        from PySide6.QtWidgets import QMessageBox
-        QMessageBox.information(
-            self,
-            "Mídias da Reunião",
-            "A estrutura do downloader de mídias foi criada com sucesso.\n\n"
-            "O botão fará a varredura da API do JW.org para o idioma '" 
-            + self.media_language_edit.text().strip() + 
-            "' e montará os arquivos para o JW Library automaticamente."
-        )
+    def _open_media_manager(self) -> None:
+        parent = self.parent()
+        from meeting_assistant.ui.setup_assistant_dialog import SetupAssistantDialog
+
+        if isinstance(parent, SetupAssistantDialog):
+            parent.select_page("media")
+            return
+
+        from meeting_assistant.ui.meeting_media_dialog import MeetingMediaDialog
+
+        dialog = MeetingMediaDialog(self, settings=self._settings)
+        dialog.exec()
 
     def apply_to(self, settings: AppSettings) -> None:
         settings.congregation_name = self.congregation_name_edit.text().strip()
@@ -437,16 +453,22 @@ class SettingsDialog(QDialog):
         settings.camera_ip = self.camera_ip_edit.text().strip()
         settings.camera_username = self.camera_user_edit.text().strip()
         settings.camera_password = self.camera_password_edit.text()
+        settings.camera_ip_user = settings.camera_username
+        settings.camera_ip_pass = settings.camera_password
         settings.camera_rtsp_port = self.camera_port_spin.value()
         settings.obs_start_at_logon = self.obs_logon_check.isChecked()
         settings.simulation_enabled = self.simulation_check.isChecked()
-        settings.whatsapp_enabled = self.whatsapp_check.isChecked()
-        settings.congregation_language = self.media_language_edit.text().strip()
+        settings.whatsapp_enabled = (
+            self.whatsapp_connection_check.isChecked()
+            if hasattr(self, "whatsapp_connection_check")
+            else self.whatsapp_check.isChecked()
+        )
         settings.auto_mute_mic_for_jwl_media = self.auto_mute_mic_for_jwl_media.isChecked()
         settings.hall_display_key = str(self.hall_display_combo.currentData() or "")
         settings.obs_host = self.host_edit.text().strip() or "127.0.0.1"
         settings.obs_port = self.port_spin.value()
-        settings.obs_password = self.password_edit.text()
+        pwd = self.password_edit.text().strip()
+        settings.obs_password = pwd or detect_obs_websocket_password()
         settings.scene_background = self.background_combo.currentText().strip()
         settings.scene_speaker = self.speaker_combo.currentText().strip()
         settings.scene_media = self.media_combo.currentText().strip()
@@ -458,3 +480,8 @@ class SettingsDialog(QDialog):
         settings.telemetry_sync_enabled = self.telemetry_sync_check.isChecked()
         settings.telemetry_screenshots = self.telemetry_screenshots_check.isChecked()
         settings.telemetry_repo_url = self.telemetry_repo_edit.text().strip()
+        if hasattr(self, "_settings") and self._settings:
+            settings.meeting_media_folder = self._settings.meeting_media_folder
+            settings.jwl_userdata_db_path = self._settings.jwl_userdata_db_path
+            settings.meeting_media_quality = self._settings.meeting_media_quality
+            settings.meeting_media_auto_sync = self._settings.meeting_media_auto_sync

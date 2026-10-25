@@ -168,6 +168,8 @@ class ObsController(QObject):
         self.media_scene = "Mídias"
         self._config: ObsConnectionConfig | None = None
         self._client: obs.ReqClient | None = None
+        self._client_lock = threading.RLock()
+        self._virtual_cam_active: bool = False
         self._last_connected: bool | None = None
         self._last_connection_status: tuple[bool, str] | None = None
         self._last_scenes: list[str] = []
@@ -228,6 +230,98 @@ class ObsController(QObject):
 
     def external_task(self, action, data):
         self._commands.put(("external_task", (action, dict(data))))
+
+    @property
+    def is_connected(self) -> bool:
+        return bool(self._last_connected and self._client is not None)
+
+    def is_virtual_cam_active(self) -> bool:
+        client = self._client
+        if client is not None:
+            acquired = self._client_lock.acquire(timeout=0.5)
+            if acquired:
+                try:
+                    res = client.send("GetVirtualCamStatus", raw=True)
+                    if isinstance(res, dict):
+                        val = res.get("outputActive")
+                        if val is None:
+                            val = res.get("output_active", False)
+                        self._virtual_cam_active = bool(val)
+                    elif isinstance(res, bool):
+                        self._virtual_cam_active = res
+                    else:
+                        val = getattr(res, "output_active", getattr(res, "outputActive", None))
+                        self._virtual_cam_active = bool(val) if val is not None else False
+                    return self._virtual_cam_active
+                except Exception:
+                    return bool(self._virtual_cam_active)
+                finally:
+                    self._client_lock.release()
+            return bool(self._virtual_cam_active)
+
+        if self._config:
+            from meeting_assistant.services.preflight import (
+                _close_temp_obs_client,
+                _extract_vcam_status,
+                _make_temp_obs_client,
+            )
+
+            temp_client = _make_temp_obs_client(
+                host=self._config.host,
+                port=self._config.port,
+                password=self._config.password,
+                timeout=2,
+            )
+            if temp_client:
+                try:
+                    res = temp_client.send("GetVirtualCamStatus", raw=True)
+                    return _extract_vcam_status(res)
+                except Exception:
+                    return False
+                finally:
+                    _close_temp_obs_client(temp_client)
+
+        return False
+
+    def start_virtual_cam(self) -> bool:
+        client = self._client
+        if client is not None:
+            acquired = self._client_lock.acquire(timeout=2.0)
+            if acquired:
+                try:
+                    from meeting_assistant.services.obs_hall_setup import virtual_camera_step
+
+                    ok = bool(virtual_camera_step(client))
+                    if ok:
+                        self._virtual_cam_active = True
+                    return ok
+                except Exception:
+                    return False
+                finally:
+                    self._client_lock.release()
+
+        if self._config:
+            from meeting_assistant.services.obs_hall_setup import virtual_camera_step
+            from meeting_assistant.services.preflight import (
+                _close_temp_obs_client,
+                _make_temp_obs_client,
+            )
+
+            temp_client = _make_temp_obs_client(
+                host=self._config.host,
+                port=self._config.port,
+                password=self._config.password,
+                timeout=3,
+            )
+            if temp_client:
+                try:
+                    return bool(virtual_camera_step(temp_client))
+                except Exception:
+                    return False
+                finally:
+                    _close_temp_obs_client(temp_client)
+
+        return False
 
     def set_external_media_active(self, active):
         # Suppress requests queued by the sensor before it observed the pause.
@@ -526,6 +620,7 @@ class ObsController(QObject):
             obs_version = version.get("obsVersion", "versão desconhecida")
             self._refresh_scene_list()
             self._refresh_current_scene()
+            self._refresh_virtual_cam_status()
             ensure_fade_transition(client)
             self._set_connected(True, f"OBS {obs_version} conectado")
             return True
@@ -538,10 +633,31 @@ class ObsController(QObject):
         if self._client is None:
             return
         try:
-            self._refresh_current_scene()
+            with self._client_lock:
+                self._refresh_current_scene()
+                self._refresh_virtual_cam_status()
         except Exception as exc:
             self._set_connected(False, self._friendly_connection_error(exc))
             self._disconnect()
+
+    def _refresh_virtual_cam_status(self) -> None:
+        if self._client is None:
+            self._virtual_cam_active = False
+            return
+        try:
+            res = self._client.send("GetVirtualCamStatus", raw=True)
+            if isinstance(res, dict):
+                val = res.get("outputActive")
+                if val is None:
+                    val = res.get("output_active", False)
+                self._virtual_cam_active = bool(val)
+            elif isinstance(res, bool):
+                self._virtual_cam_active = res
+            else:
+                val = getattr(res, "output_active", getattr(res, "outputActive", None))
+                self._virtual_cam_active = bool(val) if val is not None else False
+        except Exception:
+            pass
 
     def _refresh_scene_list(self) -> None:
         if self._client is None:
@@ -700,22 +816,27 @@ class ObsController(QObject):
         self.connected_changed.emit(connected, message)
 
     def _disconnect(self) -> None:
-        client = self._client
-        self._client = None
-        self._last_scene = None
-        self._last_scenes = []
-        self._last_preview_error = None
-        self.jwl_capture.reset_connection()
-        self._next_jwl_capture_check = 0.0
-        if client is None:
-            return
-        try:
-            base_client = getattr(client, "base_client", None)
-            websocket = getattr(base_client, "ws", None)
-            if websocket is not None:
-                websocket.close()
-        except Exception:
-            pass
+        with self._client_lock:
+            client = self._client
+            self._client = None
+            self._virtual_cam_active = False
+            self._last_scene = None
+            self._last_scenes = []
+            self._last_preview_error = None
+            self.jwl_capture.reset_connection()
+            self._next_jwl_capture_check = 0.0
+            if client is None:
+                return
+            try:
+                client.disconnect()
+            except Exception:
+                try:
+                    base_client = getattr(client, "base_client", None)
+                    websocket = getattr(base_client, "ws", None)
+                    if websocket is not None:
+                        websocket.close()
+                except Exception:
+                    pass
 
     @staticmethod
     def _friendly_connection_error(exc: Exception) -> str:

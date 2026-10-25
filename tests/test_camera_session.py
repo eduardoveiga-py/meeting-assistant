@@ -62,6 +62,8 @@ def test_dialog_close_keeps_camera_running_and_controls_fit(qt_application):
     session.stop.assert_not_called()
     assert session.state == "running"
     monitor.stop()
+    dialog.deleteLater()
+    qt_application.processEvents()
 
 
 def test_explicit_stop_stops_host_then_authorization_not_preview():
@@ -102,4 +104,34 @@ def test_api_start_is_not_reported_as_whatsapp_validation():
     assert session.state == "running"
     assert session.diagnostic()["camera_approved_in_whatsapp"] is False
     session.health.stop()
+    session.host = host
+
+
+def test_camera_waiting_obs_when_pipe_missing():
+    session = CameraSession()
+    session.supported = True
+    session._command = Mock()
+    session.state = "starting"
+    session.deadline.start()
+    session.control_result("S", None, "Ponte OBS indisponível ou ocupada (Windows 2).")
+    assert session.state == "waiting_obs"
+    assert "Aguardando OBS" in session.message
+    assert not session.deadline.isActive()
+    # Stop while waiting for OBS cleanly turns camera off
+    session.stop()
+    assert session.state == "off"
+
+
+def test_camera_running_transitions_to_waiting_obs_on_bridge_drop():
+    session = CameraSession()
+    host = session.host
+    session.host = Mock()
+    session.supported = True
+    session.state = "running"
+    session.health.start()
+    session.control_result("I", None, "Ponte OBS indisponível ou ocupada (Windows 2).")
+    assert session.state == "waiting_obs"
+    assert "OBS desconectado" in session.message
+    assert not session.health.isActive()
+    session.host.write.assert_called_once_with(b"stop\n")
     session.host = host

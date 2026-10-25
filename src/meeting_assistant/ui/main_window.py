@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import replace
 
@@ -14,8 +15,18 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import (
+    QColor,
+    QDragEnterEvent,
+    QDragMoveEvent,
+    QDropEvent,
+    QIcon,
+    QPainter,
+    QPainterPath,
+    QPixmap,
+)
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QFrame,
     QGridLayout,
@@ -78,6 +89,15 @@ class ToggleSwitch(QCheckBox):
         return self.rect().contains(pos)
 
 
+class _MainContentScrollArea(QScrollArea):
+    """QScrollArea that keeps presentation controls visible by avoiding focus-driven auto-scrolling."""
+
+    def ensureWidgetVisible(self, childWidget, xmargin=50, ymargin=50):
+        # Prevent automatic scroll-down when controls lower in the window gain focus.
+        # This keeps the 'CONTROLE DA APRESENTAÇÃO' section pinned at the top.
+        pass
+
+
 class MainWindow(QMainWindow):
     automation_enabled_changed = Signal(bool)
     idle_reference_requested = Signal()
@@ -123,8 +143,10 @@ class MainWindow(QMainWindow):
         self.layout_service = None
         self.external_media = None
         self._external_popup = None
+        self._main_scroll = None
         self._close_after_external = False
         self._layout_save_pending = False
+        self._manual_camera_stopped = False
 
         if self.update_service:
             self.update_service.update_available.connect(self._on_update_available)
@@ -145,6 +167,34 @@ class MainWindow(QMainWindow):
         self.telemetry_session_id = ""
 
         self.state.automation_enabled = False
+
+        from meeting_assistant.services.audio_service import AudioService
+        from meeting_assistant.services.preflight import PreFlightChecker
+        from meeting_assistant.services.profile_manager import ProfileManager
+        from meeting_assistant.services.state_machine import MeetingStateMachine
+        from meeting_assistant.services.watchdog_service import WatchdogService
+
+        profile = ProfileManager.sync_from_app_settings(self.settings)
+        self.state_machine = MeetingStateMachine(obs_service=self.obs, profile=profile, parent=self)
+        self.state_machine.state_changed.connect(self._on_meeting_state_changed)
+
+        self.audio_service = AudioService(
+            media_player_executables=profile.media_player_executables,
+            audio_trigger_threshold=profile.audio_trigger_threshold,
+            audio_silence_hold_seconds=profile.audio_silence_hold_seconds,
+            parent=self,
+        )
+        self.audio_service.media_audio_started.connect(self.state_machine.on_media_audio_started)
+        self.audio_service.media_audio_stopped.connect(self.state_machine.on_media_audio_stopped)
+
+        self.watchdog_service = WatchdogService(
+            obs_service=self.obs,
+            virtual_cable_name=profile.virtual_cable_name,
+            parent=self,
+        )
+        self.watchdog_service.health_status_updated.connect(self._on_watchdog_health)
+
+        self.preflight_checker = PreFlightChecker(obs_service=self.obs, settings=self.settings)
 
         self.setWindowIcon(self.app_icon)
         self.resize(520, 780)
@@ -225,8 +275,8 @@ class MainWindow(QMainWindow):
 
         self.global_keys = GlobalHotkeys(self)
         self.global_keys.pressed.connect(self._global_key)
-        self.global_keys.status.connect(self.automation_status.setToolTip)
-        self._operator_timer.start()
+        if not os.environ.get("MEETING_ASSISTANT_TESTING"):
+            self._operator_timer.start()
         self.obs.preview_age.connect(self._preview_age)
         self.obs.operator_finished.connect(self._operator_result)
 
@@ -234,8 +284,8 @@ class MainWindow(QMainWindow):
         central = QWidget()
         root = QVBoxLayout(central)
         self._root_layout = root
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(5)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(4)
 
         header = QHBoxLayout()
         header.setSpacing(8)
@@ -257,6 +307,14 @@ class MainWindow(QMainWindow):
         title.setWordWrap(False)
         title.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
         brand_row.addWidget(title, alignment=Qt.AlignVCenter)
+
+        self.state_badge = QLabel("● IDLE")
+        self.state_badge.setObjectName("StateBadge")
+        self.state_badge.setStyleSheet(
+            "color: #6c757d; font-weight: bold; font-size: 10px; padding-left: 6px;"
+        )
+        self.state_badge.setToolTip("Estado atual da automação e transmissão AV.")
+        brand_row.addWidget(self.state_badge, alignment=Qt.AlignVCenter)
 
         title_box = QVBoxLayout()
         title_box.setSpacing(0)
@@ -344,14 +402,14 @@ class MainWindow(QMainWindow):
         controls_card.setObjectName("Card")
         controls = QVBoxLayout(controls_card)
         self._controls_layout = controls
-        controls.setContentsMargins(10, 8, 10, 8)
+        controls.setContentsMargins(8, 6, 8, 6)
         controls.setSpacing(4)
 
         controls.addWidget(self._section_label("CONTROLE DA APRESENTAÇÃO"))
 
         mode_grid = QGridLayout()
         self._mode_grid = mode_grid
-        mode_grid.setHorizontalSpacing(6)
+        mode_grid.setHorizontalSpacing(4)
         mode_grid.setVerticalSpacing(4)
         self.mode_buttons: dict[OperatingMode, QPushButton] = {}
         button_specs = [
@@ -383,51 +441,51 @@ class MainWindow(QMainWindow):
 
         self.auto_button = QPushButton("🚥 Ativar")
         self.auto_button.setToolTip("Ativar automação de mídias e guardião do JWL.")
+        self.auto_button.setMinimumWidth(0)
+        self.auto_button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.auto_button.clicked.connect(self._toggle_automation)
         automation_row = QHBoxLayout()
+        automation_row.setSpacing(4)
         automation_row.addWidget(self.auto_button, 1)
         controls.addLayout(automation_row)
 
         self.automation_status = QLabel("Automação pausada")
         self.automation_status.setObjectName("AutomationStatus")
-        self.automation_status.setWordWrap(True)
+        self.automation_status.setWordWrap(False)
+        self.automation_status.setFixedHeight(24)
         self.automation_status.setMinimumWidth(0)
-        self.automation_status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.automation_status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.automation_status.setAlignment(Qt.AlignCenter)
+        self.automation_status.setToolTip("Automação pausada")
         controls.addWidget(self.automation_status)
 
-        panic = QPushButton("🚨 Emergência (Texto do Ano)")
+        panic = self.emergency_mute_button = QPushButton("🚨 Emergência")
         panic.setObjectName("DangerButton")
+        panic.setMinimumWidth(0)
+        panic.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         panic.setToolTip("Corta o vídeo para o Texto do Ano. Usa-se em caso de pânico ou erro inesperado.")
         panic.clicked.connect(self._activate_safe_scene)
         automation_row.addWidget(panic, 1)
+
+        self.restore_camera_button = self.mode_buttons[OperatingMode.SPEAKER]
 
         self.whatsapp_audio_button = QPushButton("🔇 WhatsApp")
         self.whatsapp_audio_button.setCheckable(True)
         self.whatsapp_audio_button.setChecked(False)
         self.whatsapp_audio_button.setMinimumWidth(0)
-        self.whatsapp_audio_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.whatsapp_audio_button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.whatsapp_audio_button.setToolTip(
             "Silencia ou libera somente o áudio recebido do WhatsApp nas caixas do salão."
         )
         self.whatsapp_audio_button.clicked.connect(self._toggle_whatsapp_audio)
         automation_row.addWidget(self.whatsapp_audio_button, 1)
-
         controls.addSpacing(2)
         controls.addWidget(self._section_label("SISTEMA"))
 
-        self.power_button = QPushButton("▶️ Iniciar reunião")
-        self.power_button.setToolTip(
-            "Abre OBS, JW Library e Zoom. Se o link estiver configurado, o Zoom entra diretamente na reunião."
-        )
-        self.power_button.clicked.connect(self._start_meeting)
-
         system_grid = QGridLayout()
         self._system_grid = system_grid
-        system_grid.setHorizontalSpacing(6)
-        system_grid.setVerticalSpacing(6)
-        diagnostics = QPushButton("🩺 Operação")
-        diagnostics.clicked.connect(self._show_diagnostics)
+        system_grid.setHorizontalSpacing(4)
+        system_grid.setVerticalSpacing(4)
 
         # Row 0
         self.power_button = QPushButton("🟢 Iniciar reunião")
@@ -497,7 +555,7 @@ class MainWindow(QMainWindow):
             system_grid.setColumnStretch(column, 1)
         for button in (
             self.power_button,
-            self.power_button,
+            self.force_jwl_button,
             settings_button,
             self.volume_button,
             self.ext_media_button,
@@ -520,12 +578,26 @@ class MainWindow(QMainWindow):
         preview_row.addWidget(self.preview, 1)
         controls.addLayout(preview_row, 1)
 
+        preview_btn_row = QHBoxLayout()
+        preview_btn_row.setSpacing(4)
+
         self.pause_preview_button = QPushButton("⏸️ Pausar Prévia")
         self.pause_preview_button.setObjectName("PausePreviewButton")
         self.pause_preview_button.setToolTip("Pausa a prévia de vídeo para economizar CPU e memória")
         self.pause_preview_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.pause_preview_button.clicked.connect(self._toggle_preview_pause)
-        controls.addWidget(self.pause_preview_button)
+        preview_btn_row.addWidget(self.pause_preview_button, 1)
+
+        self.btn_preflight = QPushButton("🔍 Checar Ambiente")
+        self.btn_preflight.setObjectName("PausePreviewButton")
+        self.btn_preflight.setToolTip(
+            "Executa diagnóstico pré-reunião (OBS, Câmera Virtual, Áudio, Monitores, Zoom)."
+        )
+        self.btn_preflight.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.btn_preflight.clicked.connect(self._run_preflight_and_report)
+        preview_btn_row.addWidget(self.btn_preflight, 1)
+
+        controls.addLayout(preview_btn_row)
 
         self.zoom_output_label = QLabel("Zoom recebe: OBS Virtual Camera • transições feitas pelo OBS")
         self.zoom_output_label.setObjectName("ZoomOutputLabel")
@@ -559,15 +631,18 @@ class MainWindow(QMainWindow):
         self.update_banner.clicked.connect(self._trigger_update)
         root.addWidget(self.update_banner)
 
-        scroll = QScrollArea()
+        scroll = _MainContentScrollArea()
         scroll.setObjectName("MainContentScroll")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setWidget(central)
         self.setCentralWidget(scroll)
+        self._main_scroll = scroll
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+        if hasattr(self, "state_badge"):
+            self.state_badge.setVisible(self.width() >= 420)
         if hasattr(self, "_root_layout") and hasattr(self, "_system_grid"):
             self._update_layout_spacing()
 
@@ -579,10 +654,10 @@ class MainWindow(QMainWindow):
         if tight == getattr(self, "_tight_operator_layout", None):
             return
         self._tight_operator_layout = tight
-        vertical_margin = 6 if tight else 10
-        self._root_layout.setContentsMargins(12, vertical_margin, 12, vertical_margin)
-        self._root_layout.setSpacing(3 if tight else 5)
-        self._controls_layout.setContentsMargins(10, 5 if tight else 9, 10, 6 if tight else 10)
+        vertical_margin = 6 if tight else 8
+        self._root_layout.setContentsMargins(8, vertical_margin, 8, vertical_margin)
+        self._root_layout.setSpacing(3 if tight else 4)
+        self._controls_layout.setContentsMargins(8, 5 if tight else 6, 8, 5 if tight else 6)
         self._controls_layout.setSpacing(2 if tight else 4)
         self._mode_grid.setVerticalSpacing(4 if tight else 6)
         self._system_grid.setVerticalSpacing(4 if tight else 6)
@@ -632,6 +707,18 @@ class MainWindow(QMainWindow):
 
 
     def _select_mode(self, mode: OperatingMode) -> None:
+        if hasattr(self, "state_machine") and self.state_machine:
+            from meeting_assistant.services.state_machine import MeetingState
+
+            if mode is OperatingMode.SPEAKER:
+                self.state_machine.transition_to(MeetingState.CAMERA_LIVE)
+            elif mode is OperatingMode.BACKGROUND:
+                self.state_machine.transition_to(MeetingState.IDLE)
+            elif mode is OperatingMode.MEDIA:
+                self.state_machine.transition_to(MeetingState.DISPLAYING_IMAGE)
+            elif mode is OperatingMode.ZOOM:
+                self.state_machine.transition_to(MeetingState.SCREEN_SHARE)
+
         if self.external_media and self.external_media.active:
             self.mode_label.setText("Encerre a mídia externa antes de trocar a saída do salão.")
             return
@@ -693,6 +780,8 @@ class MainWindow(QMainWindow):
 
     def _activate_safe_scene(self, checked: bool = False) -> None:
         del checked
+        if hasattr(self, "state_machine") and self.state_machine:
+            self.state_machine.on_emergency_mute()
         if self.state.automation_enabled:
             self.state.automation_enabled = False
             self._set_automation_ui(False)
@@ -713,7 +802,7 @@ class MainWindow(QMainWindow):
     def _manual_select(self, mode):
         if mode is not OperatingMode.ZOOM and self.state.automation_enabled:
             self._toggle_automation()
-            self.automation_status.setText("Controle manual. Use Ativar automação para retomar.")
+            self.set_automation_status("Controle manual. Use Ativar automação para retomar.")
         self._select_mode(mode)
 
     def _global_key(self, key):
@@ -734,6 +823,14 @@ class MainWindow(QMainWindow):
 
     def _operator_tick(self):
         self.global_keys.set_enabled(self.settings.global_shortcuts)
+        if (
+            getattr(self.settings, "whatsapp_enabled", False)
+            and getattr(self, "obs_connected", False)
+            and getattr(self, "camera_session", None) is not None
+            and not getattr(self, "_manual_camera_stopped", False)
+            and self.camera_session.state in ("off", "error", "waiting_obs")
+        ):
+            self.camera_session.start()
         if self.zoom_audio.command_pending:
             return
         if time.monotonic() - self._zoom_audio_seen > 5:
@@ -789,7 +886,7 @@ class MainWindow(QMainWindow):
 
     def _operator_result(self, action, ok, result):
         if action == "contingency":
-            self.automation_status.setText(str(result))
+            self.set_automation_status(str(result))
 
     def _set_automation_ui(self, enabled: bool) -> None:
         if enabled:
@@ -798,18 +895,31 @@ class MainWindow(QMainWindow):
             self.auto_button.setText("⏸️ Pausar")
             self.auto_button.setAccessibleName("Pausar automação e guardião do JWL")
             self.auto_button.setToolTip("Pausar automação de mídias e guardião do JWL.")
-            self.automation_status.setText("Automação ativada; calibrando Mídias…")
+            self.set_automation_status("Automação ativada; calibrando Mídias…")
         else:
             self.automation_badge.setText("AUTOMAÇÃO PAUSADA")
             self.automation_badge.setProperty("active", False)
             self.auto_button.setText("🚥 Ativar")
             self.auto_button.setAccessibleName("Ativar automação e guardião do JWL")
             self.auto_button.setToolTip("Ativar automação de mídias e guardião do JWL.")
-            self.automation_status.setText("Automação pausada")
+            self.set_automation_status("Automação pausada")
         self._repolish(self.automation_badge)
 
+    def _format_automation_status(self, message: str) -> str:
+        text = str(message).strip()
+        if " / pixels nativos" in text:
+            text = text.replace(" / pixels nativos", "")
+        if "repouso / aguardando mídia" in text:
+            text = text.replace("repouso / aguardando mídia", "Aguardando Mídia")
+        elif "repouso" in text and "aguardando" in text:
+            text = text.replace("repouso", "Aguardando Mídia")
+        if " • sinal " in text:
+            text = text.replace(" • sinal ", " • Sinal: ")
+        return text
+
     def set_automation_status(self, message: str) -> None:
-        self.automation_status.setText(message)
+        self.automation_status.setText(self._format_automation_status(message))
+        self.automation_status.setToolTip(message)
         self.automation_badge.setToolTip(message)
         self.auto_button.setToolTip(message)
 
@@ -817,12 +927,129 @@ class MainWindow(QMainWindow):
         self.telemetry_session_id = session_id
         pass
 
+    def _on_meeting_state_changed(self, old_state: str, new_state: str) -> None:
+        state_labels = {
+            "IDLE": ("EM ESPERA (IDLE)", "#6c757d"),
+            "CAMERA_LIVE": ("CÂMERA AO VIVO", "#28a745"),
+            "DISPLAYING_IMAGE": ("EXIBINDO IMAGEM (MIC ABERTO)", "#17a2b8"),
+            "PLAYING_VIDEO": ("REPRODUZINDO VÍDEO (MIC FECHADO)", "#fd7e14"),
+            "SCREEN_SHARE": ("COMPARTILHAMENTO", "#6f42c1"),
+            "EMERGENCY_MUTE": ("MUTE DE EMERGÊNCIA", "#dc3545"),
+        }
+        text, color = state_labels.get(new_state, (new_state, "#6c757d"))
+        if hasattr(self, "state_badge"):
+            self.state_badge.setText(f"● {text}")
+            self.state_badge.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 11px;")
+
+    def _on_emergency_mute_clicked(self) -> None:
+        if hasattr(self, "state_machine") and self.state_machine:
+            self.state_machine.on_emergency_mute()
+        self._activate_safe_scene()
+
+    def _on_restore_camera_clicked(self) -> None:
+        if hasattr(self, "state_machine") and self.state_machine:
+            self.state_machine.on_restore_camera()
+        self._select_mode(OperatingMode.SPEAKER)
+
+    def _run_preflight_and_report(self) -> None:
+        if getattr(self, "preflight_checker", None) is None:
+            try:
+                from meeting_assistant.services.preflight import PreFlightChecker
+
+                self.preflight_checker = PreFlightChecker(
+                    obs_service=getattr(self, "obs", None),
+                    settings=getattr(self, "settings", None),
+                )
+            except Exception as exc:
+                QMessageBox.critical(
+                    self,
+                    "Diagnóstico Pré-Reunião",
+                    f"Falha ao inicializar o verificador de ambiente:\n\n{exc}",
+                )
+                return
+
+        btn = getattr(self, "btn_preflight", None)
+        if btn is not None:
+            btn.setEnabled(False)
+            btn.setText("⏳ Checando...")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.processEvents()
+
+        try:
+            checks = self.preflight_checker.check_all()
+            vcam_check = next((c for c in checks if c.category == "CÂMERA"), None)
+            if vcam_check and not vcam_check.passed:
+                fixed = self.preflight_checker.auto_fix_virtual_cam()
+                if fixed:
+                    checks = self.preflight_checker.check_all()
+
+            lines = [c.render() for c in checks]
+            all_ok = all(c.passed for c in checks)
+            title = (
+                "Diagnóstico Pré-Reunião — OK"
+                if all_ok
+                else "Diagnóstico Pré-Reunião — Itens Pendentes"
+            )
+            msg = "\n".join(lines)
+            if all_ok:
+                QMessageBox.information(
+                    self, title, f"Ambiente verificado e pronto para a reunião:\n\n{msg}"
+                )
+            else:
+                QMessageBox.warning(
+                    self, title, f"Alguns itens requerem atenção antes da reunião:\n\n{msg}"
+                )
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Erro no Diagnóstico",
+                f"Ocorreu um erro ao verificar o ambiente:\n\n{exc}",
+            )
+        finally:
+            QApplication.restoreOverrideCursor()
+            if btn is not None:
+                btn.setEnabled(True)
+                btn.setText("🔍 Checar Ambiente")
+
+    def _on_watchdog_health(self, status: dict) -> None:
+        if not status:
+            return
+        obs_ok = status.get("obs_connected", False)
+        vcam_ok = status.get("vcam_active", False)
+        cable_ok = status.get("virtual_cable_present", False)
+        mon_ok = status.get("secondary_monitor", False)
+        summary = (
+            f"Watchdog AV: OBS={'OK' if obs_ok else 'Desconectado'} | "
+            f"Câmera={'OK' if vcam_ok else 'Parada'} | "
+            f"CABLE={'OK' if cable_ok else 'Ausente'} | "
+            f"Tela 2={'OK' if mon_ok else 'Ausente'}"
+        )
+        if hasattr(self, "btn_preflight"):
+            self.btn_preflight.setToolTip(f"Executa diagnóstico pré-reunião.\n{summary}")
+
     def closeEvent(self, event) -> None:
         if self.external_media and self.external_media.active:
             self._close_after_external = True
             self.external_media.stop_external_media()
             event.ignore()
             return
+
+        if hasattr(self, "state_machine") and self.state_machine:
+            try:
+                self.state_machine.emergency_restore_on_exit()
+            except Exception:
+                pass
+        if hasattr(self, "audio_service") and self.audio_service:
+            try:
+                self.audio_service.stop()
+            except Exception:
+                pass
+        if hasattr(self, "watchdog_service") and self.watchdog_service:
+            try:
+                self.watchdog_service.stop()
+            except Exception:
+                pass
+
         self._operator_timer.stop()
         self.global_keys.set_enabled(False)
         self.zoom_audio.stop()
@@ -833,6 +1060,81 @@ class MainWindow(QMainWindow):
         if self.layout_service:
             self.layout_service.stop()
         super().closeEvent(event)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        try:
+            from meeting_assistant.ui.meeting_media_dialog import _unblock_windows_drag_drop
+
+            _unblock_windows_drag_drop(int(self.winId()))
+        except Exception:
+            pass
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        try:
+            from meeting_assistant.ui.meeting_media_dialog import PlaylistListWidget
+
+            paths = PlaylistListWidget.extract_file_paths(event.mimeData())
+            if paths:
+                event.setDropAction(Qt.DropAction.CopyAction)
+                event.acceptProposedAction()
+                return
+        except Exception:
+            pass
+        super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        try:
+            from meeting_assistant.ui.meeting_media_dialog import PlaylistListWidget
+
+            paths = PlaylistListWidget.extract_file_paths(event.mimeData())
+            if paths:
+                event.setDropAction(Qt.DropAction.CopyAction)
+                event.acceptProposedAction()
+                return
+        except Exception:
+            pass
+        super().dragMoveEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        try:
+            from meeting_assistant.ui.meeting_media_dialog import PlaylistListWidget
+
+            paths = PlaylistListWidget.extract_file_paths(event.mimeData())
+            if paths:
+                event.setDropAction(Qt.DropAction.CopyAction)
+                event.acceptProposedAction()
+                if self._setup_assistant is not None:
+                    self._setup_assistant.select_page("media")
+                    if (
+                        hasattr(self._setup_assistant.media_dialog, "tabs")
+                        and self._setup_assistant.media_dialog.tabs.currentIndex() != 1
+                    ):
+                        self._setup_assistant.media_dialog.tabs.setCurrentIndex(1)
+                    self._setup_assistant.media_dialog._on_files_dropped(paths)
+                    self._setup_assistant.raise_()
+                    self._setup_assistant.activateWindow()
+                else:
+                    self._open_setup_assistant_with_dropped_media(paths)
+                return
+        except Exception:
+            pass
+        super().dropEvent(event)
+
+    def _open_setup_assistant_with_dropped_media(self, paths: list) -> None:
+        from meeting_assistant.ui.setup_assistant_dialog import SetupAssistantDialog
+
+        dialog = SetupAssistantDialog(self, page="media")
+        self._setup_assistant = dialog
+        if hasattr(dialog.media_dialog, "tabs") and dialog.media_dialog.tabs.currentIndex() != 1:
+            dialog.media_dialog.tabs.setCurrentIndex(1)
+        dialog.media_dialog._on_files_dropped(paths)
+        dialog.exec()
+        self._setup_assistant = None
+        if dialog.deferred_action:
+            QTimer.singleShot(0, dialog.deferred_action)
+        dialog.deleteLater()
+        self._refresh_yeartext_notice()
 
     def _persist_layout(self, capture=False):
         if not self.layout_service:
@@ -893,20 +1195,32 @@ class MainWindow(QMainWindow):
         if not self.state.automation_enabled:
             return
         self._latest_media_active = active
-        state_text = "MÍDIA DETECTADA" if active else "repouso / aguardando mídia"
-        self.automation_status.setText(f"Sensor: {source_name} • sinal {changed_percent:.1f}% • {state_text}")
+        clean_source = source_name.split("/")[0].strip() if "/" in source_name else source_name
+        state_text = "Mídia Ativa" if active else "Aguardando Mídia"
+        full_state = "MÍDIA DETECTADA" if active else "repouso / aguardando mídia"
+        full_text = f"Sensor: {source_name} • sinal {changed_percent:.1f}% • {full_state}"
+        concise = f"Sensor: {clean_source} • Sinal: {changed_percent:.1f}% • {state_text}"
+        self.automation_status.setText(concise)
+        self.automation_status.setToolTip(full_text)
 
     def _on_obs_connected(self, connected: bool, message: str) -> None:
         if not connected:
             self.remote_confirmation = "pendente após desconexão OBS"
+            if (
+                getattr(self, "camera_session", None) is not None
+                and getattr(self.settings, "whatsapp_enabled", False)
+                and not getattr(self, "_manual_camera_stopped", False)
+                and hasattr(self.camera_session, "wait_for_obs")
+                and self.camera_session.state in ("running", "starting")
+            ):
+                self.camera_session.wait_for_obs("OBS desconectado. Aguardando OBS…")
         self.obs_connected = connected
         if connected:
             if (
                 self.camera_session is not None
-                and not self._camera_auto_start_attempted
-                and self.camera_session.state == "off"
+                and getattr(self.settings, "whatsapp_enabled", False)
+                and self.camera_session.state in ("off", "error", "waiting_obs")
             ):
-                self._camera_auto_start_attempted = True
                 # Give OBS a short moment to finish loading the native bridge
                 # before asking it to publish the first frame.
                 QTimer.singleShot(1200, self._auto_start_camera)
@@ -1081,6 +1395,8 @@ class MainWindow(QMainWindow):
             self.external_media.stop_external_media()
         else:
             self.external_media.start_external_media()
+        if getattr(self, "_main_scroll", None) is not None:
+            self._main_scroll.verticalScrollBar().setValue(0)
 
     def _choose_external_media(self, candidates):
         from meeting_assistant.ui.external_media_dialog import ExternalMediaDialog
@@ -1106,6 +1422,8 @@ class MainWindow(QMainWindow):
             and (self._close_after_external or self._meeting_ending)
         ):
             self.external_media.stop()
+            return
+        if not self.isVisible() and not self._close_after_external:
             return
         self.ext_media_button.blockSignals(True)
         self.ext_media_button.setChecked(active)
@@ -1138,6 +1456,10 @@ class MainWindow(QMainWindow):
         elif self._external_popup is not None:
             self._external_popup.finish()
             self._external_popup = None
+
+        if getattr(self, "_main_scroll", None) is not None:
+            self._main_scroll.verticalScrollBar().setValue(0)
+
         if not active and self._close_after_external:
             self._close_after_external = False
             QTimer.singleShot(0, self.close)
@@ -1155,6 +1477,8 @@ class MainWindow(QMainWindow):
 
         self.showNormal()
         restore_app(self, self.settings.window_layouts)
+        if getattr(self, "_main_scroll", None) is not None:
+            self._main_scroll.verticalScrollBar().setValue(0)
 
     def _update_blocked(self):
         return bool(
@@ -1318,7 +1642,10 @@ class MainWindow(QMainWindow):
             button.setText("⏹️ Parar Zoom → Salão")
             button.setChecked(True)
             if self.state.automation_enabled:
-                self.automation_status.setText(
+                self.set_automation_status(
+                    "Zoom → Salão ativo • sensor JWL suspenso"
+                )
+                self.automation_status.setToolTip(
                     "Zoom → Salão ativo • sensor do JW Library suspenso temporariamente"
                 )
             self.zoom_output_label.setText(
@@ -1336,27 +1663,43 @@ class MainWindow(QMainWindow):
                 self.state.set_mode(mode)
         self._refresh_mode()
         if self.state.automation_enabled:
-            self.automation_status.setText("Automação retomando leitura da Tela do Salão…")
+            self.set_automation_status("Automação retomando leitura da Tela do Salão…")
         self.mode_label.setText(message)
 
     def _on_obs_error(self, message: str) -> None:
         self.mode_label.setText(message)
 
+    def _ensure_camera_session(self):
+        if getattr(self, "camera_session", None) is None:
+            try:
+                from meeting_assistant.services.camera_session import (
+                    camera_session as get_camera_session,
+                )
+                self.camera_session = get_camera_session()
+                self.camera_session.changed.connect(self._on_camera_state)
+            except Exception:
+                pass
+        return getattr(self, "camera_session", None)
+
     def _auto_start_camera(self) -> None:
         if getattr(self.settings, "whatsapp_enabled", True) is False:
             return
-        if not self.obs_connected or self.camera_session is None:
+        if getattr(self, "_manual_camera_stopped", False):
             return
-        if self.camera_session.state == "off":
-            self.camera_session.start()
+        session = self._ensure_camera_session()
+        if session and session.state in ("off", "error", "waiting_obs"):
+            session.start()
 
     def _toggle_camera(self) -> None:
-        if self.camera_session is None or not getattr(self.settings, "whatsapp_enabled", True):
+        session = self._ensure_camera_session()
+        if session is None:
             return
-        if self.camera_session.state == "running":
-            self.camera_session.stop()
+        if session.state in ("running", "waiting_obs"):
+            self._manual_camera_stopped = True
+            session.stop()
         else:
-            self.camera_session.start()
+            self._manual_camera_stopped = False
+            session.start()
 
     def _on_camera_state(self) -> None:
         if self.camera_session is None or not hasattr(self, "camera_button"):
@@ -1366,6 +1709,8 @@ class MainWindow(QMainWindow):
         busy = state in {"starting", "stopping"}
         if running:
             text = "⏹️ Parar câmera"
+        elif state == "waiting_obs":
+            text = "⏳ Aguardando OBS"
         elif state == "error":
             text = "📹 Tentar câmera"
         else:
@@ -1378,10 +1723,16 @@ class MainWindow(QMainWindow):
         if whatsapp_svg.is_file():
             self.camera_button.setIcon(QIcon(str(whatsapp_svg)))
             self.camera_button.setIconSize(QSize(16, 16))
-        enabled = bool(self.camera_session.supported) and not busy and \
-            getattr(self.settings, "whatsapp_enabled", True)
+        wa_enabled = getattr(self.settings, "whatsapp_enabled", True)
+        enabled = bool(self.camera_session.supported) and not busy and wa_enabled
         self.camera_button.setEnabled(enabled)
-        self.camera_button.setToolTip("Câmera virtual WhatsApp: " + self.camera_session.message)
+        if not wa_enabled:
+            tip = "Câmera desativada no perfil atual (WhatsApp desativado)."
+        elif not self.camera_session.supported:
+            tip = f"Câmera virtual indisponível: {self.camera_session.message}"
+        else:
+            tip = f"Câmera virtual WhatsApp: {self.camera_session.message}"
+        self.camera_button.setToolTip(tip)
         self.camera_button.setAccessibleName("Câmera virtual WhatsApp: " + text)
 
     def _on_whatsapp_toggle(self, checked: bool) -> None:
@@ -1389,9 +1740,15 @@ class MainWindow(QMainWindow):
         if hasattr(self, "settings_service"):
             self.settings_service.save(self.settings)
         self._apply_whatsapp_visibility()
-        if not checked and getattr(self, "camera_session", None):
-            if self.camera_session.state in ("running", "starting"):
-                self.camera_session.stop()
+        session = self._ensure_camera_session()
+        if checked:
+            self._manual_camera_stopped = False
+            if session and session.state in ("off", "error", "waiting_obs"):
+                session.start()
+        elif session:
+            self._manual_camera_stopped = True
+            if session.state in ("running", "starting", "waiting_obs"):
+                session.stop()
 
     def _apply_whatsapp_visibility(self) -> None:
         enabled = self.settings.whatsapp_enabled
@@ -1406,10 +1763,7 @@ class MainWindow(QMainWindow):
                 if enabled else "WhatsApp desativado no perfil atual."
             )
         if hasattr(self, "camera_button"):
-            self.camera_button.setEnabled(enabled)
-            self.camera_button.setToolTip(
-                "Câmera virtual WhatsApp" if enabled else "Câmera desativada no perfil atual."
-            )
+            self._on_camera_state()
             
     def _toggle_whatsapp_audio(self) -> None:
         if self.whatsapp_audio_guard is None:
@@ -1500,6 +1854,12 @@ class MainWindow(QMainWindow):
             setattr(self.settings, field.name, getattr(pending, field.name))
         self._startup_scene_applied = True
         self.obs.media_scene = self.settings.scene_media
+        self._apply_whatsapp_visibility()
+        if getattr(self.settings, "whatsapp_enabled", False):
+            self._auto_start_camera()
+        elif getattr(self, "camera_session", None):
+            if self.camera_session.state in ("running", "starting"):
+                self.camera_session.stop()
         if previous_obs_config != self._obs_config():
             self._set_component_status("OBS", "pending", "○ OBS", "Reconectando…")
             self.obs.reconfigure(self._obs_config())
@@ -1612,10 +1972,12 @@ class MainWindow(QMainWindow):
         return "\n\n".join(lines)
 
     def _obs_config(self) -> ObsConnectionConfig:
+        from meeting_assistant.services.settings import detect_obs_websocket_password
+
         return ObsConnectionConfig(
             host=self.settings.obs_host,
             port=self.settings.obs_port,
-            password=self.settings.obs_password,
+            password=self.settings.obs_password or detect_obs_websocket_password(),
         )
 
     def _scene_for_mode(self, mode: OperatingMode) -> str:
@@ -1765,8 +2127,9 @@ class MainWindow(QMainWindow):
                 background: #10141a;
                 color: #aeb7c4;
                 border-radius: 6px;
-                padding: 5px 7px;
+                padding: 3px 6px;
                 font-size: 10px;
+                qproperty-alignment: AlignCenter;
             }
             QFrame#Card {
                 background: #171b22;
@@ -1791,7 +2154,7 @@ class MainWindow(QMainWindow):
                 background: #252c36;
                 border: 1px solid #343e4c;
                 border-radius: 7px;
-                padding: 6px 9px;
+                padding: 5px 6px;
                 font-size: 11px;
                 font-weight: 600;
                 text-align: left;

@@ -70,6 +70,15 @@ class CameraSession(QObject):
             self.control.start()
         self.control.commands.put(command)
 
+    def wait_for_obs(self, message: str = "Aguardando OBS…"):
+        if not self.supported:
+            return
+        self.deadline.stop()
+        self.health.stop()
+        if self.host.state() != QProcess.ProcessState.NotRunning:
+            self.host.write(b"stop\n")
+        self._set("waiting_obs", message)
+
     def start(self):
         if not self.supported or self.state in {"starting", "running", "stopping"}:
             return
@@ -88,6 +97,10 @@ class CameraSession(QObject):
 
     def stop(self):
         self.deadline.stop()
+        self.health.stop()
+        if self.state == "waiting_obs":
+            self._set("off", "Câmera desligada. A prévia do Program continua disponível.")
+            return
         self._set("stopping", "Encerrando câmera…")
         if self.host.state() != QProcess.ProcessState.NotRunning:
             self.host.write(b"stop\n")
@@ -104,12 +117,33 @@ class CameraSession(QObject):
             return
         if command == "I":
             self.health_pending = False
+            if self.state == "running" and error:
+                err_lower = error.lower()
+                if any(x in err_lower for x in ("indisponível", "windows 2", "pipe", "não encontrada")):
+                    self.health.stop()
+                    if self.host.state() != QProcess.ProcessState.NotRunning:
+                        self.host.write(b"stop\n")
+                    self._set("waiting_obs", "OBS desconectado. Aguardando OBS…")
+                    return
             if self.state == "running" and not error and status is not None and not status.enabled:
                 self._command("S")  # OBS restarted while the user still wants the camera active.
             return
         if command == "S" and self.state == "starting":
             if error or status is None or not status.enabled:
                 self.deadline.stop()
+                err_lower = (error or "").lower()
+                is_pipe_missing = (
+                    "ponte obs indisponível" in err_lower
+                    or "indisponível" in err_lower
+                    or "windows 2" in err_lower
+                    or "pipe" in err_lower
+                    or "arquivo não encontrado" in err_lower
+                    or "não confirmou" in err_lower
+                    or (error is None and status is None)
+                )
+                if is_pipe_missing:
+                    self._set("waiting_obs", "Aguardando OBS…")
+                    return
                 self._set("error", error or "A ponte do OBS não confirmou o envio.")
                 self._command("T")
                 return
@@ -190,8 +224,16 @@ class CameraSession(QObject):
             self.control = None
 
 
+_fallback_camera_session = None
+
+
 def camera_session():
     app = QApplication.instance()
+    if app is None:
+        global _fallback_camera_session
+        if _fallback_camera_session is None:
+            _fallback_camera_session = CameraSession()
+        return _fallback_camera_session
     if not hasattr(app, "_camera_session"):
         app._camera_session = CameraSession(app)
         app.aboutToQuit.connect(app._camera_session.shutdown)

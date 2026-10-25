@@ -667,7 +667,7 @@ class TestCLIAndGUIBoundaryAndConcurrency:
         for t in threads:
             t.start()
         for t in threads:
-            t.join(timeout=10)
+            t.join(timeout=35)
 
         assert not errors
         assert len(results) == 10

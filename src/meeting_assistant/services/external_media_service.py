@@ -71,6 +71,8 @@ class ExternalMediaService(QObject):
         self._restore_errors = []
         self._media_warning = ""
         self._has_presented = False
+        self._jwl_return_requested = False
+        self._last_jwl_return = None
         self._control_cancel = threading.Event()
         self._watch = QTimer(self)
         self._watch.setInterval(350)
@@ -172,6 +174,8 @@ class ExternalMediaService(QObject):
         self._restore_errors.clear()
         self._media_warning = ""
         self._has_presented = False
+        self._jwl_return_requested = False
+        self._last_jwl_return = None
         self._control_cancel.clear()
         self.controls.fullscreen_owned = False
         self._state("choosing", "Selecione a janela que deseja apresentar.")
@@ -276,9 +280,15 @@ class ExternalMediaService(QObject):
                 self._restore_errors.append(
                     payload.get("message", "Player não confirmou a disposição anterior")
                 )
-            if not self.zoom_hall.restore_jwl() and self.phase == "returning":
-                self.operator_layout_requested.emit()
-                self._state("return_failed", "Retorno do JWL não confirmado. Confira a tela do salão.")
+            if not getattr(self, "_jwl_return_requested", False):
+                if not self.zoom_hall.restore_jwl() and self.phase == "returning":
+                    self.operator_layout_requested.emit()
+                    self._state("return_failed", "Retorno do JWL não confirmado. Confira a tela do salão.")
+            elif (
+                not getattr(self.zoom_hall, "returning", False)
+                and getattr(self, "_last_jwl_return", None) is not None
+            ):
+                self._finish_return(*self._last_jwl_return)
         elif action == "monitor" and self.phase == "presenting":
             if not ok:
                 self._failure = payload.get("message", "Player perdeu a exibição no Salão.")
@@ -338,7 +348,7 @@ class ExternalMediaService(QObject):
         
         try:
             if hasattr(self.backend, "_restore_hall_order"):
-                self.backend._restore_hall_order()
+                self.backend._restore_hall_order(self.window.hwnd if self.window else None)
         except Exception as exc:
             import logging
             logging.getLogger(__name__).warning("Falha ao restaurar JWL antecipadamente: %s", exc)
@@ -416,6 +426,21 @@ class ExternalMediaService(QObject):
             self.state_changed.emit(True, "Retorno solicitado; concluindo o comando em andamento…")
             return
         self._restore_errors.clear()
+        self._last_jwl_return = None
+        self._jwl_return_requested = False
+        player_hwnd = self.window.hwnd if self.window else None
+        try:
+            if hasattr(self.backend, "_restore_hall_order"):
+                self.backend._restore_hall_order(player_hwnd)
+        except Exception:
+            pass
+        try:
+            if hasattr(self.zoom_hall, "restore_jwl"):
+                if not self.zoom_hall.restore_jwl(activate=True):
+                    self._last_jwl_return = (False, "JWL não pôde ser restaurado.")
+                self._jwl_return_requested = True
+        except Exception:
+            pass
         if self._has_presented and self.phase != "return_failed":
             self._state("stopping_media", "Parando a mídia antes de retornar ao JWL…")
             self._work("stop_media", self._stop_media)
@@ -424,19 +449,22 @@ class ExternalMediaService(QObject):
         self._request_obs("restore", {"prior": self._prior})
 
     def _return_status(self, ok, message):
-        if self.phase != "returning" or self.zoom_hall.returning:
+        self._last_jwl_return = (ok, message)
+        if self.phase != "returning" or getattr(self.zoom_hall, "returning", False):
             return
-        if ok and not self._restore_errors:
+        self._finish_return(ok, message)
+
+    def _finish_return(self, ok, message):
+        if ok:
             if self._failure:
                 message = f"Falha na mídia externa: {self._failure} {message}"
             if self._media_warning:
                 message += " Aviso: " + self._media_warning
+            if self._restore_errors:
+                message += "; pendências: " + "; ".join(self._restore_errors)
             self.operator_layout_requested.emit()
             self._state("idle", message)
             self.window, self._prior, self._selector = None, "", ""
-        elif ok:
-            self.operator_layout_requested.emit()
-            self._state("return_failed", message + "; pendências: " + "; ".join(self._restore_errors))
         else:
             self.operator_layout_requested.emit()
             self._state("return_failed", "Retorno JWL não confirmado: " + message)

@@ -202,9 +202,13 @@ def create_standard_scenes(settings):
     import obsws_python as obs
 
     from meeting_assistant.services.obs_setup import STANDARD_SCENES
+    from meeting_assistant.services.settings import detect_obs_websocket_password
 
     client = obs.ReqClient(
-        host=settings.obs_host, port=settings.obs_port, password=settings.obs_password, timeout=3
+        host=settings.obs_host,
+        port=settings.obs_port,
+        password=settings.obs_password or detect_obs_websocket_password(),
+        timeout=3,
     )
     try:
         names = {r["sceneName"] for r in client.send("GetSceneList", raw=True)["scenes"]}

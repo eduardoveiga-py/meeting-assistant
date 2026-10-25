@@ -64,6 +64,16 @@ def main() -> int:
     _set_windows_app_id()
     _configure_qt_logging()
 
+    from meeting_assistant.utils import (
+        configure_dpi_awareness,
+        install_global_excepthook,
+        setup_rotating_logger,
+    )
+
+    configure_dpi_awareness()
+    setup_rotating_logger()
+    install_global_excepthook()
+
     # QApplication must be constructed before pywinauto/comtypes is imported.
     # The JW Library UIA service intentionally performs that import lazily on
     # its own STA worker thread, after Qt has established OLE and DPI awareness.
@@ -106,10 +116,12 @@ def main() -> int:
     state.automation_enabled = False
 
     def current_obs_config() -> ObsConnectionConfig:
+        from meeting_assistant.services.settings import detect_obs_websocket_password
+
         return ObsConnectionConfig(
             host=settings.obs_host,
             port=settings.obs_port,
-            password=settings.obs_password,
+            password=settings.obs_password or detect_obs_websocket_password(),
         )
 
     def current_media_automation_config() -> MediaAutomationConfig:
@@ -512,6 +524,8 @@ def main() -> int:
     window.show()
     window.layout_service.start()
     QTimer.singleShot(600, lambda: window.layout_service.restore(operator_fraction(window)))
+    if getattr(settings, "whatsapp_enabled", False):
+        QTimer.singleShot(1500, window._auto_start_camera)
     if settings_service.recovery_message:
         QTimer.singleShot(
             0, lambda: QMessageBox.warning(window, "Ajustes recuperados", settings_service.recovery_message)

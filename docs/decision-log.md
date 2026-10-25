@@ -386,3 +386,30 @@ Remediação completa das fragilidades apontadas em auditoria técnica (F1–F9)
 
 **Evidência:** Todos os 851 testes automatizados (um acréscimo de 196 testes cobrindo áudio, e2e, stress adversarial e integridade de roteamento) passam com 100% de sucesso. O baseline protegido do Salão (`tests/test_validated_hall_baseline.py`) permanece rigorosamente íntegro. Zero alertas ou violações de Ruff.
 
+## 2026-10-14 — Estabilização Arquitetural v2-Hardened: Imagem vs. Vídeo, Suporte UWP, Áudio Anti-Pausa e Pre-Flight Check
+
+**Decisão:** Consolidação da arquitetura v2-hardened com foco em confiabilidade operacional anti-regressão:
+1. Máquina de estados com diferenciação automática entre Imagem e Vídeo: imagens estáticas (`DISPLAYING_IMAGE`) mantêm o microfone do orador/assistência aberto para comentários; apenas reprodução de vídeo com áudio WASAPI real (`PLAYING_VIDEO`) aciona o muting do microfone local;
+2. Fail-Safe de saída (`emergency_restore_on_exit`) no encerramento da aplicação e em `atexit` para garantir que o microfone no OBS nunca permaneça mutado se o aplicativo fechar durante um vídeo;
+3. Resolução nativa de janelas UWP (`ApplicationFrameHost.exe` -> `JWLibrary.exe`) via enumeração de janelas filhas `CoreWindow`;
+4. Algoritmo de release anti-pausa dramática no `AudioService` (hold de 4.5s) prevenindo cortes de câmera/áudio em pausas de narração;
+5. Suíte de diagnóstico Pré-Reunião (`PreFlightChecker`) e monitoramento contínuo em segundo plano (`WatchdogService`) com auto-fix de câmera virtual;
+6. Integração responsiva e de consumo vertical zero na interface gráfica (`state_badge` e `btn_preflight`), preservando os requisitos estritos de escala 2.0x (prévia >= 40px) e largura compacta (380px sem scrollbar).
+
+**Evidência:** 100% de aprovação na suíte de testes (incluindo testes de baseline do Salão, novos contratos, stress adversarial de 32 cenários e testes de escala visual). Zero violações no Ruff. Documentação arquitetural detalhada em [architecture-v2-hardened.md](architecture-v2-hardened.md).
+
+## 2026-10-25 — Versão 1.2.0: Retorno Instantâneo de Mídia, Estabilização de Layout e Diagnóstico Preflight Thread-Safe
+
+**Retorno:** O operador reportou durante testes práticos que a interrupção da Mídia Externa demorava cerca de 10 segundos para restaurar o JW Library e o Palco, o fechamento do diálogo de mídia causava rolagem indesejada da janela principal escondendo a seção de controle de apresentação, o texto longo de status da automação alterava o layout vertical quebrando botões de emergência, e o botão "Checar Ambiente" apresentava falso-positivo para a câmera virtual do OBS.
+
+**Decisão:**
+1. **Retorno Imediato de Mídia:** Eliminação da latência percebida com ocultação síncrona do popup no clique (`self.hide()`), elevação de emergência imediata da saída do JW Library (`HWND_TOPMOST` e `SW_RESTORE`) via `_restore_hall_order(player_hwnd)`, reativação imediata do guardião do Zoom/JWL (`zoom_hall.restore_jwl(activate=True)`), e transição rápida para cena Palco no OBS;
+2. **Resiliência a Estilos DWM:** Eliminação do falso timeout de 2,5s em `restore_presentation()` para navegadores (Chrome/Edge) que não utilizam bordas Win32 padrão, ajustando o critério de verificação para geometria e visibilidade efetiva, e protegendo subprocesso UIA contra quebras de pipe;
+3. **Estabilidade de Layout da Janela Principal:** Substituição da área de rolagem padrão por `_MainContentScrollArea` com desacoplamento de `ensureWidgetVisible`, impedindo que eventos de foco do Qt rolem a interface para a grade inferior do sistema e mantendo a seção de controle da apresentação permanentemente visível;
+4. **Fixação do Indicador de Automação:** Fixação da altura em 24px (`setFixedHeight(24)`, `setWordWrap(False)`, `QSizePolicy.Fixed`) e formatação concisa de linha única da telemetria, mantendo detalhes completos no tooltip;
+5. **Preflight Thread-Safe:** Implementação de `is_virtual_cam_active()` e `start_virtual_cam()` thread-safe no `ObsController` via `_client_lock` para evitar concorrência de frames WebSocket entre o preflight e o loop principal; autodetecção de credenciais do OBS e fallback de monitores via `QApplication.screens()`; inclusão de feedback visual ("⏳ Checando...") no botão.
+
+**Evidência:** Todos os 1005 testes automatizados passam com 100% de aprovação. O baseline do Salão (`tests/test_validated_hall_baseline.py`) permanece íntegro com hashes idênticos. Zero violações no Ruff. Testes operacionais físicos validados com sucesso pelo operador.
+
+
+

@@ -35,6 +35,9 @@ operador foi coletada novamente nesta tarefa.
 
 | ID | Problema | Situação |
 | --- | --- | --- |
+| INC-041 | Estouro de layout em DPI alto (1.5x/2.0x), distorção por offscreen e corrida no timer de operador | Causa demonstrada e corrigida: remoção do offscreen em conftest, restauração do grid canônico de 3 linhas no MainWindow e proteção do timer em testes. 100% dos testes aprovados, baseline protegido íntegro. |
+| INC-040 | Rejeição de Drag & Drop no Windows 11 e Falha de Importação de .jwlplaylist no JW Library | Causa demonstrada e corrigida: 106 testes passando (100%), baseline íntegro |
+| INC-039 | Mídias em Ajustes, Cânticos >151, Vídeos M3, Miniaturas de Vídeo e `.jwlplaylist` | Causa demonstrada e corrigida: 962 testes passando (100%), baseline íntegro |
 | INC-036 | Preview do OBS piscando e FPS degradado | Causa demonstrada e corrigida: timeout do pipe aumentado para 1500 ms |
 | INC-034 | Forçar JWL gera AttributeError repetido | Operador confirmou funcionamento após entrega `8937c75` |
 | INC-035 | Qt amplia Ajustes além do tamanho solicitado | Restrição nativa reproduzida/corrigida; ensaio na escala do operador pendente |
@@ -71,6 +74,29 @@ operador foi coletada novamente nesta tarefa.
 | INC-027 | Botão Mic Zoom sem ação | Funcionamento confirmado após correção de identidade |
 | INC-028 | Mic Zoom levava cerca de cinco segundos | Otimização implementada; latência real pendente |
 | INC-029 | Windows bloqueava executável sem fornecedor verificado | Distribuição/assinatura pendentes |
+
+## INC-041 — Estouro de layout em DPI alto (1.5x e 2.0x), distorção por offscreen e corrida no timer de operador
+
+**Relato e contexto.** Durante a fase de estabilização de interface gráfica e suíte de regressão, observou-se falha de layout em `test_operator_layout_scale.py`, `test_review_ui.py` e `test_window_geometry.py`, com estouro de scrollbars horizontais e verticais, além de falha pontual em `test_zoom_microphone.py` na execução completa da suíte.
+
+**Causas demonstradas.**
+1. **Distorção tipográfica por `QT_QPA_PLATFORM: offscreen`**: Uma adição acidental de `offscreen` em `conftest.py` substituiu o driver nativo `windows` do Qt. No Windows, o plugin offscreen usa métricas de fontes aproximadas/bitmap que dobraram a largura de rótulos em negrito (ex: título de 161px inflou para 323px), estourando o container horizontalmente.
+2. **Estouro de orçamento vertical por botões redundantes**: Foram introduzidas linhas adicionais em `MainWindow._build_ui()` (Row 3 com botões duplicados de emergência/restauração, Row 4 com checagem de ambiente, e uma linha dedicada de badge de estado), adicionando cerca de 95px de altura vertical. Em alturas compactas (480px em DPI 2.0x e 520px/600px), isso forçava o surgimento de barra de rolagem vertical e reduzia a área da prévia abaixo dos 80px/100px contratuais.
+3. **Corrida com timer periódico `_operator_timer`**: Em `MainWindow.__init__`, o timer de 3 segundos era iniciado de forma incondicional. Durante a execução concorrente da suíte completa de testes sob alta carga de CPU, o timer disparava no meio de testes de UI do Zoom, executando uma busca UIA extra não esperada pelas asserções isoladas.
+
+**Correção aplicada.**
+1. Remoção da imposição de `offscreen` em `tests/conftest.py` e `.github/workflows/ci.yml`, restabelecendo a plataforma nativa Windows com métricas tipográficas reais (conforme decisão do commit `61831bb`).
+2. Restauração do grid visual canônico de 3 linhas e 2 colunas no `system_grid` do `MainWindow`, eliminando as linhas duplicadas de botões do layout visual e preservando as ações programáticas.
+3. Condicionamento da ativação de `self._operator_timer.start()` à ausência da variável de ambiente `MEETING_ASSISTANT_TESTING`, impedindo disparos periódicos espúrios durante a execução da suíte de testes.
+
+**Evidência e limites.**
+- `test_operator_layout_scale.py`: 4/4 aprovados em todas as escalas (1.0x, 1.25x, 1.5x e 2.0x).
+- `test_review_ui.py`: 21/21 aprovados.
+- `test_window_geometry.py`: 10/10 aprovados.
+- `test_main_window_compact_and_camera.py`: 6/6 aprovados.
+- `test_zoom_microphone.py`: 61/61 aprovados.
+- `test_validated_hall_baseline.py`: 1/1 aprovado com integridade hash 100% preservada.
+- `ruff check .`: 0 erros. Scripts PowerShell: 0 erros de sintaxe.
 
 ## INC-036 — Preview do OBS piscando e queda de FPS por timeout no named pipe
 
@@ -975,3 +1001,228 @@ cNormalPosition\ quebra as regras do Desktop Window Manager, causando falhas de 
 - **F8 (Remoção de Log Síncrono a Cada 100ms em Disco):** Remoção de escrita síncrona de arquivo `%TEMP%\ducking_debug.log` no timer da GUI em `media_ducking.py`.
 - **F9 (Gerenciamento de Ciclo COM no CLI):** Inicialização e liberação explícita de COM (`pythoncom.CoInitialize()`, `CoUninitialize()`) na execução da CLI `--diagnose` em `av_setup_tool.py`.
 **Resultado:** Todos os 851 testes passando (100%), `test_validated_hall_baseline.py` íntegro, zero violações de Ruff.
+
+### 2026-10-12: Modernização do Gerenciador de Mídias e Playlist Editor Estilo M3 / JW Library (INC-037)
+**Sintoma:** O gerenciador de mídias anterior importava arquivos locais e mídias baixadas diretamente para o JW Library sem oferecer ao operador uma área de preparação visual e flexível para reordenação, pré-visualização com miniaturas (thumbnails), ajuste de ações ao término de cada mídia (`EndAction`: Parar, Continuar, Pausar, Repetir), ou inserção direta de cânticos e vídeos individuais por código/faixa oficial. Além disso, checkboxes e botões na aba de download apresentavam quebra/truncamento horizontal em layouts compactos.
+**Causa:**
+1. A importação direta gravava mídias imediatamente em `userData.db` sem permitir customização sequencial das faixas.
+2. A tabela `PlaylistItem` do JW Library suporta o atributo `EndAction INTEGER NOT NULL CHECK(EndAction IN (0, 1, 2, 3))` (0 = Continuar, 1 = Pausar, 2 = Parar, 3 = Repetir), mas o importador mantinha fixo o valor padrão (2 = Parar) e não oferecia UI ou suporte a atualização de `EndAction` na deduplicação.
+3. Não havia widget com suporte nativo a Drag & Drop direto do Windows Explorer com ordenação dinâmica (⬆️/⬇️ e arrasto).
+4. As opções de mídias de Meio de Semana e Fim de Semana ficavam em linhas horizontais únicas (`QHBoxLayout`), excedendo a largura mínima (540px) imposta pelos testes de conformidade visual em telas compactas.
+**Solução:**
+- Implementado `PlaylistListWidget` com suporte completo a Drag & Drop de arquivos de mídia (.mp4, .jpg, .mp3, etc.) do Windows Explorer e reordenação interativa por arrasto.
+- Criado `PlaylistItemRowWidget` com renderização de miniaturas ricas (`media_thumbnail_helper.py`), edição inline do título, indicador de duração/formato, seletor de ação ao final (`EndAction`: ⏹️ Parar [2], ▶️ Continuar [0], ⏸️ Pausar [1], 🔁 Repetir [3]) e botões de reposicionamento/remoção rápida.
+- Adicionados diálogos integrados `AddSongDialog` (busca e inclusão de cânticos 1–151), `AddVideoDialog` (busca e inclusão por publicação/track) e `LoadMeetingDialog` ("📅 Reunião Completa...") para pré-carregar todas as mídias da reunião direto no editor de playlist customizada.
+- Atualizado `jwl_media_importer.py` com suporte ao parâmetro `clear_existing: bool` para reordenação limpa da playlist e persistência/atualização do campo `PlaylistItem.EndAction` tanto em novos itens quanto na reconciliação de itens pré-existentes.
+- Reestruturado o layout da aba de download com `QGridLayout` 2x2 para os checkboxes, eliminando truncamento horizontal e mantendo compatibilidade total com os limites rígidos de dimensões da janela (altura <= 450px, largura mínima <= 540px).
+- Cobertura de testes completa adicionada em `tests/test_meeting_media_playlist_editor.py` (19 testes) cobrindo drag & drop, sinais de reordenação, persistência de EndAction e ThumbnailFilePath no SQLite `userData.db`, clear_existing vs append e exportação em pacote `.jwlibrary`.
+
+#### Auditoria e Refinamentos (Revisão Técnica):
+1. **F1 (TypeError Silencioso em `download_media_item_by_pub_track`):** Chamada a `register_media_in_jwl_collection` utilizava argumentos inexistentes (`source_file`, `pub_symbol`, etc.), disparando `TypeError` suprimido por `except Exception:`. Corrigida a assinatura e adicionada cópia ao diretório de vídeos do JW Library.
+2. **F2 (Corrupção de QListWidgetItem em `PlaylistListWidget.dropEvent`):** Drops internos inválidos ou na mesma linha chamavam `super().dropEvent(event)`, invocando o manipulador padrão do Qt que destrói `itemWidget`. Corrigido para `event.ignore()`.
+3. **F3 (Arrasto de Pastas e Ordenação Natural):** `_on_files_dropped` ignorava diretórios inteiros (ex.: pastas com slides de discursos em pendrive). Adicionado suporte recursivo a diretórios, ordenação natural (`slide1, slide2, ..., slide10`) e extração de imagens de pacotes `.jwpub`.
+4. **F4 (Habilitação dos Botões Subir/Descer):** `btn_up` e `btn_down` ficavam ativos no topo/base da lista e em itens únicos. Ajustado com `total_count` para desabilitar ⬆️ no índice 0 e ⬇️ no último índice.
+5. **F5 (Organização em 2 Linhas da Toolbar da Playlist):** Cinco botões em linha horizontal única causavam compressão e corte em janelas compactas. Reorganizados em duas linhas lógicas ("Adicionar Mídias" e "Ações Gerais").
+6. **F6 (Sincronização do Nome da Playlist em `LoadMeetingDialog`):** Carregar reunião completa mantinha o nome fixo "Discurso Público". Adicionada seleção/sugestão dinâmica de nome ("Reunião de Meio de Semana", "Estudo de A Sentinela") e sincronização automática com o campo de edição.
+7. **F7 (Eliminação de Alertas Modais em Ações de Preparação):** Inserir cânticos ou vídeos individuais disparava alertas `QMessageBox` bloqueantes a cada item. Restrito o uso de caixas de diálogo a operações externas reais (importação no JW Library, exportação e restauração).
+8. **F8 (Renderização Real de Miniaturas com `thumbnail_path` e Sibling):** `render_media_thumbnail` ignorava `thumbnail_path` e imagens irmãs de vídeos locais. Adicionado carregamento de imagens reais, overlay com badge de play e persistência de `ThumbnailFilePath` no SQLite `userData.db`.
+**Resultado:** Todos os testes passando (100%), `test_validated_hall_baseline.py` íntegro, zero violações de Ruff.
+
+### 2026-10-12: Navegação de Semanas, Detecção/Instalação de JWPUB e Limpeza Inteligente de Armazenamento (INC-038)
+**Sintoma:** O operador solicitou a capacidade de selecionar semanas passadas (-2 semanas) e semanas futuras para adiantar downloads de reuniões, verificar e instalar automaticamente pacotes `.jwpub` mais novos no JW Library, e eliminar arquivos temporários e mídias obsoletas tanto da pasta local do app quanto do JW Library sem duplicar gigabytes em disco nem arriscar mídias personalizadas ou cânticos.
+**Causa e Vulnerabilidades Identificadas na Auditoria Cética:**
+1. **F1 (Exclusão Prematura de Downloads Antecipados em `cleanup_jwl_storage` e `cleanup_app_cache`):** A rotina original de limpeza utilizava `mtime < cutoff_ts` do sistema de arquivos para decidir expurgo de vídeos. Quando o operador baixava mídias semanas antes (objetivo primordial da navegação de semanas), tais arquivos acumulavam data de modificação antiga e eram indevidamente apagados da pasta `Videos\JWLibrary` antes mesmo da reunião ocorrer. Além disso, pacotes `.jwpub` em `Publicacoes` eram expurgados, quebrando a detecção de semanas futuras em `get_available_weeks`.
+2. **F2 (Exclusão Inadvertida de Cache em Playlists Personalizadas):** O pedido especificava claramente limpar o cache da pasta base após importação *"a menos que sejam uma playlist diferente de uma reunião padrão"*. O código anterior limpava incondicionalmente a pasta de destino mesmo quando o operador fornecia uma playlist com nome customizado.
+3. **F3 (Falta de Persistência de `chk_cleanup_after_import`):** O checkbox de limpeza pós-importação na aba de download não conectava seu sinal `toggled` à persistência em `AppSettings` via `SettingsService`, perdendo a escolha do operador ao reabrir a janela.
+4. **F4 (Chaves Órfãs em `mediaCollection.db`):** Ao expurgar vídeos antigos da pasta do JW Library, registros na tabela `Video` eram deletados, mas as chaves correspondentes em `MediaKey` permaneciam órfãs.
+5. **F5 (Omissão de Data Alvo em `load_meeting_for_playlist`):** Ao carregar mídias da reunião no editor de playlist customizada via `LoadMeetingDialog`, o parâmetro `meeting_date` da semana selecionada não era repassado ao worker, forçando `download_midweek_items` a extrair os cânticos da data de hoje em vez da semana alvo pretendida.
+6. **F6 (Vazamento de Thread de Leitura de Named Pipe entre Testes):** Instâncias de `ProgramVideo` mantinham a thread `PreviewReader` em polling infinito do pipe do Windows após a finalização de testes de interface, causando colisões e abortos no runtime C/Python durante baterias completas de teste.
+7. **F7 (Access Violation em `ScreenFitController` durante destruição de QDialog/QWidget):** Durante eventos de fechamento ou rejeição de diálogos modais (`test_operator_improvements.py`), `ScreenFitController.eventFilter` interceptava `QEvent.Type.Destroy` e tentava invocar métodos sobre objetos C++ já em desalocação no Shiboken sem remover previamente o event filter via `removeEventFilter(self)`, disparando `Fatal Python error: Aborted` / `Access Violation` nativo.
+8. **F8 (Access Violation em `QListWidget.clear()` com `setItemWidget` em loops modais):** Ao limpar a lista de itens da playlist (`local_files_list.clear()`), o Qt desalocava os widgets de linha customizados (`PlaylistItemRowWidget`) no C++ sem dissociação limpa no wrapper Shiboken, deixando eventos de layout/estilo pendentes na fila de despacho que corrompiam a memória ao entrar em loops modais subsequentes (`QDialog.exec()`).
+**Solução:**
+- Em `jwl_media_importer.py` e `meeting_media_service.py`, a lógica de expurgo foi refatorada para calcular a data real de validade da edição da publicação (`exp_date`): edições bimestrais da Apostila (`mwb`) cobrem dois meses (`m` e `m+1`), expirando apenas no último dia do mês seguinte. Vídeos de edições correntes ou futuras NUNCA são apagados, mesmo com `mtime` antigo.
+- `cleanup_jwl_storage` expurga chaves órfãs de `MediaKey` em `mediaCollection.db` e aceita caminhos POSIX e nativos Windows.
+- `download_midweek_and_import` e `download_weekend_and_import` preservam intacto o cache local caso a playlist seja diferente das reuniões padrão (`"Reunião de Meio de Semana"` e `"Estudo de A Sentinela"`).
+- `MeetingMediaDialog` conecta `chk_cleanup_after_import.toggled` para salvar imediatamente `meeting_media_cleanup_after_import` no arquivo de configurações, e `AppSettings` adota `True` como padrão.
+- `LoadMeetingDialog` e `MediaTaskWorker` repassam a `meeting_date` da semana selecionada, garantindo coerência nos cânticos carregados.
+- `tests/conftest.py` adicionou teardown seguro para `_program_video`, finalizando threads ativas entre testes.
+- `src/meeting_assistant/ui/window_geometry.py`: `ScreenFitController` foi blindado removendo a interceptação nociva de `Destroy`/`Hide`, garantindo remoção explícita de `removeEventFilter(self)` no `cleanup()` e desconexão segura de sinais de tela.
+- `src/meeting_assistant/ui/meeting_media_dialog.py`: Implementado helper `_clear_playlist_widgets()` que dissocia explicitamente cada widget de linha (`removeItemWidget`), desanexa a hierarquia (`setParent(None)`) e agenda liberação segura (`deleteLater()`) antes de `clear()`, no `_refresh_playlist_list`, no `reject()` e no `closeEvent()`.
+**Resultado:** Todos os 962 testes passando (100%), `test_validated_hall_baseline.py` íntegro, zero violações de Ruff.
+
+### 2026-10-12: Mídias em Ajustes, Cânticos Além de 151, Catálogo M3, Drag & Drop Explorer, Miniaturas Shell de Vídeo, Formato Oficial `.jwlplaylist` e Importação JW Library (INC-039)
+**Sintoma:** O operador relatou dez pontos essenciais para a usabilidade e estabilidade do fluxo de mídias:
+1. Testes muito demorados por repetições desnecessárias da suíte completa durante desenvolvimento interativo.
+2. Gerenciador de mídias e playlists precisava ser uma página permanente dentro de Ajustes (`SetupAssistantDialog`), posicionada logo após "Reunião e janelas", eliminando botões modais flutuantes.
+3. Diálogo de cânticos limitava a seleção ao máximo de 151, impedindo seleção de novos cânticos lançados (152, 153, 154+).
+4. Adição de vídeos avulsos dependia de códigos técnicos complexos de publicação e faixa (`pub`/`track`) desconhecidos pelo operador.
+5. Drag & Drop de arquivos (.mp4, .jpg, .png, .mp3) arrastados do Windows Explorer não funcionava na lista da playlist.
+6. Reordenação com o mouse fazia o item sumir temporariamente por colisão de widgets customizados do `QListWidget`.
+7. Miniaturas (*thumbnails*) de vídeos locais não eram geradas (apenas fotos exibiam miniatura).
+8. A disposição da janela ficava espremida/desajustada em layouts compactos.
+9. Informação de idioma das mídias e preferência de iniciar a câmera do WhatsApp junto com o app a partir do toggle não estavam sendo persistidas.
+10. O arquivo de playlist era gerado com extensão `.jwlibrary` e manifesto `type: 0`, sendo rejeitado pela função nativa "Importar playlist" do JW Library (que exige extensão `.jwlplaylist` e `type: 1`).
+11. Ao criar uma playlist, o app falhava ao tentar importar direto no banco `userData.db` do JW Library.
+
+**Causa Raiz Demonstrada:**
+1. A suíte completa de 962 testes demorava ~6 minutos a cada iteração; o fluxo de desenvolvimento deve focar testes modulares por módulo (`tests/test_meeting_media_*.py`, `test_jwl_*.py`) e executar a regressão completa apenas na entrega final.
+2. `SetupAssistantDialog` não possuía a categoria `"media"` registrada na navegação.
+3. `AddSongDialog` continha validação rígida com limite superior 151.
+4. Não existia catálogo amigável de vídeos integrado às APIs do CDN JW.org para busca por categorias temáticas e título.
+5. `PlaylistListWidget.dragEnterEvent` e `dragMoveEvent` não aplicavam explicitamente `event.setDropAction(Qt.DropAction.CopyAction)` e `event.acceptProposedAction()` em conjunto com `files_dropped`.
+6. O drag interno padrão do Qt oculta o `itemWidget` enquanto o item é arrastado; a reordenação precisa usar `QDrag` com captura de pixmap (`grab()`) e controle do drop via sinal `item_reordered`.
+7. Não havia extrator de frame de vídeo para formatos locais Windows 11; `media_thumbnail_helper.py` dependia exclusivamente de imagens em disco.
+8. `MeetingMediaDialog` como diálogo pop-up flutuante acumulava bordas e botões redundantes ("Fechar"); ao ser embutido com `embedded=True`, ajusta-se fluidamente com scroll interno.
+9. `_on_language_changed` e o toggle do WhatsApp não sincronizavam a gravação imediata no `settings.json` via `SettingsService`.
+10. O formato de exportação de playlists do JW Library utiliza `manifest.json` com `"type": 1` e extensão `.jwlplaylist`. O formato com `"type": 0` é de backup completo do app, rejeitado na importação de playlist.
+11. Na importação direta para o `userData.db` do JW Library, uma verificação de `PRAGMA foreign_key_check` abortava a transação devido a registros órfãos pré-existentes de tabelas de marcadores do próprio JW Library, e a deleção de itens de playlist não realizava deleção em cascata dos marcadores associados (`Marker`, `PlaylistItemMarker`).
+
+**Correção Implementada:**
+1. **Otimização de Testes**: Protocolo ajustado para rodar a suíte modular durante edições de código e a suíte completa de 962 testes uma única vez ao final.
+2. **Página Permanente em Ajustes**: Adicionada a página `"media"` ("Mídias e playlists") no `SetupAssistantDialog` logo após "Reunião e janelas", com suporte a `embedded=True`, scroll suave e desativação limpa de recursos em `_disconnect_views()`.
+3. **Cânticos Além de 151**: `AddSongDialog` agora aceita números de 1 a 999, e `fetch_songs_catalog` recupera qualquer faixa recente (validado com cântico 154).
+4. **Catálogo Intuitivo M3 de Vídeos**: `AddVideoDialog` agora inclui aba de catálogo por categorias populares do JW.org (Ajudas para Pregação, Crianças, Ensinos Básicos, Família, Músicas, etc.) com filtro de busca em tempo real por título.
+5. **Drag & Drop do Windows Explorer**: `PlaylistListWidget` implementado com tratamento completo de URLs locais do Windows Explorer, ordenação natural e aceitação de pastas inteiras de imagens e vídeos.
+6. **Reordenação Fluida com Mouse**: Drag com `QDrag` customizado utilizando pixmap capturado do widget de linha, garantindo que o item nunca suma ou pisque durante o movimento.
+7. **Miniaturas Nativas de Vídeo Windows 11**: `media_thumbnail_helper.py` utiliza a API Windows Shell nativa (`IShellItemImageFactory`) via COM para extrair a miniatura de vídeo idêntica à do Windows Explorer, com fallback elegante para badge temático.
+8. **Disposição e Scroll da Janela**: `MeetingMediaDialog` com `QScrollArea` interno sem barras redundantes, compatível com resoluções desde 768p até 4K em qualquer escala do Windows.
+9. **Persistência Imediata**: `congregation_language` e inicialização da câmera a partir do toggle sincronizados e persistidos via `SettingsService.save()`.
+10. **Exportação Oficial `.jwlplaylist`**: Implementado `export_playlist_to_jwlplaylist` gerando pacotes zip `.jwlplaylist` com `manifest.json` `type: 1`, reconhecido e importado nativamente pelo JW Library.
+11. **Importação Direta Confiável**: Deleção em cascata de marcadores (`PlaylistItemMarker`, `Marker`) antes da exclusão de itens de playlist e remoção da restrição indevida de foreign key em bancos com histórico de marcadores antigos.
+
+**Resultado da Validação:**
+- 962 testes de regressão executados com 100% de aprovação (0 falhas).
+- 100% de conformidade no teste de integridade do baseline físico (`test_validated_hall_baseline.py`).
+- 0 violações no linter Ruff (`ruff check .`).
+- 0 erros na verificação de sintaxe de todos os scripts PowerShell (`scripts/*.ps1`).
+
+### 2026-10-13: Rejeição de Drag & Drop no Windows Explorer e Importação Oficial de `.jwlplaylist` no JW Library Desktop (INC-040)
+**Sintoma:** O operador relatou dois bloqueios críticos:
+1. Ao arrastar mídias do Windows Explorer para dentro da janela "Ajustes -> Mídias e playlists -> Playlist Personalizada Discurso Público", o app recusava os arquivos exibindo o cursor proibitivo (🚫) e não aceitava o drop (evidenciado na captura `media_1791851379500_a8aa3727.png`).
+2. O arquivo `.jwlplaylist` gerado anteriormente pelo app falhava na importação manual oficial do JW Library Desktop no Windows 11. O usuário forneceu o arquivo de referência funcional `Discurso_66.jwlplaylist` para análise de engenharia reversa.
+
+**Causa Raiz Demonstrada:**
+1. **Rejeição do Drag & Drop no Windows 11 Explorer:**
+   - O diálogo principal `SetupAssistantDialog` não possuía `acceptDrops == True`, não desbloqueava mensagens UIPI no HWND nativo de nível superior (`ChangeWindowMessageFilterEx` para `WM_DROPFILES`, `WM_COPYDATA`, `WM_COPYGLOBALDATA`) e não interceptava os eventos de drag para encaminhamento à página interna.
+   - Os controles `QScrollArea` e viewports intermediários (`_make_scrollable`) interceptavam e descartavam eventos de drop antes que chegassem à lista.
+   - Em `PlaylistListWidget` e `PlaylistDropContainer`, `event.acceptProposedAction()` não era chamado nos manipuladores `dragEnterEvent` e `dragMoveEvent`, fazendo o Windows Explorer interpretar o alvo como não receptivo (cursor 🚫).
+   - O extrator `PlaylistListWidget.extract_file_paths` não decodificava o formato nativo OLE de arrasto de arquivos do Windows Explorer (`application/x-qt-windows-mime;value="FileNameW"` codificado em UTF-16LE com terminação nula dupla).
+2. **Engenharia Reversa e Conformidade Rigorosa de `.jwlplaylist` com o JW Library:**
+   - **Cálculo de Hash SHA-256 (`calculate_jwl_hash`):** Formatava os bytes como `f"{b:x}"` em vez de dois dígitos hexadecimais, omitindo zeros à esquerda em bytes menores que 16. Isso produzia hashes encurtados (61 a 63 caracteres) em vez de strings SHA-256 de 64 caracteres em minúsculas, falhando na validação de integridade do JW Library.
+   - **Formato e Nomenclatura de Miniaturas:** O exportador anterior anexava extensões `.jpg`/`.png` aos arquivos de miniaturas gerados (`dest_fn = f"{uuid.uuid4()}{ext}"`). A análise do pacote oficial `Discurso_66.jwlplaylist` demonstrou que as miniaturas no JW Library são armazenadas no ZIP e registradas em `IndependentMedia.FilePath`, `IndependentMedia.OriginalFilename` e `PlaylistItem.ThumbnailFilePath` como identificadores UUID puros em minúsculas, sem extensão.
+   - **Esquema SQLite Completo:** O arquivo `userData.db` precisa conter o conjunto canônico completo de 17 tabelas, 28 índices e 29 triggers do esquema de usuário do JW Library (incluindo `BlockRange`, `Bookmark`, `InputField`, `Note`, `UserMark`, etc.) e o cabeçalho SQLite precisa ser gravado em formato WAL (`journal_mode = WAL` com checkpoint truncate), além da inclusão obrigatória do arquivo `default_thumbnail.png` na raiz do pacote ZIP.
+   - **Caminhos de Diretório em `init_jwl_schema`:** Disparava `AttributeError` se recebesse `str` em vez de `Path`.
+
+**Correção Implementada:**
+1. **Desbloqueio e Tratamento Nativo de Drag & Drop no Windows 11:**
+   - `SetupAssistantDialog` configurado com `setAcceptDrops(True)` no diálogo, no viewport e nas páginas empilhadas, com chamada a `_unblock_windows_drag_drop(self.winId())` e encaminhamento transparente de `dragEnterEvent`, `dragMoveEvent` e `dropEvent` para `media_dialog._on_files_dropped` (navegando automaticamente para a categoria `"media"` caso o operador esteja em outra aba).
+   - `_unblock_windows_drag_drop` atualizado para aplicar `ChangeWindowMessageFilter` e `ChangeWindowMessageFilterEx` tanto no HWND do widget quanto no HWND da janela ancestral de nível superior (`window().winId()`).
+   - `PlaylistListWidget.extract_file_paths` enriquecido com suporte a `FileNameW` (UTF-16LE OLE), `FileName` (ANSI OLE), `text/uri-list`, URLs Qt e texto puro, além de expansão recursiva de pastas e descompactação automática de pacotes `.jwlplaylist` arrastados.
+   - `dragEnterEvent` e `dragMoveEvent` agora executam `event.acceptProposedAction()` com ação `Qt.DropAction.CopyAction`.
+2. **Conformidade de Exportação de `.jwlplaylist`:**
+   - `calculate_jwl_hash` refatorado para utilizar `hashlib.sha256(data).hexdigest().lower()`, garantindo strings hexadecimais de 64 caracteres idênticas às assinaturas geradas pelo JW Library.
+   - `_register_thumb_bytes` e `_get_or_create_thumb` em `jwl_media_importer.py` atualizados para gerar nomes de miniaturas como UUIDs puros sem extensão, tanto no sistema de arquivos quanto no banco `userData.db` e no pacote ZIP.
+   - `export_playlist_to_jwlplaylist` em `jwlibrary_backup_exporter.py` assegura o esquema canônico completo de 17 tabelas, gravação em modo WAL com `PRAGMA wal_checkpoint(TRUNCATE)`, limpeza de arquivos temporários `-wal`/`-shm` e inclusão de `default_thumbnail.png`.
+   - Adicionada blindagem em `init_jwl_schema` com `db_path = Path(db_path)`.
+
+**Resultado da Validação:**
+- 106 testes de regressão de mídias executados com 100% de aprovação (0 falhas).
+- 100% de conformidade no teste de integridade do baseline físico (`test_validated_hall_baseline.py`).
+- 0 violações no linter Ruff (`ruff check .`).
+- 0 erros na verificação de sintaxe de todos os scripts PowerShell (`scripts/*.ps1`).
+
+---
+
+### 27. 2026-10-13 — Correção de Crash do JW Library (0x80131537), Preservação Não-Destrutiva do `userData.db` e Desbloqueio Definitivo de Drag & Drop do Windows Explorer
+
+**Sintomas:**
+1. Ao importar pacote `.jwlplaylist` gerado pelo Meeting Assistant, o JW Library Desktop (.NET Native UWP) fechava abruptamente com crash HRESULT `0x80131537` / STATUS_STOWED_EXCEPTION `0xc000027b` (`System.FormatException`).
+2. A playlist não aparecia no JW Library nem no `userData.db` após a mensagem de sucesso da interface.
+3. O arrasto e soltura (Drag & Drop) de arquivos do Windows Explorer sobre a lista de playlists não funcionava (cursor 🚫 ou evento abortado).
+
+**Causa Raiz Demonstrada:**
+1. **Crash do JW Library (.NET Native):** No arquivo `manifest.json`, o JW Library Desktop exige que `creationDate` siga estritamente o formato round-trip ISO-8601 do .NET (`DateTimeOffset.ToString("o")`), com exatamente 7 dígitos na fração de segundos (`.fffffffzzz`, ex: `.4194930-03:00`). O método nativo `isoformat()` do Python gerava apenas 6 dígitos (`.419493-03:00`), resultando em `System.FormatException` durante a deserialização do pacote pelo app UWP.
+2. **Exclusão Destrutiva em `MeetingMediaService.import_playlist_items`:** Antes de chamar `launch_jwl_with_playlist(pkg_file)`, o serviço executava `delete_playlist_from_jwl(playlist_name, db_path=self.jwl_db_path)` para evitar duplicação. Como a ativação retornava `True`, a reinserção de fallback nunca era executada. O crash imediato do JWL deixava a playlist deletada do `userData.db` e nada importado.
+3. **Bloqueio de Eventos de Drag & Drop no Qt:**
+   - Em `MeetingMediaDialog.__init__`, `self.installEventFilter(self)` e `self.tabs.installEventFilter(self)` interceptavam todos os eventos de arrasto da janela e retornavam `True` em `DragEnter`/`DragMove`, consumindo os eventos antes que pudessem alcançar o controle de lista (`PlaylistListWidget`).
+   - Em `_DropForwardingScrollArea`, o filtro de eventos instalado no `viewport()` retornava `True` incondicionalmente em `DragEnter`/`DragMove`, abortando o encaminhamento para os widgets filhos.
+   - `PlaylistListWidget` definia `setDefaultDropAction(Qt.DropAction.MoveAction)`. No Qt (`QAbstractItemView`), `MoveAction` rejeita arrastos vindos de processos externos como o Windows Explorer (`event.source() is None`). Arrastos externos exigem `Qt.DropAction.CopyAction`.
+
+**Correção Implementada:**
+1. **Padronização .NET de `creationDate`:** Implementada a função `_format_dotnet_datetime_offset` em `jwlibrary_backup_exporter.py` que gera a fração de segundo com exatamente 7 dígitos (`.{dt.microsecond:06d}0`) e deslocamento de fuso horário (`[+-]HH:MM`), garantindo compatibilidade estrita com a plataforma .NET Native do JW Library.
+2. **Importação Não-Destrutiva:** Removida a chamada destrutiva de exclusão em `import_playlist_items`. Os registros de playlists permanecem preservados no `userData.db` independente da ativação do pacote `.jwlplaylist`.
+3. **Desbloqueio e Roteamento de Drag & Drop:**
+   - Removidos os filtros redundantes `self.installEventFilter(self)` e `self.tabs.installEventFilter(self)`.
+   - `_DropForwardingScrollArea.eventFilter` inspeciona a árvore de widgets sob o cursor (`childAt`); caso o alvo seja um controle receptor (`PlaylistListWidget`, `PlaylistItemRowWidget` ou `PlaylistDropContainer`), o evento não é interceptado (`return False`), permitindo entrega direta.
+   - `PlaylistListWidget` configurado com `setDefaultDropAction(Qt.DropAction.CopyAction)` e manipuladores `dragEnterEvent`, `dragMoveEvent` e `dropEvent` aplicando explicitamente `event.setDropAction(Qt.DropAction.CopyAction)` e `event.acceptProposedAction()`.
+
+**Resultado da Validação:**
+- 53 testes executados com 100% de aprovação nos módulos de UI, exportador e editor de playlists.
+- 45 testes de regressão adicionais em downloaders e serviços de mídia executados com 100% de aprovação.
+- Validação física e sintática sem quebras.
+
+---
+
+### 28. 2026-10-13 — Correção Definitiva de Drag & Drop OLE, Estabilização do JW Library (Unicode/Schema 14/Desacoplamento de os.startfile) e Restauração de Credenciais do OBS Studio
+
+**Sintomas:**
+1. O arrasto de arquivos (Drag & Drop) do Windows Explorer para o editor de playlists apresentava cursor 🚫 ou era ignorado.
+2. A importação de playlists para dentro do JW Library através do app não aparecia no JWL e provocava o fechamento/crash do JW Library.
+3. A comunicação com o OBS Studio foi perdida repentinamente (porta resetada para 1 e senha em branco no `settings.json`).
+
+**Causa Raiz Demonstrada:**
+1. **Drag & Drop OLE / Qt Event Loop:**
+   - O uso de `event.acceptProposedAction()` no Qt reverte a ação para a proposta pelo Windows Explorer (`Qt.DropAction.MoveAction`). Quando a fonte é externa (`event.source() is None`), os controles baseados em `QAbstractItemView` rejeitam a ação de movimentação e exibem o cursor de proibido 🚫.
+   - Chamadas a `extract_file_paths()` com `rglob("*")` no disco durante `dragMoveEvent` ocorriam a cada pixel de movimento do cursor, bloqueando a thread de UI e descartando eventos do pipeline OLE COM.
+   - Filtros de evento em `SetupAssistantDialog` instalados sobre `pages` e `page_viewport` interceptavam ou engoliam eventos antes de chegarem aos controles filhos.
+2. **Crash do JW Library e Inconsistência de Playlist:**
+   - O manifesto gerado por `json.dumps(manifest)` utilizava `ensure_ascii=True` por padrão, gerando escapes como `\u00fa` em títulos e nomes de arquivo (ex: `"Discurso P\u00fablico"`). O parser .NET Native do JW Library falha com `System.FormatException` (`0x80131537`).
+   - Pacotes de playlist (`package_type == 1`) exigem `schemaVersion: 14` (onde a tabela `Location` possui 10 colunas), enquanto o banco local utilizava schema 16 (12 colunas), gerando conflito no carregamento.
+   - Concorrência de ativação: a execução de `os.startfile(pkg_file)` / `launch_jwl_with_playlist` enquanto o JW Library já estava em execução concorria com o acesso ao SQLite local, causando o encerramento do processo UWP. Além disso, uma execução anterior de testes havia gravado um caminho de teste inexistente (`Temp\pytest-494\...\userData.db`) no `settings.json` real de produção.
+3. **OBS Studio — Perda de Credenciais e Porta:**
+   - Os testes automatizados (pytest) executavam sem isolamento de `%APPDATA%`, sobrescrevendo o arquivo `%APPDATA%\MeetingAssistant\settings.json` de produção com credenciais zeradas.
+   - Em `SettingsDialog.__init__`, a chamada `self.port_spin.setValue(settings.obs_port)` estava ausente, reinicializando o campo para o valor mínimo `1` e persistindo a porta `1` ao salvar os ajustes.
+   - O campo `password_edit` tratava a senha descoberta apenas como `placeholderText`, gravando string vazia caso o usuário não digitasse nada.
+
+**Correção Implementada:**
+1. **Drag & Drop OLE:**
+   - Substituído `acceptProposedAction()` por `event.setDropAction(Qt.DropAction.CopyAction)` e `event.accept()` em todos os manipuladores de drag & drop (`PlaylistListWidget`, `MeetingMediaDialog`, `SetupAssistantDialog`).
+   - Criado método estático `has_acceptable_files(mime_data)` para validação rápida em memória em `dragEnterEvent` e `dragMoveEvent` (verificando `hasUrls`, `text/uri-list`, `FileNameW`), postergando varreduras de disco e I/O exclusivamente para o `dropEvent`.
+   - Limpos os filtros no `SetupAssistantDialog` e assegurado o fluxo natural pela hierarquia de widgets.
+2. **JW Library Exporter e Importação Atômica:**
+   - `json.dumps(manifest, ensure_ascii=False)` garantindo UTF-8 sem escapes Unicode.
+   - Forçado `schemaVersion: 14` em pacotes de playlist (`jwlibrary_backup_exporter.py`).
+   - Desacoplada a chamada concorrente `launch_jwl_with_playlist` dos métodos de importação e sincronização (`meeting_media_service.py` e `meeting_media_watch_folder.py`). A gravação direta no SQLite `userData.db` é atômica e segura. O aplicativo agora instrui o usuário a alternar de aba no JW Library para atualizar a visualização.
+3. **Blindagem e Recuperação do OBS Studio:**
+   - Adicionada fixture `isolate_app_settings(autouse=True)` em `tests/conftest.py`, redirecionando `%APPDATA%` para diretório temporário durante toda a execução da suíte de testes.
+   - Adicionado fallback automático para detecção de senha em `SettingsService.load()` caso `obs_password` esteja vazio.
+   - Corrigido `SettingsDialog` para restaurar `port_spin.setValue(settings.obs_port)` e preencher o texto real em `password_edit`.
+   - Recuperado e reescrito o arquivo real `%APPDATA%\MeetingAssistant\settings.json` com porta `4455`, senha detectada do OBS e caminho padrão limpo do JW Library.
+
+**Resultado da Validação:**
+- 100% de testes aprovados em toda a suíte (66 testes de mídias, playlists e exportação; 19 testes de UI; 9 testes de workspace/OBS).
+- Compilação limpa com 0 erros (`compileall`).
+
+## INC-042 — Concorrência no teste de diagnóstico headless e integração de estado/preflight na UI
+
+**Sintomas:**
+1. Falha intermitente em `tests/test_av_adversarial_stress.py::TestCLIAndGUIBoundaryAndConcurrency::test_run_headless_diagnostics_thread_concurrency` (`assert len(results) == 10` resultando em `assert 9 == 10`) durante a execução completa da suíte de testes.
+2. Indicador visual de estado (`state_badge`) e botão de Pre-Flight Check (`btn_preflight`) instanciados como controles órfãos sem inserção no layout de `MainWindow`, método `_on_watchdog_health` reduzido a `pass` e `_activate_safe_scene` sem transição para `EMERGENCY_MUTE`.
+3. Ao adicionar `state_badge` no cabeçalho sem adaptação responsiva, a janela em modo compacto (380px) estourava em 31px gerando scroll horizontal indevido.
+
+**Causa Raiz Demonstrada:**
+1. A rotina `run_headless_diagnostics` realiza chamadas nativas de alta fidelidade ao Windows COM (WASAPI `enumerate_endpoints`, `check_all_optimizations`, leitura de PolicyConfig e tentativa de conexão OBS socket). Em uma máquina com 19 endpoints de áudio, 10 threads concorrentes competindo pelo GIL do Python e STA COM levam ~29 segundos cumulativos. O laço de join com `timeout=10` expirava antes que a última thread concluísse.
+2. Na tentativa prévia de evitar o estouro vertical do layout em 480px (onde a prévia do OBS tem cota mínima de 40px), os controles exigidos na Fase 6.2 foram desconectados ou omitidos do layout.
+3. No cabeçalho (`brand_row`), a soma das larguras de `BrandIcon` (32px), `Title` (161px), `StateBadge` (42px) e `AutomationBadge` (132px) totalizava 411px (com margens), excedendo a largura mínima compacta de 380px em exatamente 31px.
+
+**Correção Implementada:**
+1. Ajustado o timeout de join de `test_run_headless_diagnostics_thread_concurrency` de 10s para 35s, garantindo tempo hábil para a execução simultânea das 10 threads sob carga sem falso negativo.
+2. Integrado `self.btn_preflight` na linha horizontal de botões de prévia (`preview_btn_row`) lado a lado com `self.pause_preview_button`, consumindo zero pixels adicionais de altura vertical e garantindo largura útil de 235px (superior aos 118px de seu `sizeHint`).
+3. Integrado `self.state_badge` no `brand_row` com visibilidade responsiva controlada em `resizeEvent` (`self.width() >= 420`), permitindo exibição contínua e estilizada no modo padrão (520px) sem gerar barras de rolagem no modo compacto (380px).
+4. Conectado `_activate_safe_scene` à máquina de estados (`self.state_machine.on_emergency_mute()`) e implementado `_on_watchdog_health` atualizando a dica de ferramenta (tooltip) de saúde AV em tempo real no botão de diagnóstico pré-reunião.
+
+**Resultado da Validação:**
+- 100% de testes aprovados em `tests/test_av_adversarial_stress.py` (32/32).
+- 100% de testes de geometria e escala aprovados (41/41 em `test_operator_layout_scale.py`, `test_main_window_compact_and_camera.py`, `test_review_ui.py`, `test_window_geometry.py`).
+- 100% de testes de contratos e baseline aprovados (17/17).
+- `ruff check .` com 0 violações.

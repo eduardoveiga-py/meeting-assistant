@@ -27,6 +27,7 @@ htmlcov/
 logs/
 settings.local.json
 .agents/
+.gemini/
 
 # OS
 Thumbs.db

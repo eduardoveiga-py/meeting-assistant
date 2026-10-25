@@ -46,13 +46,19 @@ class ExternalMediaControls(QDialog):
         self.buttons["maximize"].setToolTip("Preenche o monitor do Salão sem selecionar outra janela.")
         self.stop_button = QPushButton("■ Parar mídia")
         self.stop_button.setMinimumHeight(34)
-        self.stop_button.clicked.connect(self.stop_requested)
+        self.stop_button.clicked.connect(self._handle_stop)
         layout.addWidget(self.stop_button, 2, 1)
         self.status = QLabel()
         self.status.setWordWrap(True)
         self.status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         layout.addWidget(self.status, 4, 0, 1, 2)
         self.update_phase("checking", "Preparando a apresentação…")
+
+    def _handle_stop(self):
+        self.hide()
+        if self.stop_button.isEnabled():
+            self.stop_button.setEnabled(False)
+            self.stop_requested.emit()
 
     def show_on_operator_monitor(self):
         screen = QApplication.primaryScreen()
@@ -70,10 +76,14 @@ class ExternalMediaControls(QDialog):
         for button in self.buttons.values():
             button.setEnabled(phase == "presenting" and not self._busy)
         returning = phase in {"stopping_media", "stopping", "returning"}
+        if returning:
+            self.hide()
         self.stop_button.setEnabled(not returning)
         self.stop_button.setText("Retornando…" if returning else (
             "Repetir retorno" if phase == "return_failed" else "■ Parar mídia"
         ))
+        if phase == "return_failed":
+            self.show()
 
     def control_status(self, busy, message):
         self._busy = busy
@@ -81,6 +91,14 @@ class ExternalMediaControls(QDialog):
 
     def finish(self):
         self._finish = True
+        try:
+            self.command_requested.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        try:
+            self.stop_requested.disconnect()
+        except (RuntimeError, TypeError):
+            pass
         self.close()
         self.deleteLater()
 
@@ -88,6 +106,8 @@ class ExternalMediaControls(QDialog):
         if self._finish:
             event.accept()
         else:
-            event.ignore()
+            self.hide()
+            event.accept()
             if self.stop_button.isEnabled():
+                self.stop_button.setEnabled(False)
                 self.stop_requested.emit()

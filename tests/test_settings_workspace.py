@@ -106,11 +106,11 @@ def test_open_read_and_navigation_preserve_saved_values_and_live_audio(tmp_path)
     before = deepcopy(fake.sources), deepcopy(fake.scenes), deepcopy(fake.filters)
     dialog = SetupAssistantDialog(owner, page="meeting")
     dialog.show()
-    assert dialog.navigation.count() == 5
+    assert dialog.navigation.count() == 6
     assert not dialog.editor.isWindow() and not dialog.audio.isWindow()
-    assert not dialog.hall.isWindow() and not dialog.camera.isWindow()
+    assert not dialog.hall.isWindow() and not dialog.camera.isWindow() and not dialog.media_dialog.isWindow()
     open_audio(dialog, owner)
-    for page in ("video", "diagnostics", "installation", "meeting"):
+    for page in ("video", "diagnostics", "installation", "meeting", "media"):
         dialog.select_page(page)
         QApplication.processEvents()
     assert owner.settings_service.path.read_bytes() == saved

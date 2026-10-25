@@ -64,11 +64,34 @@ class VirtualCameraDialog(QDialog):
         self.update_diagnostic()
 
     def disconnect_results(self):
-        self.timer.stop()
-        self.session.changed.disconnect(self.refresh)
-        self.monitor.status_changed.disconnect(self.status.setText)
-        self.monitor.frame_ready.disconnect(self.preview.present)
-        self.monitor.status_changed.disconnect(self.preview.status)
+        try:
+            self.timer.stop()
+        except Exception:
+            pass
+        try:
+            self.session.changed.disconnect(self.refresh)
+        except Exception:
+            pass
+        try:
+            self.monitor.status_changed.disconnect(self.status.setText)
+        except Exception:
+            pass
+        try:
+            self.monitor.frame_ready.disconnect(self.preview.present)
+        except Exception:
+            pass
+        try:
+            self.monitor.status_changed.disconnect(self.preview.status)
+        except Exception:
+            pass
+
+    def reject(self):
+        self.disconnect_results()
+        super().reject()
+
+    def closeEvent(self, event):
+        self.disconnect_results()
+        super().closeEvent(event)
 
     def refresh(self):
         running = self.session.state == "running"

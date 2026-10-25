@@ -82,8 +82,9 @@ class SetupAssistantDialog(QDialog):
         self.setStyleSheet(
             "QTextEdit { background: #0e141c; color: #f2f4f8; border: 1px solid #46546a; }"
         )
-        self.resize(620, 700)
-        self.setMinimumSize(360, 280)
+        self.resize(760, 760)
+        self.setMinimumSize(540, 480)
+        self.setAcceptDrops(True)
         # Video children can create native handles before Show; bound the size
         # before constructing them, then fit again after the form is complete.
         fit_window(self)
@@ -96,6 +97,7 @@ class SetupAssistantDialog(QDialog):
         self.hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         root.addWidget(self.hint)
         self.pages = QStackedWidget()
+        self.pages.setAcceptDrops(True)
         # QStackedLayout includes hidden pages in height-for-width constraints.
         # Windows can then enlarge the dialog beyond fit_window's work area.
         # A viewport bounds the stack without propagating that preferred height.
@@ -105,6 +107,8 @@ class SetupAssistantDialog(QDialog):
         self.page_viewport.setFrameShape(QFrame.NoFrame)
         self.page_viewport.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.page_viewport.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.page_viewport.setAcceptDrops(True)
+        self.page_viewport.viewport().setAcceptDrops(True)
         self.page_viewport.setViewport(self.pages)
         root.addWidget(self.page_viewport, 1)
         self.editor = SettingsDialog(owner.settings, owner.obs_scenes, self, embedded=True)
@@ -129,6 +133,16 @@ class SetupAssistantDialog(QDialog):
         self._button(layouts_body, "Salvar disposição atual", lambda: owner._persist_layout(capture=True))
         self._button(layouts_body, "Aplicar disposição salva", owner._restore_layout)
         meeting_layout.insertWidget(meeting_layout.count() - 1, layouts)
+
+        from meeting_assistant.ui.meeting_media_dialog import MeetingMediaDialog
+
+        self.media_dialog = MeetingMediaDialog(self, settings=owner.settings, embedded=True)
+        self._page(
+            "media",
+            "Mídias e playlists",
+            self.media_dialog,
+            "Download de mídias do JW.org, playlists personalizadas e sincronização com o JW Library.",
+        )
 
         self.video_tabs = QTabWidget()
         self._page(
@@ -342,6 +356,8 @@ class SetupAssistantDialog(QDialog):
         self.camera.disconnect_results()
         self.maintenance.disconnect_results()
         self.owner.obs.setup_finished.disconnect(self._obs_finished)
+        if hasattr(self, "media_dialog") and hasattr(self.media_dialog, "cleanup"):
+            self.media_dialog.cleanup()
 
     def _jwl_plugin(self):
         if self._authorized():
@@ -375,10 +391,13 @@ class SetupAssistantDialog(QDialog):
     def _save(self):
         pending = replace(self.owner.settings)
         self.editor.apply_to(pending)
+        if hasattr(self, "media_dialog") and hasattr(self.media_dialog, "language_combo"):
+            lang = self.media_dialog.language_combo.currentData()
+            if lang:
+                pending.congregation_language = lang
         try:
             service.validate_settings(pending)
-            if pending != self.owner.settings:
-                self.owner._apply_assistant_settings(pending)
+            self.owner._apply_assistant_settings(pending)
         except Exception as exc:
             self.status.setText(str(exc) if isinstance(exc, ValueError) else "Falha ao salvar ajustes.")
             self.status.show()
@@ -636,3 +655,44 @@ class SetupAssistantDialog(QDialog):
     def closeEvent(self, event):
         event.ignore()
         self.reject()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        from meeting_assistant.ui.meeting_media_dialog import _unblock_windows_drag_drop
+
+        _unblock_windows_drag_drop(int(self.winId()))
+
+    def eventFilter(self, watched, event):
+        return super().eventFilter(watched, event)
+
+    def dragEnterEvent(self, event):
+        from meeting_assistant.ui.meeting_media_dialog import PlaylistListWidget
+
+        if PlaylistListWidget.has_acceptable_files(event.mimeData()) and hasattr(self, "media_dialog"):
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
+            return
+        super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event):
+        from meeting_assistant.ui.meeting_media_dialog import PlaylistListWidget
+
+        if PlaylistListWidget.has_acceptable_files(event.mimeData()) and hasattr(self, "media_dialog"):
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
+            return
+        super().dragMoveEvent(event)
+
+    def dropEvent(self, event):
+        from meeting_assistant.ui.meeting_media_dialog import PlaylistListWidget
+
+        paths = PlaylistListWidget.extract_file_paths(event.mimeData())
+        if paths and hasattr(self, "media_dialog"):
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
+            self.select_page("media")
+            if hasattr(self.media_dialog, "tabs") and self.media_dialog.tabs.currentIndex() != 1:
+                self.media_dialog.tabs.setCurrentIndex(1)
+            self.media_dialog._on_files_dropped(paths)
+            return
+        super().dropEvent(event)

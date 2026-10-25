@@ -180,6 +180,8 @@ class ExternalWindowBackend(WindowBackend):
             return
         if self.same_window(hall):
             con, gui = self._win32()
+            if not player_hwnd and isinstance(self.last_snapshot, dict):
+                player_hwnd = self.last_snapshot.get("hwnd")
             if player_hwnd:
                 gui.SetWindowPos(player_hwnd, con.HWND_NOTOPMOST, 0, 0, 0, 0,
                                  con.SWP_NOMOVE | con.SWP_NOSIZE | con.SWP_NOACTIVATE
@@ -373,7 +375,8 @@ class ExternalWindowBackend(WindowBackend):
             gui.SetWindowPos(window.hwnd, con.HWND_TOPMOST if window.topmost else con.HWND_NOTOPMOST,
                              0, 0, 0, 0, con.SWP_NOMOVE | con.SWP_NOSIZE | con.SWP_NOACTIVATE
                              | con.SWP_FRAMECHANGED | con.SWP_ASYNCWINDOWPOS)
-            deadline = self._clock() + 2.5
+            deadline = self._clock() + 1.0
+            is_browser = window.process.casefold() in {"chrome.exe", "msedge.exe"}
             while True:
                 if not self.same_window(window):
                     return
@@ -386,19 +389,23 @@ class ExternalWindowBackend(WindowBackend):
                     "minimized_ok": bool(gui.IsIconic(window.hwnd)) == window.minimized,
                     "topmost_ok": bool(gui.GetWindowLong(window.hwnd, con.GWL_EXSTYLE)
                                        & con.WS_EX_TOPMOST) == window.topmost,
-                    "frame_ok": (gui.GetWindowLong(window.hwnd, con.GWL_STYLE) & frame_mask)
-                                == (window.style & frame_mask),
-                    "edges_ok": (gui.GetWindowLong(window.hwnd, con.GWL_EXSTYLE) & edge_mask)
-                                == (window.extended_style & edge_mask),
+                    "frame_ok": True if is_browser else (
+                        (gui.GetWindowLong(window.hwnd, con.GWL_STYLE) & frame_mask)
+                        == (window.style & frame_mask)
+                    ),
+                    "edges_ok": True if is_browser else (
+                        (gui.GetWindowLong(window.hwnd, con.GWL_EXSTYLE) & edge_mask)
+                        == (window.extended_style & edge_mask)
+                    ),
                 }
                 if all(self.last_snapshot[name] for name in
                        ("placement_ok", "show_state_ok", "minimized_ok",
                         "topmost_ok", "frame_ok", "edges_ok")):
                     return
                 if self._clock() >= deadline:
-                    raise ValueError("Player não confirmou a disposição anterior em 2,5 s.")
+                    raise ValueError("Player não confirmou a disposição anterior em 1,0 s.")
                 self._pause(0.05)
         finally:
             # Restore ordering even after a partial player rollback. The
             # existing explicit JWL return then confirms actual hall exposure.
-            self._restore_hall_order()
+            self._restore_hall_order(window.hwnd)
